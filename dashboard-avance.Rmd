@@ -1,0 +1,445 @@
+---
+title: "Control avance HAPIN"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+# load use packages
+library(package = "tidyverse")
+library(package = "crosstalk")
+
+# Load helper functions
+source(file = "scripts/zz_output.R")
+```
+
+
+
+```{r get_z10}
+#------------------------------------------------------------------------------*
+# Datos de contacto de participantes ----
+#------------------------------------------------------------------------------*
+
+data_base <- DBI::dbConnect(odbc::odbc(), "hapin-gt", dbname = "hapindb")
+
+z10_vars <- c(
+  "record", "record_id", "municipio", "z10_village", "com_jalapa", 
+  "com_jalapa_new", "z10_alti_gps", "z10_lati_gps", "z10_long_gps", 
+  "type_goelocation"
+)
+
+gt_z10 <- DBI::dbGetQuery(
+  conn = data_base,
+  statement = paste(
+    "select *",
+    "from redcap_data",
+    "where project_id = 39",
+    # "in \"(select project_id from redcap_projects where project_name = 'main_study_gt'\") A",
+    "and field_name in",
+    paste0(
+      "('",
+      paste(
+        z10_vars,
+        collapse = "', '"
+      ),
+      "')"
+    )
+  )
+) %>%
+  select(record, field_name, value) %>%
+  spread(field_name, value) %>%
+  select(!!!z10_vars) %>%
+  as_tibble()
+
+
+# Disconnect from database
+DBI::dbDisconnect(conn = data_base)
+
+
+#------------------------------------------------------------------------------*
+# Clean up z10 data ----
+#------------------------------------------------------------------------------*
+
+# Hard limits on geo-data
+gt_participants <- gt_z10 %>%
+  # GPS data as numbers
+  mutate_at(
+    vars(matches("alti|lati|long")),
+    funs(
+      gsub("[^-0-9.]", "", .) %>%
+        as.numeric()
+    )
+  ) %>%
+  # Select GPS data given source type
+  mutate(
+    long = case_when(
+      # type_goelocation == "1" ~ z10_long_tablet,
+      type_goelocation == "2" ~ z10_long_gps,
+      TRUE ~ NA_real_
+    ),
+    lat = case_when(
+      # type_goelocation == "1" ~ z10_lati_tablet,
+      type_goelocation == "2" ~ z10_lati_gps,
+      TRUE ~ NA_real_
+    ),
+    elevation = case_when(
+      # type_goelocation == "1" ~ z10_alti_tablet,
+      type_goelocation == "2" ~ z10_alti_gps,
+      TRUE ~ NA_real_
+    )
+  ) %>%
+  select(-matches("(long|lati|alti)_(gps|tablet)")) %>%
+  # Common fixes for GPS data
+  mutate(
+    # Longitude should be roughly in -90.266 to -89.61
+    # and latitude roughly in 14.42 to 14.87
+    # If these appear to be reversed, switch
+    long_lat_switched = (
+      # latitude is negative and < -80
+      lat < -80 |
+      # longitude is positive and < 80
+      between(long, 0, 80)
+    ),
+    gps_d_temp = if_else(long_lat_switched, long, lat),
+    long = if_else(long_lat_switched, lat, long),
+    lat = if_else(long_lat_switched, gps_d_temp, lat),
+    # Longitude in Jalapa has to be negative
+    long = case_when(long > 0 ~ long * -1, TRUE ~ long),
+    # Latitude in Jalapa has to be positive,
+    lat = case_when(lat < 0 ~ lat * -1, TRUE ~ lat),
+    # Elevation can not be below 100 meters
+    elevation = case_when(
+      elevation < 100 ~ elevation * 100,
+      TRUE ~ elevation
+    )
+  )
+```
+
+
+
+```{r get-emory-data}
+# Get screening data from Emory export
+gt_emory_file <- list.files(
+  path = "data/exports", pattern = "MainSt.+csv", full.names = TRUE
+) %>%
+  data_frame(
+    file = .,
+    export_time = file %>%
+      gsub(".+?_([-0-9_]+).csv", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(export_time))
+
+gt_emory_data <- gt_emory_file %>%
+  pull(file) %>%
+  read_csv() %>%
+  rownames_to_column() %>%
+  filter(!(redcap_event_name == "elegibilidad_arm_1" & id == "33010"))
+
+
+#------------------------------------------------------------------------------*
+# Separate data topics ----
+#------------------------------------------------------------------------------*
+
+# Mujeres tamizadas elegibles pero no inscritas
+elegibles <- gt_emory_data %>%
+  filter(
+    # from screening
+    redcap_event_name == "elegibilidad_arm_1",
+    # is eligible
+    (
+      s1_pregnant == 1 & s1_age_s == 1 & s1_area_s == 1 & s1_biomass == 1 &
+        s1_smoke != 1 & s1_move != 1 &  s1_lpg != 1
+    ),
+    # is not ineligible
+    (
+      !s2_fetus %in% c(0, 2) & !s2_gest %in% c(0, 2) &
+        !s2_onefetus %in% c(0, 2) & !s2_participate %in% c(0, 2)
+    ),
+    # not yet enrolled
+    (
+      is.na(s4_date) |
+       ! s4_consent %in% c(0, 2) |
+        s2_not_particip %in% c(2, 3, 4)
+    ) &
+      is.na(s4_main_id)
+  ) %>%
+  select(rowname, id, redcap_event_name, matches("^(s1|s2|m17|s3|s4)_"))
+
+
+# Tabla de referencia IDs tamizaje y estudio principal
+id_screening_enrolled <- gt_emory_data %>%
+  filter(redcap_event_name == "elegibilidad_arm_1") %>%
+  select(rowname, id, s4_main_id)
+
+
+# Mujeres inscritas en el estudio
+inscritas <- gt_emory_data %>%
+  filter(
+    id %in% {
+      gt_emory_data %>%
+        filter(redcap_event_name == "elegibilidad_arm_1", !is.na(s4_main_id)) %>%
+        pull(s4_main_id) %>%
+        as.character()
+    }
+  ) %>%
+  left_join(
+    select(id_screening_enrolled, screening_id = id, id = s4_main_id) %>%
+      mutate(id = as.character(id))
+  ) %>%
+  select(
+    rowname, screening_id, id, redcap_event_name, everything(),
+    -matches("^(s1|s2|m17|s3|s4)_"), fpp = m17_ga
+  )
+
+
+tamizadas <- gt_emory_data %>%
+  filter(
+    ! rowname %in% c(
+      # elegibles pero no inscritasd
+      elegibles$rowname,
+      # inscritas
+      inscritas$rowname,
+      # datos de tamizaje de las inscritas
+      gt_emory_data %>%
+        filter(
+          redcap_event_name == "elegibilidad_arm_1",
+          id %in% inscritas$screening_id
+        ) %>%
+        pull(rowname)
+    ),
+    redcap_event_name == "elegibilidad_arm_1"
+  ) %>%
+  select(rowname, id, redcap_event_name, matches("^(s1|s2|m17|s3|s4)_"))
+
+
+```
+
+
+
+```{r tag_location_data}
+gt_participants <- gt_participants %>%
+  left_join(
+    select(inscritas, record_id = id, id_sc = screening_id)
+  ) %>%
+  mutate(
+    record_id = if_else(
+      condition = grepl("^3[35]", record_id) & !is.na(id_sc),
+      true = id_sc,
+      false = record_id
+    )
+  ) %>%
+  select(-long_lat_switched, -record, -id_sc, gps_d_temp)
+```
+
+
+
+# Elegibles - no inscritas
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+## Tabla
+
+### Tabla de datos disponibles para mujeres elegibles
+
+```{r}
+
+elegibles %>%
+  # Keep reference values
+  mutate(
+    fpp = m17_ga
+  ) %>%
+  tabla_interactiva()
+  
+```
+
+
+## Mapa
+
+```{r}
+
+```
+
+
+
+# Participantes inscritas
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+<!-- ## Tabla -->
+
+<!-- ### Tabla de datos disponibles para mujeres elegibles -->
+
+<!-- ```{r} -->
+<!-- inscritas %>% -->
+<!--   mutate(id = paste(id, screening_id, sep = " - ")) %>% -->
+<!--   select(-screening_id) %>% -->
+<!--   tabla_interactiva() -->
+
+<!-- ``` -->
+
+
+## Mapa
+
+```{r}
+mapa_inscritas <- inscritas %>%
+  mutate(id = paste(id, screening_id, sep = " - ")) %>%
+  left_join(
+    gt_participants %>%
+      select(screening_id = record_id, lat, long)
+  ) %>%
+  select(-screening_id) %>%
+  mutate_at(
+    vars(matches("date|m17_ga")),
+    funs(as.character)
+  ) %>%
+    gather(
+      variable, value, -id, -redcap_event_name, -fpp, -rowname, -lat, -long,
+      factor_key = TRUE
+    ) %>%
+    # Tag each crf and keep order
+    mutate(
+      crf = gsub("^([^_]+)_.+", "\\1", variable),
+      letter = gsub("[a-z]+[0-9]+([a-z]*)", "\\1", crf) %>%
+        if_else(. == "", NA_character_, .) %>%
+        zoo::na.locf(na.rm = FALSE) %>%
+        if_else(is.na(.), "", .),
+      crf = paste0(gsub("([a-z]+[0-9]+)[a-z]*", "\\1", crf), letter) %>%
+        factor(levels = unique(.))
+    ) %>%
+    select(-letter) %>%
+    # For each participant, event and crf
+    group_by(id, redcap_event_name, crf, fpp, lat, long) %>%
+    # Get completion status
+    bind_rows(
+      summarize(., not_complete =!any(grepl("_complete", variable))) %>%
+        filter(not_complete) %>%
+        select(-not_complete) %>%
+        mutate(
+          variable = paste0(crf, "_complete"),
+          value = "0"
+        )
+    ) %>%
+    # TODO: status for crfs without {crf}_complete variable
+    mutate(
+      status = value[grepl("_complete", variable)] %>%
+        recode(
+          `0` = "incomplete",
+          `1` = "unverified",
+          `2` = "complete"
+        ) %>%
+        recode(
+          `0` = "incomplete",
+          `1` = "unverified",
+          `2` = "complete"
+        ) %>%
+        unique() %>%
+        paste(collapse = "")
+    ) %>%
+    filter(!grepl("_complete", variable)) %>%
+    # Label if there is data
+    summarize(
+      date = first(value[grepl(paste0(first(crf), "_date$"), variable)]),
+      data = ifelse(
+        any(!is.na(value)),
+        first(status),
+        "no-data"
+      ) %>%
+        recode(
+          incomplete = "red",
+          unverified = "yellow",
+          complete = "green",
+          "no-data" = "gray",
+          .missing = "error"
+        ) %>%
+        # Include semaphore image
+        paste0(
+          # Include value for tables
+          "<div style=\"display:none;\">",
+          date, ";",
+          first(status),
+          "</div>",
+          # Include image for display
+          "<img src=\"img/circle_", ., ".png\" width=16 height=16></img>"
+        )
+    ) %>%
+    select(id, crf, data, fpp, lat, long) %>%
+    spread(crf, data) %>%
+    select(everything(), -redcap_event_name, redcap_event_name)
+
+# Wrap data frame in SharedData
+sd <- SharedData$new(mapa_inscritas)
+
+# Create a filter input
+# filter_slider("mag", "Magnitude", sd, column=~mag, step=0.1, width=250)
+
+# Use SharedData like a dataframe with Crosstalk-enabled widgets
+bscols(
+  leaflet::leaflet(sd, width = "100%", height = 1000) %>%
+    leaflet::addTiles() %>%
+    leaflet::addCircleMarkers(
+      lng = ~long, lat = ~lat,
+      radius = 3, label = ~id
+    ),
+  
+  DT::datatable(
+    sd,
+    # Keep html in cells
+    escape = FALSE,
+    # Fill vertically
+    height = "1200",
+    # declare extensions
+    extensions = c(
+      # provide downloads
+      "Buttons",
+      # fix columns with IDs
+      "FixedColumns",
+      # Fixed header
+      # "FixedHeader",
+      # Only render visible
+      "Scroller"
+    ),
+    # configure options
+    options = list(
+      dom = "Bfrtip",
+      scrollX = TRUE, scrollY = TRUE,
+      fixedColumns = list(leftColumns = 2),
+      # fixedHeader = TRUE,
+      extend = "collection",
+      buttons = c("csv", "excel", "pdf"),
+      # Scroller
+      deferRender = TRUE,
+      scroller = TRUE
+    )
+  ),
+  device = "xs"
+)
+
+
+  
+
+```
+
+
+
+
+# No elegibles
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+## Tabla
+
+### Tabla de datos disponibles para mujeres elegibles
+
+```{r}
+tamizadas %>%
+  # Keep reference values
+  mutate(
+    fpp = m17_ga
+  ) %>%
+  tabla_interactiva()
+
+```
+
