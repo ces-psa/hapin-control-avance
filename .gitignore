@@ -6,3 +6,6 @@
 
 # Ignore data files
 data/
+
+# Ignore html output
+*.html
