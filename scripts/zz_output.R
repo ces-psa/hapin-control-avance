@@ -2,10 +2,9 @@
 # Funciones para mostrar datos ----
 #------------------------------------------------------------------------------*
 
+# Datos para tabla interactiva
 
-
-# Tabla interactiva de crfs llenos
-tabla_interactiva <- function(.data, ...){
+datos_tabla <- function(.data, ...){
   # eval unnamed parameters
   dots <- quos(...)
   
@@ -87,9 +86,15 @@ tabla_interactiva <- function(.data, ...){
           "<img src=\"img/circle_", ., ".png\" width=16 height=16></img>"
         )
     ) %>%
-    select(id, crf, data, fpp) %>%
+    ungroup() %>%
+    select(id, redcap_event_name, crf, data, fpp) %>%
     spread(crf, data) %>%
-    select(everything(), -redcap_event_name, redcap_event_name) %>%
+    select(everything(), -redcap_event_name, redcap_event_name)
+}
+
+# Tabla interactiva de crfs llenos
+tabla_interactiva <- function(.data, ...){
+  .data %>%
     # DT::renderDataTable(escape = FALSE) %>%
     DT::datatable(
       # Keep html in cells
@@ -114,7 +119,7 @@ tabla_interactiva <- function(.data, ...){
         fixedColumns = list(leftColumns = 2),
         # fixedHeader = TRUE,
         extend = "collection",
-        buttons = c("csv", "excel", "pdf"),
+        buttons = c("csv", "excel"),
         # Scroller
         deferRender = TRUE,
         scroller = TRUE
