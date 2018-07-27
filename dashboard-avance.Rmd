@@ -240,25 +240,71 @@ gt_participants <- gt_participants %>%
 
 Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
 
-## Tabla
-
-### Tabla de datos disponibles para mujeres elegibles
+## Tabla y mapa
 
 ```{r}
-
-elegibles %>%
+# Prepare data for eligibles table and map
+mapa_elegibles <- elegibles %>%
   # Keep reference values
   mutate(
     fpp = m17_ga
   ) %>%
-  tabla_interactiva()
-  
-```
+  datos_tabla() %>%
+  left_join(
+    gt_participants %>%
+      select(id = record_id, lat, long)
+  )
 
+# Wrap data frame in SharedData
+sd <- SharedData$new(mapa_elegibles)
 
-## Mapa
-
-```{r}
+# Use SharedData like a dataframe with Crosstalk-enabled widgets
+bscols(
+  {
+    cat("\n### Mapa para mujeres elegibles con datos de ubicación\n\n")
+    leaflet::leaflet(sd, width = "100%", height = 1000) %>%
+      leaflet::addTiles() %>%
+      leaflet::addCircleMarkers(
+        lng = ~long, lat = ~lat,
+        radius = 3, label = ~id
+      )
+  },
+  {
+    cat("\n### Tabla de datos disponibles para mujeres elegibles\n\n")
+    DT::datatable(
+    sd,
+    # Keep html in cells
+    escape = FALSE,
+    # Fill vertically
+    height = "1200",
+    # declare extensions
+    extensions = c(
+      # provide downloads
+      "Buttons",
+      # fix columns with IDs
+      "FixedColumns",
+      # Fixed header
+      # "FixedHeader",
+      # Only render visible
+      "Scroller"
+    ),
+    # configure options
+    options = list(
+      dom = "Bfrtip",
+      scrollX = TRUE, scrollY = TRUE,
+      fixedColumns = list(leftColumns = 2),
+      # fixedHeader = TRUE,
+      extend = "collection",
+      buttons = c("csv", "excel", "pdf"),
+      # Scroller
+      deferRender = TRUE,
+      scroller = TRUE
+    )
+  )
+  }
+  ,
+  device = "xs"
+)
 
 ```
 
