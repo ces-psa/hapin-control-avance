@@ -350,6 +350,7 @@ tamizadas %>%
   mutate(
     fpp = m17_ga
   ) %>%
+  datos_tabla() %>%
   tabla_interactiva()
 
 ```
