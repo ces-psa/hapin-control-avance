@@ -268,18 +268,6 @@ elegibles %>%
 
 Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
 
-<!-- ## Tabla -->
-
-<!-- ### Tabla de datos disponibles para mujeres elegibles -->
-
-<!-- ```{r} -->
-<!-- inscritas %>% -->
-<!--   mutate(id = paste(id, screening_id, sep = " - ")) %>% -->
-<!--   select(-screening_id) %>% -->
-<!--   tabla_interactiva() -->
-
-<!-- ``` -->
-
 
 ## Mapa
 
@@ -371,9 +359,6 @@ mapa_inscritas <- inscritas %>%
 
 # Wrap data frame in SharedData
 sd <- SharedData$new(mapa_inscritas)
-
-# Create a filter input
-# filter_slider("mag", "Magnitude", sd, column=~mag, step=0.1, width=250)
 
 # Use SharedData like a dataframe with Crosstalk-enabled widgets
 bscols(
