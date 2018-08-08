@@ -118,6 +118,71 @@ gt_participants <- gt_z10 %>%
 ```
 
 
+```{r get-gt-exposure, eval=TRUE}
+#------------------------------------------------------------------------------*
+# Datos de inicio de actividades de exposure ----
+#------------------------------------------------------------------------------*
+
+data_base <- DBI::dbConnect(odbc::odbc(), "hapin-gt", dbname = "hapindb")
+
+gt_exposure_start <- DBI::dbGetQuery(
+  conn = data_base,
+  statement = paste(
+    "select *",
+    "from redcap_data",
+    "where project_id in (select project_id from redcap_projects where project_name = 'hapin_guatemala_exposure')"
+  )
+) %>%
+  select(record, field_name, value) %>%
+  spread(field_name, value) %>%
+  as_tibble()
+
+
+# Disconnect from database
+DBI::dbDisconnect(conn = data_base)
+
+```
+
+
+
+
+
+```{r get_emory_dictionary}
+# Get screening data from Emory export
+gt_emory_dict_file <- list.files(
+  path = "data/dictionaries", pattern = "MainSt.+csv", full.names = TRUE
+) %>%
+  data_frame(
+    file = .,
+    export_time = file %>%
+      gsub(".+?_([-0-9_]+).csv", "\\1", .) %>%
+      lubridate::ymd(tz = "America/New_York")
+  ) %>%
+  slice(which.max(export_time))
+
+gt_emory_dictionary <- gt_emory_dict_file %>%
+  pull(file) %>%
+  read_csv() %>%
+  set_names(
+    names(.) %>%
+      make.names(unique = TRUE, allow_ = TRUE) %>%
+      tolower() %>%
+      gsub("[.]+", "_", .)
+  ) %>%
+  rownames_to_column() %>%
+  extract(form_name, into = c("crf", "title"), regex = "^([^_]+)_(.*)") %>%
+  select(
+    rowname, crf, variable = variable_field_name, field_type,
+    title, text = field_label,
+    config = choices_calculations_or_slider_labels,
+    valid_min = text_validation_min, valid_max = text_validation_max,
+    relevance = branching_logic_show_field_only_if_,
+    required = required_field_
+  )
+```
+
+
+
 
 ```{r get-emory-data}
 # Get screening data from Emory export
@@ -136,9 +201,30 @@ gt_emory_data <- gt_emory_file %>%
   pull(file) %>%
   read_csv() %>%
   rownames_to_column() %>%
-  filter(!(redcap_event_name == "elegibilidad_arm_1" & id == "33010"))
+  # Manual removes
+  filter(
+    !(redcap_event_name == "elegibilidad_arm_1" & id == "33010"),
+    !(redcap_event_name == "elegibilidad_arm_1" & id == "G004")
+  )
+```
 
 
+
+
+
+```{r, include=FALSE}
+gt_emory_data %>%
+  select(id, s1_ultra, matches("m17.+(fl|crl|hc)"), s4_main_id) %>%
+  filter(s1_ultra == 1) %>%
+  print(n = Inf)
+```
+
+
+
+
+
+
+```{r prepare-women-data}
 #------------------------------------------------------------------------------*
 # Separate data topics ----
 #------------------------------------------------------------------------------*
@@ -156,7 +242,8 @@ elegibles <- gt_emory_data %>%
     # is not ineligible
     (
       !s2_fetus %in% c(0, 2) & !s2_gest %in% c(0, 2) &
-        !s2_onefetus %in% c(0, 2) & !s2_participate %in% c(0, 2)
+        !s2_onefetus %in% c(0, 2) & !s2_participate %in% c(0, 2) &
+        s1_ultra != 0
     ),
     # not yet enrolled
     (
@@ -179,19 +266,40 @@ id_screening_enrolled <- gt_emory_data %>%
 inscritas <- gt_emory_data %>%
   filter(
     id %in% {
-      gt_emory_data %>%
-        filter(redcap_event_name == "elegibilidad_arm_1", !is.na(s4_main_id)) %>%
+      id_screening_enrolled %>%
+        filter(!is.na(s4_main_id)) %>%
         pull(s4_main_id) %>%
         as.character()
     }
   ) %>%
+  # Add dates for started H41s
+  left_join(
+    gt_exposure_start %>%
+      filter(gth4x_crf == "h41") %>%
+      select(id = record_id, gth4x_date)
+  ) %>%
+  mutate(
+    h41_date = if_else(
+      condition = !is.na(gth4x_date),
+      true = as.POSIXct(gth4x_date),
+      false = as.POSIXct(h41_date)
+    )
+  ) %>%
+  # Add screening ids
   left_join(
     select(id_screening_enrolled, screening_id = id, id = s4_main_id) %>%
       mutate(id = as.character(id))
   ) %>%
+  left_join(
+    gt_emory_data %>%
+      filter(redcap_event_name == "elegibilidad_arm_1", !is.na(m17_ga)) %>%
+      select(
+        screening_id = id, fpp = m17_ga, screening_date = s1_date
+      )
+  ) %>%
   select(
     rowname, screening_id, id, redcap_event_name, everything(),
-    -matches("^(s1|s2|m17|s3|s4)_"), fpp = m17_ga
+    -matches("^(s1|s2|m17|s3|s4)_"), fpp
   )
 
 
@@ -242,6 +350,29 @@ Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Gu
 
 ## Tabla y mapa
 
+<div width=200>
+<table class='gmisc_table' style='border-collapse: collapse; margin-top: 1em; margin-bottom: 1em; width=50pt' >
+<tbody>
+<tr>
+<td style='text-align: center;'><img src="img/circle_gray.png" width=16 height=16></img></td>
+<td style='text-align: center;'>No data</td>
+</tr>
+<tr>
+<td style='text-align: center;'><img src="img/circle_red.png" width=16 height=16></img></td>
+<td style='text-align: center;'>Uploaded</td>
+</tr>
+<tr>
+<td style='text-align: center;'><img src="img/circle_yellow.png" width=16 height=16></img></td>
+<td style='text-align: center;'>Reviewed</td>
+</tr>
+<tr>
+<td style='border-bottom: 2px solid grey; text-align: center;'><img src="img/circle_green.png" width=16 height=16></img></td>
+<td style='border-bottom: 2px solid grey; text-align: center;'>Complete</td>
+</tr>
+</tbody>
+</table>
+</div>
+
 ```{r}
 # Prepare data for eligibles table and map
 mapa_elegibles <- elegibles %>%
@@ -284,6 +415,7 @@ Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Gu
 ```{r}
 # Prepare data for enrolled table and map
 mapa_inscritas <- inscritas %>%
+  filter(!duplicated(id)) %>%
   mutate(id = paste(id, screening_id, sep = " - ")) %>%
   select(-screening_id) %>%
   datos_tabla() %>%
@@ -292,9 +424,10 @@ mapa_inscritas <- inscritas %>%
   ) %>%
   left_join(
     gt_participants %>%
-      select(screening_id = record_id, lat, long)
+      select(screening_id = record_id, lat, long) %>%
+      filter(!duplicated(screening_id))
   ) %>%
-  select(-screening_id)
+  select(id, screening_id, fpp, everything())
 
 # Wrap data frame in SharedData
 sd <- SharedData$new(mapa_inscritas)

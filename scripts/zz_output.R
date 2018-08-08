@@ -17,32 +17,23 @@ datos_tabla <- function(.data, ...){
     gather(
       variable, value, -id, -redcap_event_name, -fpp, -rowname,
       # ignore extra variables
-      !!!dots,
+      -one_of(gsub("~", "", as.character(dots))),
       factor_key = TRUE
     ) %>%
+    # Separate variable names from dummy columns
+    separate(variable, into = c("variable", "dummy_option"), sep = "___") %>%
     # Tag each crf and keep order
+    left_join(
+      select(gt_emory_dictionary, variable, crf)
+    ) %>%
     mutate(
-      crf = gsub("^([^_]+)_.+", "\\1", variable),
-      letter = gsub("[a-z]+[0-9]+([a-z]*)", "\\1", crf) %>%
-        if_else(. == "", NA_character_, .) %>%
-        zoo::na.locf(na.rm = FALSE) %>%
-        if_else(is.na(.), "", .),
-      crf = paste0(gsub("([a-z]+[0-9]+)[a-z]*", "\\1", crf), letter) %>%
-        factor(levels = unique(.))
+      crf = zoo::na.locf(crf, na.rm = FALSE),
+      variable = factor(variable, levels = unique(variable)),
+      crf = factor(crf, levels = unique(crf))
     ) %>%
-    select(-letter) %>%
+    arrange(id, crf, variable) %>%
     # For each participant, event and crf
-    group_by(id, redcap_event_name, crf, fpp) %>%
-    # Get completion status
-    bind_rows(
-      summarize(., not_complete =!any(grepl("_complete", variable))) %>%
-        filter(not_complete) %>%
-        select(-not_complete) %>%
-        mutate(
-          variable = paste0(crf, "_complete"),
-          value = "0"
-        )
-    ) %>%
+    group_by(id, redcap_event_name, crf, fpp, !!!dots) %>%
     # TODO: status for crfs without {crf}_complete variable
     mutate(
       status = value[grepl("_complete", variable)] %>%
@@ -87,7 +78,7 @@ datos_tabla <- function(.data, ...){
         )
     ) %>%
     ungroup() %>%
-    select(id, redcap_event_name, crf, data, fpp) %>%
+    select(id, redcap_event_name, crf, data, fpp, !!!dots) %>%
     spread(crf, data) %>%
     select(everything(), -redcap_event_name, redcap_event_name)
 }
@@ -112,6 +103,7 @@ tabla_interactiva <- function(.data, ...){
         # Only render visible
         "Scroller"
       ),
+      fillContainer = TRUE,
       # configure options
       options = list(
         dom = "Bfrtip",
