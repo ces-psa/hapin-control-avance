@@ -468,3 +468,28 @@ tamizadas %>%
 
 ```
 
+
+
+# Qué hacer
+
+## Tabla
+
+```{r}
+source("scripts/zz_events_quehacer.R")
+
+all_events %>%
+  arrange(screening_id, id, event_name, report_date) %>%
+  filter(event_relevant) %>%
+  filter(!duplicated(select(., screening_id, id, event_name))) %>%
+  select(
+    "Fecha de reporte" = report_date,
+    "ID tamizaje" = screening_id,
+    "ID estudio" = id,
+    "Fecha tamizaje" = screening_date,
+    "FPP" = fpp,
+    "Edad gestacional en dias" = current_days_pregnancy,
+    "Evento" = event_name
+  ) %>%
+  tabla_interactiva()
+```
+
