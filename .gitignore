@@ -9,3 +9,9 @@ data/
 
 # Ignore html output
 *.html
+
+# Ignore common binary files
+*.zip
+*.pdf
+*.doc*
+*.od*
