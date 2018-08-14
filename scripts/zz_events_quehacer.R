@@ -46,7 +46,8 @@ days <- lubridate::days
 
 all_events <- inscritas %>%
   select(
-    screening_id, id, screening_date, fpp
+    screening_id, id, fpp,
+    screening_date, enrollment_date, randomization_date = s6_date
   ) %>%
   mutate(
     placeholder = NA
@@ -131,7 +132,9 @@ all_events <- inscritas %>%
   ) %>%
   select(
     report_date,
-    screening_id, id, screening_date, fpp, current_days_pregnancy,
+    screening_id, id,
+    screening_date, enrollment_date, randomization_date,
+    fpp, current_days_pregnancy,
     event_name, event_relevant
   )
 

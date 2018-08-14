@@ -294,7 +294,8 @@ inscritas <- gt_emory_data %>%
     gt_emory_data %>%
       filter(redcap_event_name == "elegibilidad_arm_1", !is.na(m17_ga)) %>%
       select(
-        screening_id = id, fpp = m17_ga, screening_date = s1_date
+        screening_id = id, fpp = m17_ga,
+        screening_date = s1_date, enrollment_date = s4_date
       )
   ) %>%
   select(
@@ -418,7 +419,8 @@ mapa_inscritas <- inscritas %>%
   filter(!duplicated(id)) %>%
   mutate(id = paste(id, screening_id, sep = " - ")) %>%
   select(-screening_id) %>%
-  datos_tabla() %>%
+  rename(randomization_date = s6_date) %>%
+  datos_tabla(screening_date, enrollment_date, randomization_date) %>%
   mutate(
     screening_id = gsub("[^- ]+[- ]*([G0-9]+)", "\\1", id)
   ) %>%
@@ -486,6 +488,8 @@ all_events %>%
     "ID tamizaje" = screening_id,
     "ID estudio" = id,
     "Fecha tamizaje" = screening_date,
+    "Fecha inscripción" = enrollment_date,
+    "Fecha aleatorización" = randomization_date,
     "FPP" = fpp,
     "Edad gestacional en dias" = current_days_pregnancy,
     "Evento" = event_name
