@@ -45,7 +45,9 @@ gt_z10 <- DBI::dbGetQuery(
         collapse = "', '"
       ),
       "')"
-    )
+    ),
+    # get specifically for z10
+    "and event_id = 161"
   )
 ) %>%
   select(record, field_name, value) %>%
@@ -116,6 +118,35 @@ gt_participants <- gt_z10 %>%
     )
   )
 ```
+
+
+```{r pregnancy-pre-screening}
+#------------------------------------------------------------------------------*
+# Datos de contacto de participantes ----
+#------------------------------------------------------------------------------*
+
+data_base <- DBI::dbConnect(odbc::odbc(), "hapin-gt", dbname = "hapindb")
+
+
+s0 <- DBI::dbGetQuery(
+  conn = data_base,
+  statement = paste(
+    "select *",
+    "from redcap_data",
+    "where project_id = 39",
+    # get specifically for s0
+    "and event_id = 193"
+  )
+) %>%
+  select(record, field_name, value) %>%
+  spread(field_name, value) %>%
+  as_tibble()
+
+
+# Disconnect from database
+DBI::dbDisconnect(conn = data_base)
+```
+
 
 
 ```{r get-gt-exposure, eval=TRUE}
