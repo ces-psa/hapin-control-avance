@@ -508,11 +508,20 @@ tamizadas %>%
 ## Tabla
 
 ```{r}
+# Prepare all events
 source("scripts/zz_events_quehacer.R")
+
+# Set reference dates
+last_friday <- lubridate::floor_date(Sys.Date(), unit = "1 week") - lubridate::days(2)
+next_friday <- last_friday + lubridate::weeks(1)
+
 
 all_events %>%
   arrange(screening_id, id, event_name, report_date) %>%
-  filter(event_relevant) %>%
+  filter(
+    event_relevant,
+    report_date %in% as.Date(c(last_friday, next_friday))
+  ) %>%
   filter(!duplicated(select(., screening_id, id, event_name))) %>%
   select(
     "Fecha de reporte" = report_date,
