@@ -52,3 +52,23 @@ install.packages(
     dependencies = c("Depends", "Imports")
 )
 ```
+
+
+### Versión del dashboard
+
+Para utilizar la versión más reciente del dashboard puede:
+
+- Descargar el más reciente:
+
+```
+git clone https://github.com/ces-psa/hapin-control-avance.git
+```
+
+- O, si ya tiene el repositorio localmente, actualizarlo:
+
+```
+git pull origin master
+```
+
+> Si al actualizar el repositorio `git` reporta conflictos, mejor borrar la
+carpeta y descargar de nuevo el repositorio con `git clone ...`
