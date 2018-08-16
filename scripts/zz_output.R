@@ -70,8 +70,7 @@ datos_tabla <- function(.data, ...){
         paste0(
           # Include value for tables
           "<div style=\"display:none;\">",
-          date, ";",
-          first(status),
+          date,# ";", first(status),
           "</div>",
           # Include image for display
           "<img src=\"img/circle_", ., ".png\" width=16 height=16></img>"
