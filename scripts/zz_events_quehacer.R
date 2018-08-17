@@ -1,4 +1,12 @@
+#------------------------------------------------------------------------------*
+# Calculate event windows ----
+#------------------------------------------------------------------------------*
 
+# Register commonly used functions
+days <- lubridate::days
+
+
+# Reference windows for events
 event_references <- tribble(
   ~event_name, ~start_days, ~end_days,
   "baseline",            0,      21*7,
@@ -10,7 +18,6 @@ event_references <- tribble(
   "b3",            9*30 -4,   9*30 +4,
   "b4",           12*30 -4,  12*30 +4
 )
-
 
 
 # Set parameters for screening
@@ -29,28 +36,37 @@ report_days <- seq.Date(
   by = "1 day"
 )
 
+
+# Only keep Fridays
 report_days <- report_days[weekdays(report_days) %in% c("viernes", "friday")]
 
 
 
 
-# Register commonly used functions
-days <- lubridate::days
+#------------------------------------------------------------------------------*
+# Define all possible events ----
+#------------------------------------------------------------------------------*
 
 all_events <- inscritas %>%
+  # Windows are mostly based on the expected date of delivery
   select(
     screening_id, id, fpp,
+    # Leave these dates as reference for the field team
     screening_date, s2_date, enrollment_date, randomization_date = s6_date
   ) %>%
   mutate(
+    # Used to force a join with all the enrolled women and the report days below
     placeholder = 1
   ) %>%
   full_join(
     data_frame(
+      # Same placeholder as above
       placeholder = 1,
+      # Days for report
       report_date = report_days
     )
   ) %>%
+  # Add event reference windows
   left_join(mutate(event_references, placeholder = 1)) %>%
   # Determine event relevance
   mutate(
@@ -121,3 +137,5 @@ all_events <- inscritas %>%
     event_name, event_relevant
   )
 
+
+# End of script
