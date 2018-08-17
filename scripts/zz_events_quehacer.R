@@ -17,18 +17,11 @@ event_references <- tribble(
 monthly_screening <- 57
 start_date <- as.Date("2018-07-19")
 screening_duration <- ceiling(800 / monthly_screening / 12 * 365)
-enrollment_rate <- 0.705
-
-# All dates from screening start until 800 are enrolled
-all_dates <- seq.Date(
-  from = start_date, to = start_date + screening_duration, by = "1 day"
-)
-
 
 
 # Generate report every Friday morning
 report_days <- seq.Date(
-  from = min(all_dates),
+  from = start_date,
   # Latest birth
   to = max(inscritas$fpp) +
     # plus one year
