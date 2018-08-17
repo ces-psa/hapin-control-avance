@@ -321,6 +321,7 @@ inscritas <- gt_emory_data %>%
     select(id_screening_enrolled, screening_id = id, id = s4_main_id) %>%
       mutate(id = as.character(id))
   ) %>%
+  select(-s2_date) %>%
   left_join(
     gt_emory_data %>%
       filter(redcap_event_name == "elegibilidad_arm_1", !is.na(m17_ga)) %>%
