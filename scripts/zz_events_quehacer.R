@@ -40,26 +40,16 @@ days <- lubridate::days
 all_events <- inscritas %>%
   select(
     screening_id, id, fpp,
-    screening_date, enrollment_date, randomization_date = s6_date
+    screening_date, s2_date, enrollment_date, randomization_date = s6_date
   ) %>%
   mutate(
-    placeholder = NA
+    placeholder = 1
   ) %>%
   full_join(
     data_frame(
-      placeholder = NA,
+      placeholder = 1,
       report_date = report_days
     )
-  ) %>%
-  select(-placeholder) %>%
-  mutate(
-    # s2 somewhere between 0 and 4 days from ultrasound
-    s2_date = screening_date + sample(
-      0:4, size = n(), replace = TRUE,
-      # With closer date more likely
-      prob = c(0.3, 0.4, 0.2, 0.07, 0.03)
-    ),
-    placeholder = 1
   ) %>%
   left_join(mutate(event_references, placeholder = 1)) %>%
   # Determine event relevance

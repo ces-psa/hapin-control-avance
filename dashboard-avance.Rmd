@@ -326,12 +326,13 @@ inscritas <- gt_emory_data %>%
       filter(redcap_event_name == "elegibilidad_arm_1", !is.na(m17_ga)) %>%
       select(
         screening_id = id, fpp = m17_ga,
-        screening_date = s1_date, enrollment_date = s4_date
+        screening_date = s1_date, enrollment_date = s4_date,
+        s2_date
       )
   ) %>%
   select(
     rowname, screening_id, id, redcap_event_name, everything(),
-    -matches("^(s1|s2|m17|s3|s4)_"), fpp
+    -matches("^(s1|s2|m17|s3|s4)_"), fpp, s2_date
   )
 
 
