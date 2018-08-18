@@ -1,0 +1,411 @@
+---
+title: "Reporte de avance HAPIN Guatemala"
+author: "Oscar de León"
+date: "`r Sys.Date()`"
+output: pdf_document
+---
+
+```{r setup-report, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+# prepare data from report
+knitr::knit(input = "dashboard-avance.Rmd", tangle = TRUE)
+source(file = "dashboard-avance.R")
+file.remove("dashboard-avance.R")
+
+# Utility functions
+bold_all <- . %>%
+  mutate_all(
+    funs(
+      if_else(
+        condition = . == "",
+        true = "",
+        false = paste0("**", ., "**")
+      )
+    )
+  )
+```
+
+
+
+**Este reporte incluye datos hasta `r gt_emory_file$export_time - lubridate::hours(2)`**
+
+
+```{r prepare-all-data}
+all_data <- s0 %>%
+  select(id = record, everything(), -record_id) %>%
+  full_join(gt_emory_data, by = "id") %>%
+  mutate(
+    redcap_event_name = if_else(
+      condition = is.na(redcap_event_name),
+      true = "pre_screening_arm_0",
+      false = redcap_event_name
+    ),
+    id = if_else(
+      condition = !is.na(s4_main_id),
+      true = as.character(s4_main_id),
+      false = id
+    )
+  )
+```
+
+
+
+```{r classify-women, include=FALSE}
+classified <- all_data %>%
+  mutate_at(
+    vars(matches("_date")),
+    funs(as.character)
+  ) %>%
+  # join all events
+  select(-rowname, -redcap_event_name) %>%
+  gather(variable, value, -id, factor_key = TRUE) %>%
+  filter(!is.na(value)) %>%
+  spread(variable, value) %>%
+  mutate(
+    # pre screened to estimate gestational age
+    pre_screened = !is.na(s0_date),
+    # Gestational age possibly below 24 weeks
+    pre_eligible = (s0_knows_lmp == 1 & s0_ga_lmp < 24) |
+      # (s0_knows_lmp == 2 & s0_lmp_knows_month == 1 & s0_ga_lmp_month < 24) |
+      (s0_knows_lmp == 2  & s0_lmp_knows_month == 2 & s0_lmp_6months == 1),
+    # Emory server data
+    screened = !is.na(s1_date),
+    eligible = (
+      # is eligible
+      s1_pregnant == 1 & s1_age_s == 1 & s1_area_s == 1 & s1_biomass == 1 &
+        s1_smoke != 1 & s1_move != 1 &  s1_lpg != 1
+    ) & (
+      # is not ineligible
+      !s2_fetus %in% c(0, 2) & !s2_gest %in% c(0, 2 ) &
+        !s2_onefetus %in% c(0, 2) & !s2_participate %in% c(0, 2) &
+        s1_ultra != 0
+    ),
+    enrolled = !is.na(s4_date) & s4_consent == 1,
+    left = !is.na(e3_date_exit)
+  ) %>%
+  mutate_at(
+    vars(pre_screened, pre_eligible, screened, eligible, enrolled, left),
+    funs(if_else(condition = ., "yes", "no") %>% factor(levels = c("yes", "no")))
+  ) %>%
+  select(
+    id, pre_screened, pre_eligible, screened, eligible, enrolled, left,
+    everything()
+  ) %>%
+  rownames_to_column()
+
+classified %>%
+  count(pre_screened, pre_eligible, screened, eligible, enrolled, left)
+```
+
+
+
+
+
+```{r weekly-summary}
+date_events <- classified %>%
+  mutate(
+    rowname = as.integer(rowname)
+  ) %>%
+  select(
+    id,
+    pre_screened, pre_eligible, screened, eligible, enrolled, left,
+    s0_date, s1_date, s2_date, s4_date, e3_date_exit
+  ) %>%
+  # Collect relevant dates
+  gather(
+    key = crf, value = date, matches("(s[0-4]|e3)_"), factor_key = TRUE
+  ) %>%
+  gather(
+    key = type, value = value,
+    pre_screened, pre_eligible, screened, eligible, enrolled, left,
+    factor_key = TRUE
+  ) %>%
+  filter(
+    (crf == "s0_date" & type %in% c("pre_screened", "pre_eligible")) |
+      (crf == "s1_date" & type == "screened") |
+      (crf == "s2_date" & type == "eligible") |
+      (crf == "s4_date" & type == "enrolled") |
+      (crf == "e3_date_exit" & type == "left")
+  ) %>%
+  filter(!is.na(date), value == "yes") %>%
+  arrange(date) %>%
+  # Get event week
+  mutate(
+    week = lubridate::week(as.Date(date) + lubridate::days(3)) - 1
+  )
+
+# Remove participants who have left
+classified <- filter(classified, left != "yes" | is.na(left))
+```
+
+
+
+## Resumen de tamizaje e inscripción de participantes
+
+El total de las inscritas excluye a las que han dejado el estudio.
+
+
+```{r}
+date_events %>%
+  group_by(week) %>%
+  mutate(
+    dates = date %>%
+      unique() %>%
+      range() %>%
+      paste(collapse = " a ")
+  ) %>%
+  count(week, dates, type) %>%
+  spread(type, n, fill = 0) %>%
+  mutate_at(
+    vars(pre_screened, pre_eligible),
+    funs(
+      if_else(
+        condition = week < 31,
+        true = "--",
+        false = as.character(.)
+      )
+    )
+  ) %>%
+  ungroup() %>%
+  mutate(
+    week = as.character(week)
+  ) %>%
+  # Add totals
+  rbind(
+    summarize(
+      .,
+      week = "Total",
+      dates = "",
+      pre_screened = as.character(sum(as.integer(pre_screened), na.rm = TRUE)),
+      pre_eligible = as.character(sum(as.integer(pre_eligible), na.rm = TRUE)),
+      screened = sum(screened, na.rm = TRUE),
+      eligible = sum(eligible, na.rm = TRUE),
+      left = sum(left, na.rm = TRUE),
+      enrolled = sum(enrolled, na.rm = TRUE) - left
+    ) %>%
+      bold_all()
+  ) %>%
+  rename(
+    Semana = week,
+    Fechas = dates,
+    "Pre-tamizadas s0" = pre_screened,
+    "Elegibles s0" = pre_eligible,
+    "Tamizadas" = screened,
+    "Elegibles" = eligible,
+    "Inscritas" = enrolled,
+    "Dejó estudio" = left
+  ) %>%
+  knitr::kable()
+```
+
+
+
+## Resumen de ultrasonidos obstétricos y edades gestacionales
+
+Esta tabla muestra la cantidad de ultrasonidos obstétricos realizados por semana,
+el número que fueron elegibles, y el promedio de edad gestacional para las
+mujeres elegibles y para las mujeres no elegibles.
+
+```{r}
+classified %>%
+  select(id, date = m17_date, matches("m17")) %>%
+  filter(!is.na(date)) %>%
+  transmute(
+    id = id,
+    date = date,
+    week = lubridate::week(as.Date(date) + lubridate::days(3)) - 1,
+    ga = if_else(
+      condition = m17_ga_method == 1,
+      true = m17_lmp_ga,
+      false = m17_ultra_ga
+    ) %>%
+      gsub("([0-9]+)([.]([0-9]*))?", "\\1;\\3", .)
+  ) %>%
+  separate(ga, into = c("weeks", "days"), convert = TRUE) %>%
+  mutate(
+    ga = weeks + ifelse(is.na(days), 0, days) / 7,
+    eligibility = if_else(
+      condition = ga < 20 & !is.na(ga),
+      true = "eligible",
+      false = "not_eligible"
+    )
+  ) %>%
+  group_by(week) %>%
+  mutate(
+    dates = date %>%
+      unique() %>%
+      range() %>%
+      paste(collapse = " a ")
+  ) %>%
+  group_by(week, dates, eligibility) %>%
+  summarize(
+    n = n(),
+    ga = mean(ga, na.rm = TRUE),
+    ga = paste0(floor(ga), "s ", round((ga - floor(ga)) %% 7, 1), "d"),
+    count = sum(eligibility == "eligible")
+  ) %>%
+  mutate(
+    count = count[eligibility == "eligible"],
+    n = sum(n)
+  ) %>%
+  ungroup() %>%
+  spread(eligibility, ga, fill = "--") %>%
+  # Add totals
+  rbind(
+    summarize(
+      .,
+      week = "Total",
+      dates = "",
+      n = sum(n, na.rm = TRUE),
+      count = sum(count, na.rm = TRUE),
+      eligible = "--",
+      not_eligible = "--"
+    ) %>%
+      bold_all()
+  ) %>%
+  rename(
+    Semana = week,
+    Fechas = dates,
+    Realizados = n,
+    "# elegibles" = count,
+    "Promedio EG elegibles" = eligible,
+    "Promedio EG no elegibles" = not_eligible
+  ) %>%
+  knitr::kable()
+```
+
+
+
+## Resumen de participantes inscritas por tipo
+
+
+La columna embarazadas incluye todas las embarazadas inscritas,
+es decir tanto las que solo hay mujer embarazada en el hogar (IDs 33###),
+como las que tienen mujer embarazada y también otra mujer adulta (IDs 35###).
+
+
+
+```{r}
+classified %>%
+  filter(enrolled == "yes") %>%
+  mutate(
+    type = if_else(
+      condition = grepl("^35[0-9]{3}", id),
+      true = "oaw",
+      false = "pw"
+    ),
+    week = lubridate::week(as.Date(s4_date) + lubridate::days(3)) - 1
+  ) %>%
+  count(week, type) %>%
+  spread(type, n) %>%
+  mutate(
+    week = as.character(week),
+    pw = pw + oaw
+  ) %>%
+  rbind(
+    summarize(
+      .,
+      week = "Total",
+      oaw = sum(oaw),
+      pw = sum(pw)
+    ) %>%
+      bold_all()
+  ) %>%
+  select(
+    Semana = week,
+    "Embarazadas" = pw,
+    "Otras mujeres adultas" = oaw
+  ) %>%
+  knitr::kable(
+    caption = "Hogares inscritos según los tipos de participantes."
+  )
+```
+
+
+
+
+## Resumen de avance con línea base, aleatorización e instalación de estufas
+
+
+```{r}
+classified %>%
+  filter(enrolled == "yes") %>%
+  transmute(
+    id = id,
+    type = if_else(
+      condition = grepl("^35[0-9]{3}", id),
+      true = "oaw",
+      false = "pw"
+    ),
+    start_date = m10_date,
+    end_date = h42_date,
+    rand_date = s6_date,
+    stove_date = h50_date,
+    bl_started = !is.na(start_date),
+    bl_complete = !is.na(end_date),
+    randomized = !is.na(rand_date),
+    intervention = s6_arm == 1,
+    installed = !is.na(stove_date)
+  ) %>%
+  gather(
+    key = event, value = happened,
+    bl_started, bl_complete, randomized, intervention, installed,
+    factor_key = TRUE
+  ) %>%
+  gather(
+    key = group, value = date,
+    matches("_date"),
+    factor_key = TRUE
+  ) %>%
+  filter(
+    (group == "start_date" & event == "bl_started") |
+      (group == "end_date" & event == "bl_complete") |
+      (group == "rand_date" & event == "randomized") |
+      (group == "rand_date" & event == "intervention") |
+      (group == "stove_date" & event == "installed"),
+    !is.na(date), happened
+  ) %>%
+  mutate(
+    week = lubridate::week(as.Date(date) + lubridate::days(3)) - 1
+  ) %>%
+  group_by(week) %>%
+  mutate(
+    dates = date %>%
+      unique() %>%
+      range() %>%
+      paste(collapse = " a ")
+  ) %>%
+  count(week, dates, event) %>%
+  spread(event, n, fill = 0) %>%
+  ungroup() %>%
+  mutate(
+    week = as.character(week)
+  ) %>%
+  # Add totals
+  rbind(
+    summarize(
+      .,
+      week = "Total",
+      dates = "",
+      bl_started = sum(bl_started, na.rm = TRUE),
+      bl_complete = sum(bl_complete, na.rm = TRUE),
+      randomized = sum(randomized, na.rm = TRUE),
+      intervention = sum(intervention, na.rm = TRUE),
+      installed = sum(installed, na.rm = TRUE)
+    ) %>%
+      bold_all()
+  ) %>%
+  rename(
+    Semana = week,
+    Fechas = dates,
+    "Inicia BL" = bl_started,
+    "Completa BL" = bl_complete,
+    "Aleatorizadas" = randomized,
+    "Intervención" = intervention,
+    "Instaladas" = installed
+  ) %>%
+  knitr::kable()
+```
+
+
