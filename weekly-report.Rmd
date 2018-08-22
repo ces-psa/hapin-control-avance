@@ -242,7 +242,7 @@ classified %>%
   summarize(
     n = n(),
     ga = mean(ga, na.rm = TRUE),
-    ga = paste0(floor(ga), "s ", round((ga - floor(ga)) %% 7, 1), "d"),
+    ga = paste0(floor(ga), "s ", round((ga - floor(ga)) * 7, 0), "d"),
     count = sum(eligibility == "eligible")
   ) %>%
   mutate(
