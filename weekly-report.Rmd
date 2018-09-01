@@ -40,28 +40,90 @@ all_data <- s0 %>%
       condition = is.na(redcap_event_name),
       true = "pre_screening_arm_0",
       false = redcap_event_name
-    ),
-    id = if_else(
-      condition = !is.na(s4_main_id),
-      true = as.character(s4_main_id),
-      false = id
     )
+  ) %>%
+  mutate_at(
+    vars(matches("_date")),
+    funs(as.character)
+  ) %>%
+  mutate(
+    arm = redcap_event_name %>%
+      gsub(".+_arm_([0-9]+)", "\\1", .) %>%
+      factor(
+        levels = c("0", "1", "2", "3"),
+        labels = c("tamizaje", "tamizaje", "estudio", "mensual"),
+        ordered = TRUE
+      ),
+    visit = recode_factor(
+      redcap_event_name,
+      pre_screening_arm_0 = "tamizaje",
+      elegibilidad_arm_1 = "tamizaje",
+      linea_de_base_arm_2 = "baseline",
+      p1_arm_2 = "p1",
+      p2_arm_2 = "p2",
+      b_arm_2 = "parto",
+      b1_arm_2 = "b1",
+      b2_arm_2 = "b2",
+      b3_arm_2 = "b3",
+      b4_arm_2 = "b4",
+      segun_sea_necesari_arm_2 = "libres",
+      salida_del_estudio_arm_2 = "salida",
+      m1_arm_3 = "mensual1",
+      m2_arm_3 = "mensual2",
+      .ordered = TRUE
+    )
+  ) %>%
+  select(arm, visit, id, everything(), -rowname)
+
+
+variables <- all_data %>%
+  gather(
+    var_name, value,
+    -redcap_event_name, -arm, -visit, -id,
+    factor_key = TRUE
+  ) %>%
+  mutate(
+    varcrf = sub("([^_])_.+", "\\1", var_name)
+  ) %>%
+  separate(
+    var_name, into = c("variable", "dummy_option"),
+    sep = "___", remove = FALSE
+  ) %>%
+  left_join(
+    select(gt_emory_dictionary, variable, crf)
+  ) %>%
+  mutate(
+    crf = if_else(
+      condition = is.na(crf),
+      true = varcrf,
+      false = crf
+    ) %>%
+      factor(., levels = unique(.))
+  ) %>%
+  group_by(arm, visit, crf) %>%
+  mutate(
+    keep = any(!is.na(value))
+  ) %>%
+  ungroup() %>%
+  filter(keep) %>%
+  count(arm, visit, crf, variable, var_name) %>%
+  mutate_all(
+    funs(as.character)
   )
 ```
 
 
 
 ```{r classify-women, include=FALSE}
-classified <- all_data %>%
-  mutate_at(
-    vars(matches("_date")),
-    funs(as.character)
+#------------------------------------------------------------------------------*
+# TODO: fix variables repeated inside events
+#------------------------------------------------------------------------------*
+
+screening_data <- all_data %>%
+  # keep screening ids
+  filter(
+    grepl("^G", id) | arm == "tamizaje"
   ) %>%
-  # join all events
-  select(-rowname, -redcap_event_name) %>%
-  gather(variable, value, -id, factor_key = TRUE) %>%
-  filter(!is.na(value)) %>%
-  spread(variable, value) %>%
   mutate(
     # pre screened to estimate gestational age
     pre_screened = !is.na(s0_date),
@@ -82,20 +144,103 @@ classified <- all_data %>%
         s1_ultra != 0
     ),
     enrolled = !is.na(s4_date) & s4_consent == 1,
-    left = !is.na(e3_date_exit)
-  ) %>%
-  mutate_at(
-    vars(pre_screened, pre_eligible, screened, eligible, enrolled, left),
-    funs(if_else(condition = ., "yes", "no") %>% factor(levels = c("yes", "no")))
+    study_id = as.character(s4_main_id)
   ) %>%
   select(
-    id, pre_screened, pre_eligible, screened, eligible, enrolled, left,
-    everything()
+    arm, visit,
+    screening_id = id, study_id,
+    pre_screened, pre_eligible,
+    screened, eligible, enrolled,
+    one_of(
+      variables %>%
+        filter(arm == "tamizaje") %>%
+        pull(var_name)
+    )
+  )
+
+
+main_data <- all_data %>%
+  filter(
+    !grepl("^G", id),
+    arm == "estudio"
   ) %>%
-  rownames_to_column()
+  group_by(id) %>%
+  mutate_at(
+    vars(left_p = e3_date_exit, left_oaw = e3_date_exit_o, left_c = e3_date_c),
+    funs(
+      any(!is.na(.))
+    )
+  ) %>%
+  ungroup() %>%
+  mutate(
+    left = left_p | left_oaw | left_c
+  ) %>%
+  select(
+    arm, visit,
+    study_id = id,
+    matches("^left_"), left,
+    one_of(
+      variables %>%
+        filter(arm == "estudio") %>%
+        pull(var_name)
+    )
+  )
+
+
+monthly_data <- all_data %>%
+  filter(
+    !grepl("^G", id),
+    arm == "mensual"
+  ) %>%
+  select(
+    id, arm, visit,
+    one_of(
+      variables %>%
+        filter(arm == "mensual") %>%
+        pull(var_name)
+    )
+  )
+
+
+classified <- screening_data %>%
+  # select(
+  #   arm, visit,
+  #   screening_id, study_id,
+  #   matches("(s[0-4]|e3)_date"),
+  #   pre_screened, pre_eligible,
+  #   screened, eligible, enrolled
+  # ) %>%
+  left_join(
+    main_data %>%
+      ungroup() %>%
+      gather(
+        key = variable, value = value,
+        -c(arm, visit, study_id, matches("^left")),
+        factor_key = TRUE
+      ) %>%
+      mutate(
+        variable = paste(arm, visit, variable, sep = ".")
+      ) %>%
+      select(-arm, -visit) %>%
+      spread(variable, value)
+  ) %>%
+  mutate_at(
+    vars(
+      pre_screened, pre_eligible,
+      screened, eligible, enrolled,
+      matches("^left(_|$)")
+    ),
+    funs(
+      if_else(condition = ., "yes", "no") %>% factor(levels = c("yes", "no"))
+    )
+  )
+
 
 classified %>%
-  count(pre_screened, pre_eligible, screened, eligible, enrolled, left)
+  count(
+    arm, visit,
+    pre_screened, pre_eligible, screened, eligible, enrolled, left
+  )
 ```
 
 
@@ -104,29 +249,31 @@ classified %>%
 
 ```{r weekly-summary}
 date_events <- classified %>%
+  select(
+    matches("(s[0-4]|e3)_date$"),
+    screening_id, study_id,
+    pre_screened, pre_eligible,
+    screened, eligible, enrolled,
+    left
+  ) %>%
+  rownames_to_column() %>%
   mutate(
     rowname = as.integer(rowname)
   ) %>%
-  select(
-    id,
-    pre_screened, pre_eligible, screened, eligible, enrolled, left,
-    s0_date, s1_date, s2_date, s4_date, e3_date_exit
-  ) %>%
   # Collect relevant dates
   gather(
-    key = crf, value = date, matches("(s[0-4]|e3)_"), factor_key = TRUE
+    key = crf, value = date, matches("^(s[0-4])_date$"), factor_key = TRUE
   ) %>%
   gather(
     key = type, value = value,
-    pre_screened, pre_eligible, screened, eligible, enrolled, left,
+    pre_screened, pre_eligible, screened, eligible, enrolled,
     factor_key = TRUE
   ) %>%
   filter(
     (crf == "s0_date" & type %in% c("pre_screened", "pre_eligible")) |
       (crf == "s1_date" & type == "screened") |
       (crf == "s2_date" & type == "eligible") |
-      (crf == "s4_date" & type == "enrolled") |
-      (crf == "e3_date_exit" & type == "left")
+      (crf == "s4_date" & type == "enrolled")
   ) %>%
   filter(!is.na(date), value == "yes") %>%
   arrange(date) %>%
@@ -135,8 +282,9 @@ date_events <- classified %>%
     week = lubridate::week(as.Date(date) + lubridate::days(3)) - 1
   )
 
+
 # Remove participants who have left
-classified <- filter(classified, left != "yes" | is.na(left))
+# classified <- filter(classified, left != "yes" | is.na(left))
 ```
 
 
@@ -181,8 +329,7 @@ date_events %>%
       pre_eligible = as.character(sum(as.integer(pre_eligible), na.rm = TRUE)),
       screened = sum(screened, na.rm = TRUE),
       eligible = sum(eligible, na.rm = TRUE),
-      left = sum(left, na.rm = TRUE),
-      enrolled = sum(enrolled, na.rm = TRUE) - left
+      enrolled = sum(enrolled, na.rm = TRUE)
     ) %>%
       bold_all()
   ) %>%
@@ -193,8 +340,7 @@ date_events %>%
     "Elegibles s0" = pre_eligible,
     "Tamizadas" = screened,
     "Elegibles" = eligible,
-    "Inscritas" = enrolled,
-    "Dejó estudio" = left
+    "Inscritas" = enrolled
   ) %>%
   knitr::kable()
 ```
@@ -209,7 +355,7 @@ mujeres elegibles y para las mujeres no elegibles.
 
 ```{r}
 classified %>%
-  select(id, date = m17_date, matches("m17")) %>%
+  select(id = study_id, date = m17_date, matches("m17")) %>%
   filter(!is.na(date)) %>%
   transmute(
     id = id,
@@ -226,7 +372,7 @@ classified %>%
   mutate(
     ga = weeks + ifelse(is.na(days), 0, days) / 7,
     eligibility = if_else(
-      condition = ga < 20 & !is.na(ga),
+      condition = ga >= 9 & ga < 20 & !is.na(ga),
       true = "eligible",
       false = "not_eligible"
     )
@@ -241,8 +387,19 @@ classified %>%
   group_by(week, dates, eligibility) %>%
   summarize(
     n = n(),
+    range = paste(
+      paste0(
+        floor(range(ga, na.rm = TRUE)), ".",
+        round((range(ga, na.rm = TRUE) - floor(range(ga, na.rm = TRUE))) * 7)
+      ),
+      collapse = " - "
+    ),
     ga = mean(ga, na.rm = TRUE),
-    ga = paste0(floor(ga), "s ", round((ga - floor(ga)) * 7, 0), "d"),
+    ga = paste0(
+      floor(ga), "s ", round((ga - floor(ga)) * 7, 0), "d",
+      # also show range in abbreviated format
+      " (", range, ")"
+    ),
     count = sum(eligibility == "eligible")
   ) %>%
   mutate(
@@ -250,6 +407,7 @@ classified %>%
     n = sum(n)
   ) %>%
   ungroup() %>%
+  select(-range) %>%
   spread(eligibility, ga, fill = "--") %>%
   # Add totals
   rbind(
@@ -291,31 +449,36 @@ classified %>%
   filter(enrolled == "yes") %>%
   mutate(
     type = if_else(
-      condition = grepl("^35[0-9]{3}", id),
+      condition = grepl("^35[0-9]{3}", study_id),
       true = "oaw",
       false = "pw"
     ),
     week = lubridate::week(as.Date(s4_date) + lubridate::days(3)) - 1
   ) %>%
-  count(week, type) %>%
-  spread(type, n) %>%
-  mutate(
-    week = as.character(week),
-    pw = pw + oaw
+  group_by(week) %>%
+  summarize(
+    left_pw = sum(left_p == "yes", na.rm = TRUE),
+    left_oaw = sum(left_oaw == "yes", na.rm = TRUE),
+    oaw = sum(type == "oaw", na.rm = TRUE),
+    pw = sum(type == "pw", na.rm = TRUE) + oaw
   ) %>%
   rbind(
     summarize(
       .,
       week = "Total",
-      oaw = sum(oaw),
-      pw = sum(pw)
+      left_pw = sum(left_pw),
+      left_oaw = sum(left_oaw),
+      oaw = sum(oaw) - left_oaw,
+      pw = sum(pw) - left_pw
     ) %>%
       bold_all()
   ) %>%
   select(
     Semana = week,
     "Embarazadas" = pw,
-    "Otras mujeres adultas" = oaw
+    "Salidas embarazadas" = left_pw,
+    "Otras mujeres adultas" = oaw,
+    "Salidas otras mujeres adultas" = left_oaw
   ) %>%
   knitr::kable(
     caption = "Hogares inscritos según los tipos de participantes."
@@ -325,32 +488,42 @@ classified %>%
 
 
 
-## Resumen de avance con línea base, aleatorización e instalación de estufas
+## Resumen de avance con cada tipo de visita durante el embarazo
 
 
-```{r}
-classified %>%
+```{r, results='asis'}
+visits <- classified %>%
+  rownames_to_column() %>%
+  gather(key = variable, value = value, matches("[.]")) %>%
+  separate(
+    col = variable, into = c("arm", "visit", "variable"), sep = "[.]"
+  ) %>%
+  filter(!is.na(value)) %>%
+  spread(variable, value) %>%
   filter(enrolled == "yes") %>%
   transmute(
-    id = id,
+    arm = arm,
+    visit = visit,
+    id = study_id,
     type = if_else(
       condition = grepl("^35[0-9]{3}", id),
       true = "oaw",
       false = "pw"
     ),
-    start_date = m10_date,
+    start_date = pmin(m10_date, m11_date, na.rm = TRUE),
     end_date = h42_date,
     rand_date = s6_date,
     stove_date = h50_date,
-    bl_started = !is.na(start_date),
-    bl_complete = !is.na(end_date),
+    visit_started = !is.na(start_date),
+    visit_complete = !is.na(end_date),
     randomized = !is.na(rand_date),
     intervention = s6_arm == 1,
+    control = s6_arm == 0,
     installed = !is.na(stove_date)
   ) %>%
   gather(
     key = event, value = happened,
-    bl_started, bl_complete, randomized, intervention, installed,
+    visit_started, visit_complete, randomized, control, intervention, installed,
     factor_key = TRUE
   ) %>%
   gather(
@@ -359,17 +532,18 @@ classified %>%
     factor_key = TRUE
   ) %>%
   filter(
-    (group == "start_date" & event == "bl_started") |
-      (group == "end_date" & event == "bl_complete") |
+    (group == "start_date" & event == "visit_started") |
+      (group == "end_date" & event == "visit_complete") |
       (group == "rand_date" & event == "randomized") |
       (group == "rand_date" & event == "intervention") |
+      (group == "rand_date" & event == "control") |
       (group == "stove_date" & event == "installed"),
     !is.na(date), happened
   ) %>%
   mutate(
     week = lubridate::week(as.Date(date) + lubridate::days(3)) - 1
   ) %>%
-  group_by(week) %>%
+  group_by(visit, week) %>%
   mutate(
     dates = date %>%
       unique() %>%
@@ -381,16 +555,28 @@ classified %>%
   ungroup() %>%
   mutate(
     week = as.character(week)
-  ) %>%
-  # Add totals
+  )
+
+```
+
+
+
+
+### Línea base
+
+```{r, results='asis'}
+visits %>%
+  filter(visit == "baseline") %>%
+  select(-visit) %>%
   rbind(
     summarize(
       .,
       week = "Total",
       dates = "",
-      bl_started = sum(bl_started, na.rm = TRUE),
-      bl_complete = sum(bl_complete, na.rm = TRUE),
+      visit_started = sum(visit_started, na.rm = TRUE),
+      visit_complete = sum(visit_complete, na.rm = TRUE),
       randomized = sum(randomized, na.rm = TRUE),
+      control = sum(control, na.rm = TRUE),
       intervention = sum(intervention, na.rm = TRUE),
       installed = sum(installed, na.rm = TRUE)
     ) %>%
@@ -399,13 +585,59 @@ classified %>%
   rename(
     Semana = week,
     Fechas = dates,
-    "Inicia BL" = bl_started,
-    "Completa BL" = bl_complete,
-    "Aleatorizadas" = randomized,
-    "Intervención" = intervention,
-    "Instaladas" = installed
+    Inicia = visit_started,
+    Completa = visit_complete,
+    Aleatorizadas = randomized,
+    Control = control,
+    Intervención = intervention,
+    Instaladas = installed
   ) %>%
-  knitr::kable()
+  # Present a table
+  knitr::kable(
+    caption = "Total de visitas de baseline"
+  )
+```
+
+
+
+
+### Otras visitas durante el embarazo
+
+```{r, results='asis'}
+visits %>%
+  filter(visit != "baseline") %>%
+  # For each visit type
+  split(.$visit) %>%
+  walk(
+    ~ {
+      visit <- first(.$visit)
+      events <- select(., week, dates, visit_started, visit_complete)
+      
+      events %>%
+        # Add a summary
+        rbind(
+          summarize(
+            .,
+            week = "Total",
+            dates = "",
+            visit_started = sum(visit_started, na.rm = TRUE),
+            visit_complete = sum(visit_complete, na.rm = TRUE)
+          ) %>%
+            bold_all()
+        ) %>%
+        rename(
+          Semana = week,
+          Fechas = dates,
+          Inicia = visit_started,
+          Completa = visit_complete
+        ) %>%
+        # Present a table
+        knitr::kable(
+          caption = paste("Total de visitas de", tolower(visit))
+        ) %>%
+        print()
+    }
+  )
 ```
 
 
