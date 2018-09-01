@@ -26,7 +26,7 @@ data_base <- DBI::dbConnect(odbc::odbc(), "hapin-gt", dbname = "hapindb")
 
 z10_vars <- c(
   "record", "record_id", "id_estudio",  "municipio", "z10_village", "com_jalapa", 
-  "com_jalapa_new", "z10_alti_gps", "z10_lati_gps", "z10_long_gps", 
+  "com_jalapa_new", "z10_alti_gps", "z10_lati_gps", "z10_long_gps", "z10_arm",
   "type_goelocation"
 )
 
@@ -373,7 +373,7 @@ gt_participants <- gt_participants %>%
       false = record_id
     )
   ) %>%
-  select(-long_lat_switched, -record, -id_sc, gps_d_temp)
+  select(-record, -id_sc, gps_d_temp)
 ```
 
 
@@ -442,6 +442,7 @@ bscols(
 )
 
 ```
+
 
 
 
