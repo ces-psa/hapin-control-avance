@@ -52,13 +52,20 @@ report_days <- report_days[
 all_events <- inscritas %>%
   # Windows are mostly based on the expected date of delivery
   select(
-    screening_id, id, fpp,
+    screening_id, id, fpp, hh_arm = s6_arm,
     # Leave these dates as reference for the field team
     screening_date, s2_date, enrollment_date, randomization_date = s6_date
   ) %>%
   mutate(
     # Used to force a join with all the enrolled women and the report days below
-    placeholder = 1
+    placeholder = 1,
+    # Tag given study arm
+    hh_arm = recode_factor(
+      hh_arm,
+      `1` = "intervencion",
+      `0` = "control",
+      .missing = "no-aleatorizadas" 
+    )
   ) %>%
   full_join(
     data_frame(
@@ -132,7 +139,7 @@ all_events <- inscritas %>%
     )
   ) %>%
   select(
-    report_date,
+    report_date, hh_arm,
     screening_id, id,
     screening_date, enrollment_date, randomization_date,
     fpp, current_days_pregnancy,

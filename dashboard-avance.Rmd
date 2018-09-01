@@ -459,10 +459,17 @@ mapa_inscritas <- inscritas %>%
   filter(!duplicated(id)) %>%
   mutate(id = paste(id, screening_id, sep = " - ")) %>%
   select(-screening_id) %>%
-  rename(randomization_date = s6_date) %>%
-  datos_tabla(screening_date, enrollment_date, randomization_date) %>%
+  rename(randomization_date = s6_date, hh_arm = s6_arm) %>%
+  datos_tabla(hh_arm, screening_date, enrollment_date, randomization_date) %>%
   mutate(
-    screening_id = gsub("[^- ]+[- ]*([G0-9]+)", "\\1", id)
+    screening_id = gsub("[^- ]+[- ]*([G0-9]+)", "\\1", id),
+    # Tag given study arm
+    hh_arm = recode_factor(
+      hh_arm,
+      `1` = "intervencion",
+      `0` = "control",
+      .missing = "no-aleatorizadas" 
+    )
   ) %>%
   # Add location from z10
   left_join(
@@ -482,9 +489,10 @@ mapa_inscritas <- inscritas %>%
       select(screening_id = id, ga)
   ) %>%
   select(
-    id, screening_id, ga, screening_date, enrollment_date, randomization_date,
+    id, hh_arm, screening_id, ga, screening_date, enrollment_date, randomization_date,
     fpp, everything()
   )
+
 
 # Wrap data frame in SharedData
 sd <- SharedData$new(mapa_inscritas)
@@ -500,7 +508,6 @@ bscols(
   tabla_interactiva(sd),
   device = "xs"
 )
-
 ```
 
 
@@ -556,6 +563,7 @@ all_events %>%
   ) %>%
   select(
     "Fecha de reporte" = report_date,
+    "Brazo del estudio" = hh_arm,
     "ID tamizaje" = screening_id,
     "ID estudio" = id,
     "Fecha tamizaje" = screening_date,
