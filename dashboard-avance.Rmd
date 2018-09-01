@@ -536,15 +536,15 @@ tamizadas %>%
 source("scripts/zz_events_quehacer.R")
 
 # Set reference dates
-last_friday <- lubridate::floor_date(Sys.Date(), unit = "1 week") - lubridate::days(2)
-next_friday <- last_friday + lubridate::weeks(1)
+last_report_day <- lubridate::floor_date(Sys.Date(), unit = "1 week") + lubridate::days(3)
+next_report_day <- last_report_day + lubridate::weeks(1)
 
 
 all_events %>%
   arrange(screening_id, id, event_name, report_date) %>%
   filter(
     event_relevant,
-    report_date %in% as.Date(c(last_friday, next_friday))
+    report_date %in% as.Date(last_report_day)
   ) %>%
   filter(!duplicated(select(., screening_id, id, event_name))) %>%
   # Calculate gestational age in weeks and days

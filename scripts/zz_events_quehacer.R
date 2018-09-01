@@ -38,7 +38,9 @@ report_days <- seq.Date(
 
 
 # Only keep Fridays
-report_days <- report_days[weekdays(report_days) %in% c("viernes", "friday")]
+report_days <- report_days[
+  weekdays(report_days) %in% c("miércoles", "wednesday")
+]
 
 
 
