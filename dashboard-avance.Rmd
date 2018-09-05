@@ -231,7 +231,6 @@ gt_emory_file <- list.files(
 gt_emory_data <- gt_emory_file %>%
   pull(file) %>%
   read_csv() %>%
-  rownames_to_column() %>%
   # Manual removes
   filter(
     !(redcap_event_name == "elegibilidad_arm_1" & id == "33010"),
@@ -323,7 +322,7 @@ elegibles <- gt_emory_data %>%
 # Tabla de referencia IDs tamizaje y estudio principal
 id_screening_enrolled <- gt_emory_data %>%
   filter(redcap_event_name == "elegibilidad_arm_1") %>%
-  select(rowname, id, s4_main_id)
+  select(id, s4_main_id)
 
 
 # Mujeres inscritas en el estudio
@@ -366,29 +365,14 @@ inscritas <- gt_emory_data %>%
       )
   ) %>%
   select(
-    rowname, screening_id, id, redcap_event_name, everything(),
-    -matches("^(s1|s2|m17|s3|s4)_"), fpp, s2_date
   )
 
 
-tamizadas <- gt_emory_data %>%
+tamizadas <- elegibles %>%
   filter(
-    ! rowname %in% c(
-      # elegibles pero no inscritasd
-      elegibles$rowname,
-      # inscritas
-      inscritas$rowname,
-      # datos de tamizaje de las inscritas
-      gt_emory_data %>%
-        filter(
-          redcap_event_name == "elegibilidad_arm_1",
-          id %in% inscritas$screening_id
-        ) %>%
-        pull(rowname)
-    ),
-    redcap_event_name == "elegibilidad_arm_1"
+    ! eligible
   ) %>%
-  select(rowname, id, redcap_event_name, matches("^(s1|s2|m17|s3|s4)_"))
+  select(id, redcap_event_name, visit, matches("^(s1|s2|m17|s3|s4)_"))
 
 
 ```
