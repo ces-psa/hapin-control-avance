@@ -15,7 +15,7 @@ datos_tabla <- function(.data, ...){
     funs(as.character)
   ) %>%
     gather(
-      variable, value, -id, -redcap_event_name, -fpp, -rowname,
+      variable, value, -id, -visit, -redcap_event_name, -fpp,
       # ignore extra variables
       -one_of(gsub("~", "", as.character(dots))),
       factor_key = TRUE
@@ -33,7 +33,7 @@ datos_tabla <- function(.data, ...){
     ) %>%
     arrange(id, crf, variable) %>%
     # For each participant, event and crf
-    group_by(id, redcap_event_name, crf, fpp, !!!dots) %>%
+    group_by(id, visit, crf, fpp, !!!dots) %>%
     # TODO: status for crfs without {crf}_complete variable
     mutate(
       status = value[grepl("_complete", variable)] %>%
@@ -77,9 +77,9 @@ datos_tabla <- function(.data, ...){
         )
     ) %>%
     ungroup() %>%
-    select(id, redcap_event_name, crf, data, fpp, !!!dots) %>%
+    select(id, visit, crf, data, fpp, !!!dots) %>%
     spread(crf, data) %>%
-    select(everything(), -redcap_event_name, redcap_event_name)
+    select(everything(), -visit, visit)
 }
 
 # Tabla interactiva de crfs llenos
