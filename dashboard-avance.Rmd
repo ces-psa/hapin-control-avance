@@ -490,94 +490,6 @@ bscols(
 
 
 
-# Participantes inscritas
-
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
-
-
-## Mapa
-
-```{r}
-# Prepare data for enrolled table and map
-mapa_inscritas <- inscritas %>%
-  filter(!duplicated(id)) %>%
-  mutate(id = paste(id, screening_id, sep = " - ")) %>%
-  select(-screening_id) %>%
-  rename(randomization_date = s6_date, hh_arm = s6_arm) %>%
-  datos_tabla(hh_arm, screening_date, enrollment_date, randomization_date) %>%
-  mutate(
-    screening_id = gsub("[^- ]+[- ]*([G0-9]+)", "\\1", id),
-    # Tag given study arm
-    hh_arm = recode_factor(
-      hh_arm,
-      `1` = "intervencion",
-      `0` = "control",
-      .missing = "no-aleatorizadas" 
-    )
-  ) %>%
-  # Add location from z10
-  left_join(
-    gt_participants %>%
-      
-      select(screening_id = record_id, lat, long) %>%
-      filter(!duplicated(screening_id))
-  ) %>%
-  # Add **current** gestational age from m17
-  left_join(
-    gt_emory_data %>%
-    filter(grepl("^G", id), !is.na(m17_ga)) %>%
-    mutate(
-        ga = 280 - as.numeric(m17_ga - Sys.Date(), units = "days"),
-        ga = paste0(ga %/% 7, "s ", ga %% 7, "d")
-    ) %>%
-      select(screening_id = id, ga)
-  ) %>%
-  select(
-    id, hh_arm, screening_id, ga, screening_date, enrollment_date, randomization_date,
-    fpp, everything()
-  )
-
-
-# Wrap data frame in SharedData
-sd <- SharedData$new(mapa_inscritas)
-
-# Use SharedData like a dataframe with Crosstalk-enabled widgets
-bscols(
-  leaflet::leaflet(sd, width = "100%", height = 1000) %>%
-    leaflet::addTiles() %>%
-    leaflet::addCircleMarkers(
-      lng = ~long, lat = ~lat,
-      radius = 3, label = ~id
-    ),
-  tabla_interactiva(sd),
-  device = "xs"
-)
-```
-
-
-
-
-# No elegibles
-
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
-
-## Tabla
-
-### Tabla de datos disponibles para mujeres elegibles
-
-```{r}
-tamizadas %>%
-  # Keep reference values
-  mutate(
-    fpp = m17_ga
-  ) %>%
-  datos_tabla() %>%
-  tabla_interactiva()
-
-```
-
-
-
 # Qué hacer
 
 ## Tabla
@@ -615,8 +527,249 @@ all_events %>%
     "Fecha aleatorización" = randomization_date,
     "FPP" = fpp,
     "Edad gestacional" = ga,
+    # "Dias restantes" = valid_days,
     "Evento" = event_name
   ) %>%
   tabla_interactiva()
 ```
 
+
+
+
+<!-- # Participantes inscritas -->
+
+```{r}
+# Prepare data for enrolled table and map
+mapa_inscritas <- inscritas %>%
+  mutate(id = paste(id, screening_id, sep = " - ")) %>%
+  select(-screening_id) %>%
+  rename(randomization_date = s6_date, hh_arm = s6_arm) %>%
+  split(.$visit) %>%
+  subset(subset = sapply(., nrow) > 0) %>%
+  map(
+    ~ .x %>%
+      datos_tabla(hh_arm, screening_date, enrollment_date, randomization_date) %>%
+      mutate(
+        screening_id = gsub("[^- ]+[- ]*([G0-9]+)", "\\1", id),
+        # Tag given study arm
+        hh_arm = recode_factor(
+          hh_arm,
+          `1` = "intervencion",
+          `0` = "control",
+          .missing = "no-aleatorizadas" 
+        )
+      ) %>%
+      # Add location from z10
+      left_join(
+        gt_participants %>%
+          
+          select(screening_id = record_id, lat, long) %>%
+          filter(!duplicated(screening_id))
+      ) %>%
+      # Add **current** gestational age from m17
+      left_join(
+        gt_emory_data %>%
+          filter(grepl("^G", id), !is.na(m17_ga)) %>%
+          mutate(
+            ga = 280 - as.numeric(m17_ga - Sys.Date(), units = "days"),
+            ga = paste0(ga %/% 7, "s ", ga %% 7, "d")
+          ) %>%
+          select(screening_id = id, ga)
+      ) %>%
+      select(
+        id, hh_arm, screening_id, ga,
+        screening_date, enrollment_date, randomization_date,
+        fpp, everything()
+      )
+  )
+```
+
+
+# Baseline
+
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+
+## Mapa
+
+```{r}
+sd <- mapa_inscritas %>%
+  magrittr::extract2("baseline") %>%
+  # Wrap data frame in SharedData
+  SharedData$new()
+
+# Use SharedData like a dataframe with Crosstalk-enabled widgets
+bscols(
+  leaflet::leaflet(sd, width = "100%", height = 1000) %>%
+    leaflet::addTiles() %>%
+    leaflet::addCircleMarkers(
+      lng = ~long, lat = ~lat,
+      radius = 3, label = ~id
+    ),
+  tabla_interactiva(sd),
+  device = "xs"
+)
+```
+
+
+# p1
+
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+
+## Mapa
+
+```{r}
+sd <- mapa_inscritas %>%
+  magrittr::extract2("p1") %>%
+  # Wrap data frame in SharedData
+  SharedData$new()
+
+# Use SharedData like a dataframe with Crosstalk-enabled widgets
+bscols(
+  leaflet::leaflet(sd, width = "100%", height = 1000) %>%
+    leaflet::addTiles() %>%
+    leaflet::addCircleMarkers(
+      lng = ~long, lat = ~lat,
+      radius = 3, label = ~id
+    ),
+  tabla_interactiva(sd),
+  device = "xs"
+)
+```
+
+
+# salida
+
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+
+## Mapa
+
+```{r}
+sd <- mapa_inscritas %>%
+  magrittr::extract2("salida") %>%
+  # Wrap data frame in SharedData
+  SharedData$new()
+
+# Use SharedData like a dataframe with Crosstalk-enabled widgets
+bscols(
+  leaflet::leaflet(sd, width = "100%", height = 1000) %>%
+    leaflet::addTiles() %>%
+    leaflet::addCircleMarkers(
+      lng = ~long, lat = ~lat,
+      radius = 3, label = ~id
+    ),
+  tabla_interactiva(sd),
+  device = "xs"
+)
+```
+
+
+# Libres 1
+
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+
+## Mapa
+
+```{r}
+sd <- mapa_inscritas %>%
+  magrittr::extract2("libres1") %>%
+  # Wrap data frame in SharedData
+  SharedData$new()
+
+# Use SharedData like a dataframe with Crosstalk-enabled widgets
+bscols(
+  leaflet::leaflet(sd, width = "100%", height = 1000) %>%
+    leaflet::addTiles() %>%
+    leaflet::addCircleMarkers(
+      lng = ~long, lat = ~lat,
+      radius = 3, label = ~id
+    ),
+  tabla_interactiva(sd),
+  device = "xs"
+)
+```
+
+
+# Mensual 1
+
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+
+## Mapa
+
+```{r}
+sd <- mapa_inscritas %>%
+  magrittr::extract2("mensual1") %>%
+  # Wrap data frame in SharedData
+  SharedData$new()
+
+# Use SharedData like a dataframe with Crosstalk-enabled widgets
+bscols(
+  leaflet::leaflet(sd, width = "100%", height = 1000) %>%
+    leaflet::addTiles() %>%
+    leaflet::addCircleMarkers(
+      lng = ~long, lat = ~lat,
+      radius = 3, label = ~id
+    ),
+  tabla_interactiva(sd),
+  device = "xs"
+)
+```
+
+
+# Mensual 2
+
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+
+## Mapa
+
+```{r}
+sd <- mapa_inscritas %>%
+  magrittr::extract2("mensual2") %>%
+  # Wrap data frame in SharedData
+  SharedData$new()
+
+# Use SharedData like a dataframe with Crosstalk-enabled widgets
+bscols(
+  leaflet::leaflet(sd, width = "100%", height = 1000) %>%
+    leaflet::addTiles() %>%
+    leaflet::addCircleMarkers(
+      lng = ~long, lat = ~lat,
+      radius = 3, label = ~id
+    ),
+  tabla_interactiva(sd),
+  device = "xs"
+)
+```
+
+
+
+
+# No elegibles
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+## Tabla
+
+### Tabla de datos disponibles para mujeres elegibles
+
+```{r}
+tamizadas %>%
+  # Keep reference values
+  mutate(
+    fpp = m17_ga
+  ) %>%
+  datos_tabla() %>%
+  tabla_interactiva()
+
+```
