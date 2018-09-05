@@ -54,6 +54,13 @@ all_data <- s0 %>%
         labels = c("tamizaje", "tamizaje", "estudio", "mensual"),
         ordered = TRUE
       ),
+    # Default change for all "monthly" visits
+    visit = gsub(
+      pattern = "m([0-9]+).+.",
+      replacement = "mensual\\1",
+      redcap_event_name
+    ),
+    # Assign routine names to the event-visit combinations
     visit = recode_factor(
       redcap_event_name,
       pre_screening_arm_0 = "tamizaje",
@@ -61,19 +68,20 @@ all_data <- s0 %>%
       linea_de_base_arm_2 = "baseline",
       p1_arm_2 = "p1",
       p2_arm_2 = "p2",
-      b_arm_2 = "parto",
-      b1_arm_2 = "b1",
-      b2_arm_2 = "b2",
-      b3_arm_2 = "b3",
+      birth_arm_2 = "parto",
+      b1_y_crecimiento_m_arm_2 = "b1",
+      b2_y_crecimiento_m_arm_2 = "b2",
+      b3_y_crecimiento_m_arm_2 = "b3",
       b4_arm_2 = "b4",
-      segun_sea_necesari_arm_2 = "libres",
       salida_del_estudio_arm_2 = "salida",
-      m1_arm_3 = "mensual1",
-      m2_arm_3 = "mensual2",
+      segun_sea_necesari_arm_2 = "libres1",
+      segun_sea_necesari_arm_2b = "libres2",
+      segun_sea_necesari_arm_2c = "libres3",
+      .default = visit,
       .ordered = TRUE
     )
   ) %>%
-  select(arm, visit, id, everything(), -rowname)
+  select(arm, visit, id, everything())
 
 
 variables <- all_data %>%
