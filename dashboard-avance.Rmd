@@ -291,29 +291,33 @@ gt_emory_data %>%
 
 # Mujeres tamizadas elegibles pero no inscritas
 elegibles <- gt_emory_data %>%
-  filter(
-    # from screening
-    redcap_event_name == "elegibilidad_arm_1",
-    # is eligible
-    (
+  mutate(
+    # eligibility
+    eligible = (
+      # is eligible
       s1_pregnant == 1 & s1_age_s == 1 & s1_area_s == 1 & s1_biomass == 1 &
         s1_smoke != 1 & s1_move != 1 &  s1_lpg != 1
-    ),
-    # is not ineligible
-    (
+    ) & (
+      # is not ineligible
       !s2_fetus %in% c(0, 2) & !s2_gest %in% c(0, 2) &
         !s2_onefetus %in% c(0, 2) & !s2_participate %in% c(0, 2) &
         s1_ultra != 0
     ),
-    # not yet enrolled
-    (
-      is.na(s4_date) |
-       ! s4_consent %in% c(0, 2) |
-        s2_not_particip %in% c(2, 3, 4)
-    ) &
-      is.na(s4_main_id)
+    # is enrolled
+    enrolled = (!is.na(s4_date) & !s4_consent %in% c(0, 2) & !is.na(s4_main_id)),
+    # should be enrolled but is not
+    pending = eligible & !enrolled &
+      (is.na(s1_date) | is.na(s2_date) | is.na(s4_date))
   ) %>%
-  select(rowname, id, redcap_event_name, matches("^(s1|s2|m17|s3|s4)_"))
+  filter(
+    # from screening
+    redcap_event_name == "elegibilidad_arm_1"
+  ) %>%
+  select(
+    redcap_event_name, visit, id,
+    eligible, enrolled, pending,
+    matches("^(s1|s2|m17|s3|s4)_")
+  )
 
 
 # Tabla de referencia IDs tamizaje y estudio principal
@@ -324,6 +328,7 @@ id_screening_enrolled <- gt_emory_data %>%
 
 # Mujeres inscritas en el estudio
 inscritas <- gt_emory_data %>%
+  # Only keep those that are enrolled
   filter(
     id %in% {
       id_screening_enrolled %>%
@@ -439,6 +444,7 @@ Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Gu
 ```{r}
 # Prepare data for eligibles table and map
 mapa_elegibles <- elegibles %>%
+  filter(pending) %>%
   # Keep reference values
   mutate(
     fpp = m17_ga,
