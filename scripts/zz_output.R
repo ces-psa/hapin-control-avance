@@ -20,6 +20,7 @@ datos_tabla <- function(.data, ...){
       -one_of(gsub("~", "", as.character(dots))),
       factor_key = TRUE
     ) %>%
+    filter(!is.na(value)) %>%
     # Separate variable names from dummy columns
     separate(variable, into = c("variable", "dummy_option"), sep = "___") %>%
     # Tag each crf and keep order
