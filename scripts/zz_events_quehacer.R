@@ -53,6 +53,8 @@ all_events <- inscritas %>%
   # Windows are mostly based on the expected date of delivery
   select(
     screening_id, id, fpp, hh_arm = s6_arm,
+    # Add the community name
+    community,
     # Leave these dates as reference for the field team
     screening_date, s2_date, enrollment_date, randomization_date = s6_date
   ) %>%
@@ -140,6 +142,7 @@ all_events <- inscritas %>%
   ) %>%
   select(
     report_date,
+    community,
     hh_arm,
     screening_id, id,
     screening_date, enrollment_date, randomization_date,
