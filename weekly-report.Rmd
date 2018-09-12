@@ -443,58 +443,6 @@ classified %>%
 
 
 
-## Resumen de participantes inscritas por tipo
-
-
-La columna embarazadas incluye todas las embarazadas inscritas,
-es decir tanto las que solo hay mujer embarazada en el hogar (IDs 33###),
-como las que tienen mujer embarazada y también otra mujer adulta (IDs 35###).
-
-
-
-```{r}
-classified %>%
-  filter(enrolled == "yes") %>%
-  mutate(
-    type = if_else(
-      condition = grepl("^35[0-9]{3}", study_id),
-      true = "oaw",
-      false = "pw"
-    ),
-    week = lubridate::week(as.Date(s4_date) + lubridate::days(3)) - 1
-  ) %>%
-  group_by(week) %>%
-  summarize(
-    left_pw = sum(left_p == "yes", na.rm = TRUE),
-    left_oaw = sum(left_oaw == "yes", na.rm = TRUE),
-    oaw = sum(type == "oaw", na.rm = TRUE),
-    pw = sum(type == "pw", na.rm = TRUE) + oaw
-  ) %>%
-  rbind(
-    summarize(
-      .,
-      week = "Total",
-      left_pw = sum(left_pw),
-      left_oaw = sum(left_oaw),
-      oaw = sum(oaw) - left_oaw,
-      pw = sum(pw) - left_pw
-    ) %>%
-      bold_all()
-  ) %>%
-  select(
-    Semana = week,
-    "Embarazadas" = pw,
-    "Salidas embarazadas" = left_pw,
-    "Otras mujeres adultas" = oaw,
-    "Salidas otras mujeres adultas" = left_oaw
-  ) %>%
-  knitr::kable(
-    caption = "Hogares inscritos según los tipos de participantes."
-  )
-```
-
-
-
 
 ## Resumen de avance con cada tipo de visita durante el embarazo
 
@@ -609,6 +557,56 @@ visits %>%
 
 
 
+## Resumen de participantes inscritas por tipo
+
+La columna embarazadas incluye todas las embarazadas inscritas,
+es decir tanto las que solo hay mujer embarazada en el hogar (IDs 33###),
+como las que tienen mujer embarazada y también otra mujer adulta (IDs 35###).
+
+
+
+```{r}
+classified %>%
+  filter(enrolled == "yes") %>%
+  mutate(
+    type = if_else(
+      condition = grepl("^35[0-9]{3}", study_id),
+      true = "oaw",
+      false = "pw"
+    ),
+    week = lubridate::week(as.Date(s4_date) + lubridate::days(3)) - 1
+  ) %>%
+  group_by(week) %>%
+  summarize(
+    left_pw = sum(left_p == "yes", na.rm = TRUE),
+    left_oaw = sum(left_oaw == "yes", na.rm = TRUE),
+    oaw = sum(type == "oaw", na.rm = TRUE),
+    pw = sum(type == "pw", na.rm = TRUE) + oaw
+  ) %>%
+  rbind(
+    summarize(
+      .,
+      week = "Total",
+      left_pw = sum(left_pw),
+      left_oaw = sum(left_oaw),
+      oaw = sum(oaw) - left_oaw,
+      pw = sum(pw) - left_pw
+    ) %>%
+      bold_all()
+  ) %>%
+  select(
+    Semana = week,
+    "Embarazadas" = pw,
+    "Otras mujeres adultas" = oaw
+  ) %>%
+  knitr::kable(
+    caption = "Hogares inscritos según los tipos de participantes."
+  )
+```
+
+
+
+
 ### Otras visitas durante el embarazo
 
 ```{r, results='asis'}
@@ -649,3 +647,44 @@ visits %>%
 ```
 
 
+
+
+## Salidas del estudio
+
+Esta tabla muestra las salidas del estudio según el tipo de participante.
+
+
+
+```{r}
+classified %>%
+  filter(enrolled == "yes") %>%
+  mutate(
+    type = if_else(
+      condition = grepl("^35[0-9]{3}", study_id),
+      true = "oaw",
+      false = "pw"
+    ),
+    week = lubridate::week(as.Date(s4_date) + lubridate::days(3)) - 1
+  ) %>%
+  group_by(week) %>%
+  summarize(
+    left_pw = sum(left_p == "yes", na.rm = TRUE),
+    left_oaw = sum(left_oaw == "yes", na.rm = TRUE)
+  ) %>%
+  rbind(
+    summarize(
+      .,
+      week = "Total",
+      left_pw = sum(left_pw),
+      left_oaw = sum(left_oaw)
+    ) %>%
+      bold_all()
+  ) %>%
+  select(
+    Semana = week,
+    "Embarazadas" = left_pw,
+    "Otras mujeres adultas" = left_oaw
+  ) %>%
+  knitr::kable(
+    caption = "Salidas del estudio según los tipos de participantes."
+  )
