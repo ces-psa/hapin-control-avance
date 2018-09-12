@@ -523,14 +523,13 @@ visits <- classified %>%
 ```{r, results='asis'}
 visits %>%
   filter(visit == "baseline") %>%
-  select(-visit) %>%
+  select(-visit, -visit_complete) %>%
   rbind(
     summarize(
       .,
       week = "Total",
       dates = "",
       visit_started = sum(visit_started, na.rm = TRUE),
-      visit_complete = sum(visit_complete, na.rm = TRUE),
       randomized = sum(randomized, na.rm = TRUE),
       control = sum(control, na.rm = TRUE),
       intervention = sum(intervention, na.rm = TRUE),
@@ -542,7 +541,6 @@ visits %>%
     Semana = week,
     Fechas = dates,
     Inicia = visit_started,
-    Completa = visit_complete,
     Aleatorizadas = randomized,
     Control = control,
     Intervención = intervention,
@@ -688,3 +686,4 @@ classified %>%
   knitr::kable(
     caption = "Salidas del estudio según los tipos de participantes."
   )
+```
