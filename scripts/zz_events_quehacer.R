@@ -139,7 +139,8 @@ all_events <- inscritas %>%
     )
   ) %>%
   select(
-    report_date, hh_arm,
+    report_date,
+    hh_arm,
     screening_id, id,
     screening_date, enrollment_date, randomization_date,
     fpp, current_days_pregnancy,
