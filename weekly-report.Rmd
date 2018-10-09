@@ -3,6 +3,8 @@ title: "Reporte de avance HAPIN Guatemala"
 author: "Oscar de León"
 date: "`r Sys.Date()`"
 output: pdf_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup-report, include=FALSE}
