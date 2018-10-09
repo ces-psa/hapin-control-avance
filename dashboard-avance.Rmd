@@ -504,7 +504,7 @@ bscols(
 
 ```{r}
 # Prepare all events
-source("scripts/zz_events_quehacer.R")
+source("scripts/zz_events_quehacer.R", encoding = "UTF-8")
 
 # Set reference dates
 last_report_day <- lubridate::floor_date(Sys.Date(), unit = "1 week") + lubridate::days(3)
