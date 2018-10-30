@@ -380,6 +380,20 @@ inscritas <- gt_emory_data %>%
     vars(matches("_date")),
     funs(as.character)
   ) %>%
+  # Add dates for started H41s
+  left_join(
+    gt_exposure_start %>%
+      filter(gth4x_crf == "h41") %>%
+      select(visit, id = record_id, gth4x_date)
+  ) %>%
+  mutate(
+    h41_date = if_else(
+      condition = !is.na(gth4x_date),
+      true = as.POSIXct(gth4x_date),
+      false = as.POSIXct(h41_date)
+    )
+  ) %>%
+  select(-gth4x_date) %>%
   gather(
     key = variable, value = value,
     -id, -visit,
@@ -390,19 +404,6 @@ inscritas <- gt_emory_data %>%
   unite(variable, visit, variable, sep = ".") %>%
   # Recover one row per patient
   spread(variable, value) %>%
-  # Add dates for started H41s
-  left_join(
-    gt_exposure_start %>%
-      filter(gth4x_crf == "h41") %>%
-      select(id = record_id, gth4x_date)
-  ) %>%
-  mutate(
-    baseline.h41_date = if_else(
-      condition = !is.na(gth4x_date),
-      true = as.POSIXct(gth4x_date),
-      false = as.POSIXct(baseline.h41_date)
-    )
-  ) %>%
   # Add screening ids
   left_join(
     select(
@@ -432,7 +433,7 @@ inscritas <- gt_emory_data %>%
   select(
     redcap_event_name, visit,
     screening_id, id, fpp, s2_date,
-    everything(), -gth4x_date
+    everything()
   )
 
 
