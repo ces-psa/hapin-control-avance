@@ -693,6 +693,34 @@ bscols(
 ```
 
 
+# p2
+
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+
+## Mapa
+
+```{r}
+sd <- mapa_inscritas %>%
+  magrittr::extract2("p2") %>%
+  # Wrap data frame in SharedData
+  SharedData$new()
+
+# Use SharedData like a dataframe with Crosstalk-enabled widgets
+bscols(
+  leaflet::leaflet(sd, width = "100%", height = 1000) %>%
+    leaflet::addTiles() %>%
+    leaflet::addCircleMarkers(
+      lng = ~long, lat = ~lat,
+      radius = 3, label = ~id
+    ),
+  tabla_interactiva(sd),
+  device = "xs"
+)
+```
+
+
 # salida
 
 
