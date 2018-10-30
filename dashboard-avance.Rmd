@@ -853,3 +853,45 @@ tamizadas %>%
   tabla_interactiva()
 
 ```
+
+
+
+
+# Partos esperados
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+## Tabla
+
+```{r}
+inscritas %>%
+  filter(visit == "baseline") %>%
+  mutate(
+    # Tag given study arm
+    hh_arm = recode_factor(
+      s6_arm,
+      `1` = "intervencion",
+      `0` = "control",
+      .missing = "no-aleatorizadas" 
+    ),
+    report_date = last_report_day,
+    conception_date = fpp - days(280),
+    # Calculate reference days
+    early_birth = fpp - lubridate::weeks(4),
+    preterm_birth = fpp - lubridate::weeks(6),
+    preterm_year = lubridate::year(preterm_birth),
+    preterm_month = lubridate::month(preterm_birth)
+  ) %>%
+  select(
+    screening_id, id, hh_arm,
+    # Add the community name
+    community,
+    # Leave these dates as reference for the field team
+    enrollment_date, randomization_date = s6_date,
+    preterm_year, preterm_month,
+    fpp, early_birth, preterm_birth
+  ) %>%
+  arrange(fpp < Sys.Date(), preterm_birth) %>%
+  tabla_interactiva()
+```
+
