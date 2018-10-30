@@ -42,13 +42,14 @@ Para generar este dashboard se necesita:
     + `flexdashboard`
     + `leaflet`
     + `DT`
+    + `crosstalk`
 
 Para mejores resultados, actualizar todos los paquetes instalados y después
 usar este código para instalar los paquetes requeridos:
 
 ```r
 install.packages(
-    pkgs = c("tidyverse", "flexdashboard", "leaflet", "DT"),
+    pkgs = c("tidyverse", "flexdashboard", "leaflet", "DT", "crosstalk"),
     dependencies = c("Depends", "Imports")
 )
 ```
