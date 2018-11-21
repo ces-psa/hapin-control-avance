@@ -26,21 +26,9 @@ start_date <- as.Date("2018-07-19")
 screening_duration <- ceiling(800 / monthly_screening / 12 * 365)
 
 
-# Generate report every Friday morning
-report_days <- seq.Date(
-  from = start_date,
-  # Latest birth
-  to = max(inscritas$fpp) +
-    # plus one year
-    12*30 + 4,
-  by = "1 day"
-)
-
-
-# Only keep Fridays
-report_days <- report_days[
-  weekdays(report_days) %in% c("miércoles", "wednesday")
-]
+# Generate report considering next Monday
+next_monday <- Sys.Date() %>%
+  lubridate::ceiling_date(unit = "week", week_start = 1)
 
 
 
@@ -61,8 +49,7 @@ all_events <- inscritas %>%
     screening_date, s2_date, enrollment_date, randomization_date = s6_date
   ) %>%
   mutate(
-    # Used to force a join with all the enrolled women and the report days below
-    placeholder = 1,
+    report_date = next_monday,
     # Tag given study arm
     hh_arm = recode_factor(
       hh_arm,
@@ -71,12 +58,6 @@ all_events <- inscritas %>%
       .missing = "no-aleatorizadas" 
     )
   ) %>%
-  full_join(
-    data_frame(
-      # Same placeholder as above
-      placeholder = 1,
-      # Days for report
-      report_date = report_days
     )
   ) %>%
   # Add event reference windows
