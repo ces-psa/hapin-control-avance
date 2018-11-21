@@ -466,6 +466,53 @@ gt_participants <- gt_participants %>%
 
 
 
+# Qué hacer
+
+## Tabla
+
+```{r}
+# Set reference dates
+last_report_day <- lubridate::floor_date(Sys.Date(), unit = "1 week") + lubridate::days(3)
+
+# Prepare all events
+source("scripts/zz_events_quehacer.R", encoding = "UTF-8")
+
+
+all_events %>%
+  arrange(valid_days) %>%
+  filter(event_relevant) %>%
+  # Calculate gestational age in weeks and days
+  mutate(
+    ga = paste0(
+      current_days_pregnancy %/% 7, "s ",
+      current_days_pregnancy %% 7, "d"
+    )
+  ) %>%
+  select(
+    "Fecha de reporte" = report_date,
+    "Comunidad" = community,
+    "Brazo del estudio" = hh_arm,
+    "ID tamizaje" = screening_id,
+    "ID estudio" = id,
+    "Fecha tamizaje" = screening_date,
+    "Fecha inscripción" = enrollment_date,
+    "Fecha aleatorización" = randomization_date,
+    "FPP" = fpp,
+    "Método FPP" = fpp_method,
+    "FUR" = fur,
+    "Edad gestacional" = ga,
+    "Evento" = event_name,
+    "Pendientes" = pending,
+    "Dias restantes" = valid_days,
+    "Salida de embarazada" = salida_pw,
+    "Salida de otra adulta" = salida_owa
+  ) %>%
+  tabla_interactiva()
+```
+
+
+
+
 # Elegibles - no inscritas
 
 Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
@@ -530,53 +577,6 @@ bscols(
   device = "xs"
 )
 
-```
-
-
-
-
-# Qué hacer
-
-## Tabla
-
-```{r}
-# Set reference dates
-last_report_day <- lubridate::floor_date(Sys.Date(), unit = "1 week") + lubridate::days(3)
-
-# Prepare all events
-source("scripts/zz_events_quehacer.R", encoding = "UTF-8")
-
-
-all_events %>%
-  arrange(valid_days) %>%
-  filter(event_relevant) %>%
-  # Calculate gestational age in weeks and days
-  mutate(
-    ga = paste0(
-      current_days_pregnancy %/% 7, "s ",
-      current_days_pregnancy %% 7, "d"
-    )
-  ) %>%
-  select(
-    "Fecha de reporte" = report_date,
-    "Comunidad" = community,
-    "Brazo del estudio" = hh_arm,
-    "ID tamizaje" = screening_id,
-    "ID estudio" = id,
-    "Fecha tamizaje" = screening_date,
-    "Fecha inscripción" = enrollment_date,
-    "Fecha aleatorización" = randomization_date,
-    "FPP" = fpp,
-    "Método FPP" = fpp_method,
-    "FUR" = fur,
-    "Edad gestacional" = ga,
-    "Evento" = event_name,
-    "Pendientes" = pending,
-    "Dias restantes" = valid_days,
-    "Salida de embarazada" = salida_pw,
-    "Salida de otra adulta" = salida_owa
-  ) %>%
-  tabla_interactiva()
 ```
 
 
