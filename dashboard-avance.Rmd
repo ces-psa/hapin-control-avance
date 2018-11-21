@@ -542,19 +542,14 @@ bscols(
 ```{r}
 # Set reference dates
 last_report_day <- lubridate::floor_date(Sys.Date(), unit = "1 week") + lubridate::days(3)
-next_report_day <- last_report_day + lubridate::weeks(1)
 
 # Prepare all events
 source("scripts/zz_events_quehacer.R", encoding = "UTF-8")
 
 
 all_events %>%
-  arrange(screening_id, id, event_name, report_date) %>%
-  filter(
-    event_relevant,
-    report_date %in% as.Date(last_report_day)
-  ) %>%
-  filter(!duplicated(select(., screening_id, id, event_name))) %>%
+  arrange(valid_days) %>%
+  filter(event_relevant) %>%
   # Calculate gestational age in weeks and days
   mutate(
     ga = paste0(
@@ -575,9 +570,9 @@ all_events %>%
     "Método FPP" = fpp_method,
     "FUR" = fur,
     "Edad gestacional" = ga,
-    # "Dias restantes" = valid_days,
     "Evento" = event_name,
     "Pendientes" = pending,
+    "Dias restantes" = valid_days,
     "Salida de embarazada" = salida_pw,
     "Salida de otra adulta" = salida_owa
   ) %>%

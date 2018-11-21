@@ -149,6 +149,11 @@ all_events <- inscritas %>%
       event_name == "b4" & days_since_birth >= start_days ~ TRUE,
       TRUE ~ FALSE
     ),
+    valid_days = case_when(
+      event_name %in% c("baseline", "p1", "p2") ~ end_days - current_days_pregnancy,
+      event_name %in% c("b1", "b2", "b3", "b4") ~ end_days - days_since_birth,
+      TRUE ~ 0
+    ),
     # ordered events
     event_name = factor(
       event_name,
@@ -166,9 +171,10 @@ all_events <- inscritas %>%
     hh_arm,
     screening_id, id,
     screening_date, enrollment_date, randomization_date,
-    event_name, event_relevant
     fpp, fpp_method, fur,
     current_days_pregnancy,
+    event_name, event_relevant,
+    valid_days,
     pending, salida_pw, salida_owa
   )
 
