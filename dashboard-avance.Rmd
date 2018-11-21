@@ -417,7 +417,8 @@ inscritas <- gt_emory_data %>%
     gt_emory_data %>%
       filter(redcap_event_name == "elegibilidad_arm_1", !is.na(m17_ga)) %>%
       select(
-        screening_id = id, fpp = m17_ga,
+        screening_id = id,
+        fpp = m17_ga, fpp_method = m17_ga_method, fur = m17_lmp_date,
         screening_date = s1_date, enrollment_date = s4_date,
         s2_date
       )
@@ -432,7 +433,7 @@ inscritas <- gt_emory_data %>%
   spread(variable, value) %>%
   select(
     redcap_event_name, visit,
-    screening_id, id, fpp, s2_date,
+    screening_id, id, fpp, fpp_method, fur, s2_date,
     everything()
   )
 
@@ -571,6 +572,8 @@ all_events %>%
     "Fecha inscripción" = enrollment_date,
     "Fecha aleatorización" = randomization_date,
     "FPP" = fpp,
+    "Método FPP" = fpp_method,
+    "FUR" = fur,
     "Edad gestacional" = ga,
     # "Dias restantes" = valid_days,
     "Evento" = event_name

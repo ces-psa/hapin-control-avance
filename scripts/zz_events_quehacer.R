@@ -52,7 +52,9 @@ report_days <- report_days[
 all_events <- inscritas %>%
   # Windows are mostly based on the expected date of delivery
   select(
-    screening_id, id, fpp, hh_arm = s6_arm,
+    visit, screening_id, id,
+    fpp, fpp_method, fur,
+    hh_arm = s6_arm,
     # Add the community name
     community,
     # Leave these dates as reference for the field team
@@ -138,6 +140,11 @@ all_events <- inscritas %>%
     event_name = factor(
       event_name,
       levels = c("baseline", "p1", "p2", "birth", "b1", "b2", "b3", "b4")
+    ),
+    fpp_method = recode(
+      fpp_method,
+      `1` = "FUR",
+      `2` = "Ultrasonido"
     )
   ) %>%
   select(
@@ -146,8 +153,9 @@ all_events <- inscritas %>%
     hh_arm,
     screening_id, id,
     screening_date, enrollment_date, randomization_date,
-    fpp, current_days_pregnancy,
     event_name, event_relevant
+    fpp, fpp_method, fur,
+    current_days_pregnancy,
   )
 
 
