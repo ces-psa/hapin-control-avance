@@ -107,8 +107,8 @@ all_events <- inscritas %>%
       report_date - fpp,
       units = "days"
     ),
-    event_week_start = report_date + days(3),
-    event_week_end = event_week_start + days(4),
+    event_week_start = report_date,
+    event_week_end = event_week_start + days(5),
     event_relevant = case_when(
       # Baseline should start at the most 14 days after S2
       # And can be considered if s2 has already been filled
@@ -118,35 +118,18 @@ all_events <- inscritas %>%
       ) ~ TRUE,
       # P1 should happen during gestational age between 24 and <27 weeks 
       event_name == "p1" & (
-        (current_days_pregnancy + 3 >= start_days) &
-          (current_days_pregnancy + 3 < end_days)
+        current_days_pregnancy >= start_days
       ) ~ TRUE,
       # P2 should happen during gestational age between 32 and <35 weeks 
       event_name == "p2" & (
-        (current_days_pregnancy + 3 >= start_days) &
-          (current_days_pregnancy + 3 < end_days)
+        current_days_pregnancy >= start_days
       ) ~ TRUE,
       # Birth expected starting 2 weeks before the expected delivery date
-      event_name == "birth" & (
-        (days_since_birth + 3 >= start_days) &
-          (days_since_birth + 3 <= end_days)
-      ) ~ TRUE,
-      event_name == "b1" & (
-        (days_since_birth + 3 >= start_days) &
-          (days_since_birth + 3 <= end_days)
-      ) ~ TRUE,
-      event_name == "b2" & (
-        (days_since_birth + 3 >= start_days) &
-          (days_since_birth + 3 <= end_days)
-      ) ~ TRUE,
-      event_name == "b3" & (
-        (days_since_birth + 3 >= start_days) &
-          (days_since_birth + 3 <= end_days)
-      ) ~ TRUE,
-      event_name == "b4" & (
-        (days_since_birth + 3 >= start_days) &
-          (days_since_birth + 3 <= end_days)
-      ) ~ TRUE,
+      event_name == "birth" & days_since_birth >= start_days ~ TRUE,
+      event_name == "b1" & days_since_birth >= start_days ~ TRUE,
+      event_name == "b2" & days_since_birth >= start_days ~ TRUE,
+      event_name == "b3" & days_since_birth >= start_days ~ TRUE,
+      event_name == "b4" & days_since_birth >= start_days ~ TRUE,
       TRUE ~ FALSE
     ),
     # ordered events
