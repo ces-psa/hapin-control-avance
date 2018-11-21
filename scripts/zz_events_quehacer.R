@@ -90,10 +90,27 @@ all_events <- inscritas %>%
       is.na(h41) |
       (grepl("^35", id) & is.na(a21) & is.na(salida_owa))
   ) %>%
+  gather(key = variable, value = value, m11, h41, a21) %>%
+  filter(
+    (variable == "a21" & grepl("^35", id) & is.na(salida_owa)) |
+      (variable == "m11" & is.na(salida_pw)) |
+      variable == "h41"
+  ) %>%
+  mutate(
+    variable = recode(
+      variable,
+      m11 = "clinica_pw",
+      a21 = "clinica_owa",
+      h41 = "exposicion"
     )
   ) %>%
-  # Add event reference windows
-  left_join(mutate(event_references, placeholder = 1)) %>%
+  arrange(id, event_name, variable) %>%
+  group_by(id, event_name) %>%
+  mutate(
+    pending = paste(variable[is.na(value)], collapse = ", ")
+  ) %>%
+  ungroup() %>%
+  spread(variable, value) %>%
   # Determine event relevance
   mutate(
     conception_date = fpp - days(280),
@@ -152,6 +169,7 @@ all_events <- inscritas %>%
     event_name, event_relevant
     fpp, fpp_method, fur,
     current_days_pregnancy,
+    pending, salida_pw, salida_owa
   )
 
 

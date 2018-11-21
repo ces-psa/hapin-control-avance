@@ -576,7 +576,10 @@ all_events %>%
     "FUR" = fur,
     "Edad gestacional" = ga,
     # "Dias restantes" = valid_days,
-    "Evento" = event_name
+    "Evento" = event_name,
+    "Pendientes" = pending,
+    "Salida de embarazada" = salida_pw,
+    "Salida de otra adulta" = salida_owa
   ) %>%
   tabla_interactiva()
 ```
