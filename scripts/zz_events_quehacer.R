@@ -46,8 +46,31 @@ all_events <- inscritas %>%
     # Add the community name
     community,
     # Leave these dates as reference for the field team
-    screening_date, s2_date, enrollment_date, randomization_date = s6_date
+    screening_date, s2_date, enrollment_date, randomization_date = s6_date,
+    m11 = m11_date, a21 = a21_date, h41 = h41_date, c30 = matches("c30_date"),
+    pw = e3_date, owa = e3_date_o
   ) %>%
+  filter(
+    visit %in% c(
+      "baseline", "p1", "p2", "b1", "b2", "b3", "b4", "salida"
+    )
+  ) %>%
+  gather(
+    key = variable, value = value,
+    hh_arm, randomization_date, m11, a21, h41, pw, owa,
+    na.rm = TRUE, factor_key = TRUE
+  ) %>%
+  unite(col = variable, visit, variable) %>%
+  spread(variable, value) %>%
+  rename(
+    hh_arm = baseline_hh_arm, randomization_date = baseline_randomization_date
+  ) %>%
+  gather(variable, value, matches("(baseline|p1|p2|parto|b1|b2|b3|b4)_")) %>%
+  extract(
+    variable, into = c("event_name", "variable"),
+    regex = "([^_]+)_(.+)"
+  ) %>%
+  spread(variable, value) %>%
   mutate(
     report_date = next_monday,
     # Tag given study arm
@@ -57,6 +80,15 @@ all_events <- inscritas %>%
       `0` = "control",
       .missing = "no-aleatorizadas" 
     )
+  ) %>%
+  full_join(event_references) %>%
+  filter(
+    # Some participant still in the study
+    (grepl("^33", id) & is.na(salida_pw)) | (grepl("^35", id) & (is.na(salida_pw) | is.na(salida_owa))),
+    # The event has not happened
+    (is.na(m11) & is.na(salida_pw)) |
+      is.na(h41) |
+      (grepl("^35", id) & is.na(a21) & is.na(salida_owa))
   ) %>%
     )
   ) %>%
