@@ -26,6 +26,9 @@ bold_all <- . %>%
       )
     )
   )
+
+# Free memory
+gc()
 ```
 
 
@@ -515,6 +518,9 @@ visits <- classified %>%
     week = as.character(week)
   )
 
+
+# Free memory
+gc()
 ```
 
 
