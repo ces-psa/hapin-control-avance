@@ -761,3 +761,120 @@ classified %>%
     caption = "Salidas del estudio según los tipos de participantes."
   )
 ```
+
+
+
+## Datos de exposición
+
+
+```{r, include=FALSE}
+
+# get exposure data
+source("scripts/exposure_listings.R", encoding = "UTF-8")
+
+```
+
+
+
+```{r}
+
+all_instruments %>%
+  filter(!duplicated(select(., id, visit, target, instrument))) %>%
+  count(visit, target, instrument) %>%
+  spread(instrument, n, fill = ".") %>%
+  left_join(
+    gt_emory_data %>%
+      filter(
+        !duplicated(select(., id, visit)),
+        visit %in% c("baseline", "p1", "p2")
+      ) %>%
+      count(visit)
+  ) %>%
+  mutate_at(
+    vars(ecm, pump, lascar, logger),
+    funs(
+      if_else(
+        condition = . == ".",
+        true = ".",
+        false = paste0(., " (", round(as.numeric(.) / n * 100), "%)")
+      )
+    )
+  ) %>%
+  select(
+    Visit = visit,
+    Households = n,
+    Target = target,
+    ecm, pump, lascar,
+    "beacon logger" = logger
+  ) %>%
+  knitr::kable(
+    caption = paste(
+      "**All exposure monitoring sessions.**",
+      "This table shows all exposure monitoring sessions recorded in RedCap,",
+      "by main study visit. Households missing exposure monitoring with ECM in",
+      "this table are those that have started, but not finished, that visit."
+    )
+  )
+
+```
+
+
+
+```{r}
+ecm_duplicates %>%
+  count(visit, target, duplicate = complete.cases(.)) %>%
+  spread(duplicate, n, fill = 0) %>%
+  set_names(tolower(names(.))) %>%
+  mutate(
+    # target = factor(target, levels = c("m", "kap1", "o", "b", "kap2")),
+    percent = round(true / (false + true) * 100, 1),
+    text = paste0(true, " (", percent, "%, monitored=", true + false,")")
+  ) %>%
+  select(visit, target, text) %>%
+  spread(visit, text, fill = "0 (0%, monitored=0)") %>%
+  select(
+    Target = target, everything()
+  ) %>%
+  knitr::kable(
+    caption = paste(
+      "**Duplicate ECM sessions.**",
+      "This table shows sessions that have included duplicate ECM instruments."
+    )
+  )
+```
+
+
+
+```{r}
+
+
+all_instruments %>%
+  filter(
+    instrument %in% c("ecm", "pump")
+  ) %>%
+  select(id, visit, target, date_start, instrument, instrument_id) %>%
+  count(id, visit, target, instrument) %>%
+  spread(key = instrument, value = n) %>%
+  count(visit, target, colocate = complete.cases(.)) %>%
+  spread(colocate, n, fill = 0) %>%
+  set_names(tolower(names(.))) %>%
+  mutate(
+    # target = factor(target, levels = c("m", "kap1", "o", "b", "kap2")),
+    percent = round(true / (false + true) * 100, 1),
+    text = paste0(true, " (", percent, "%, monitored=", true + false,")")
+  ) %>%
+  select(visit, target, text) %>%
+  spread(visit, text, fill = "0 (0%, monitored=0)") %>%
+  select(
+    Target = target, everything()
+  ) %>%
+  knitr::kable(
+    caption = paste(
+      "**ECM and Casella pump co-locations.**",
+      "This table shows sessions that have included both ECM and Casella pump."
+    )
+  )
+
+
+```
+
