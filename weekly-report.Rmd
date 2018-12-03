@@ -362,25 +362,21 @@ date_events %>%
 
 ```{r}
 ga_fcf <- gt_emory_data %>%
-  filter(visit == "tamizaje") %>%
+  filter(visit == "tamizaje", s4_consent == 1) %>%
   mutate(
-    tipo = case_when(
-      s4_consent == 1 ~ "Inscrita en HAPIN",
-      TRUE ~ "Solo tamizada"
-    ),
     fpp = m17_ga,
     fcf = m17_hr_bpm,
     conception = m17_ga - lubridate::days(280),
     ga = as.numeric(m17_date - conception, unit = "weeks")
   ) %>%
-  select(id, tipo, m17_date, fpp, fcf, conception, ga) %>%
+  select(id, m17_date, fpp, fcf, conception, ga) %>%
   filter(!is.na(ga))
 
 writexl::write_xlsx(ga_fcf, "m17_edad_y_frecuencia.xlsx")
 
 
 labels <- ga_fcf %>%
-  filter(!between(ga, 6, 38) | !between(fcf, 115, 180)) %>%
+  filter(!between(ga, 9, 20) | !between(fcf, 115, 180)) %>%
   mutate(
     vjust = if_else(
       condition = fcf > 180,
@@ -393,7 +389,7 @@ labels <- ga_fcf %>%
 ga_fcf %>%
   ggplot() +
   geom_rect(
-    aes(xmin = 6, xmax = 38, ymin = 115, ymax = 180),
+    aes(xmin = 9, xmax = 20, ymin = 115, ymax = 180),
     color = "green", linetype = "dashed", fill = NA
   ) +
   geom_text(
@@ -402,14 +398,16 @@ ga_fcf %>%
     angle = 30
   ) +
   geom_jitter(
-    aes(x = ga, y = fcf, color = tipo, alpha = tipo)
+    aes(x = ga, y = fcf)
   ) +
   labs(
     title = "Frecuencia cardiaca fetal según edad gestacional",
     x = "Edad gestacional en semanas",
     y = "Frecuencia cardiaca fetal",
-    color = "Tipo de embarazada",
     alpha = "Tipo de embarazada"
+  ) +
+  scale_x_continuous(
+    breaks = c(9, 12, 15, 18, 20, ceiling(max(ga_fcf$ga)))
   ) +
   scale_color_brewer(palette = "Set1", direction = -1) +
   scale_alpha_manual(values = c(1, 0.5)) +
