@@ -360,6 +360,72 @@ date_events %>%
 
 
 
+```{r}
+ga_fcf <- gt_emory_data %>%
+  filter(visit == "tamizaje") %>%
+  mutate(
+    tipo = case_when(
+      s4_consent == 1 ~ "Inscrita en HAPIN",
+      TRUE ~ "Solo tamizada"
+    ),
+    fpp = m17_ga,
+    fcf = m17_hr_bpm,
+    conception = m17_ga - lubridate::days(280),
+    ga = as.numeric(m17_date - conception, unit = "weeks")
+  ) %>%
+  select(id, tipo, m17_date, fpp, fcf, conception, ga) %>%
+  filter(!is.na(ga))
+
+writexl::write_xlsx(ga_fcf, "m17_edad_y_frecuencia.xlsx")
+
+
+labels <- ga_fcf %>%
+  filter(!between(ga, 6, 38) | !between(fcf, 115, 180)) %>%
+  mutate(
+    vjust = if_else(
+      condition = fcf > 180,
+      true = 1,
+      false = -1
+    )
+  )
+
+
+ga_fcf %>%
+  ggplot() +
+  geom_rect(
+    aes(xmin = 6, xmax = 38, ymin = 115, ymax = 180),
+    color = "green", linetype = "dashed", fill = NA
+  ) +
+  geom_text(
+    data = labels,
+    aes(x = ga, y = fcf, label = id, vjust = vjust),
+    angle = 30
+  ) +
+  geom_jitter(
+    aes(x = ga, y = fcf, color = tipo, alpha = tipo)
+  ) +
+  labs(
+    title = "Frecuencia cardiaca fetal según edad gestacional",
+    x = "Edad gestacional en semanas",
+    y = "Frecuencia cardiaca fetal",
+    color = "Tipo de embarazada",
+    alpha = "Tipo de embarazada"
+  ) +
+  scale_color_brewer(palette = "Set1", direction = -1) +
+  scale_alpha_manual(values = c(1, 0.5)) +
+  theme_bw() +
+  theme(
+    title = element_text(face = "bold"),
+    plot.subtitle = element_text(face = "plain"),
+    legend.position = c(0, 0),
+    legend.justification = c(-0.01, -0.01),
+    legend.background = element_blank(),
+    legend.key = element_blank()
+  )
+```
+
+
+
 ## Resumen de ultrasonidos obstétricos y edades gestacionales
 
 Esta tabla muestra la cantidad de ultrasonidos obstétricos realizados por semana,
