@@ -584,7 +584,7 @@ visits <- classified %>%
 
 
 # Free memory
-gc()
+gc(verbose = FALSE)
 ```
 
 
