@@ -33,6 +33,7 @@ gc()
 
 
 
+
 **Este reporte incluye datos hasta `r gt_emory_file$export_time - lubridate::hours(2)`**
 
 
@@ -524,6 +525,21 @@ classified %>%
 
 ```{r, results='asis'}
 visits <- classified %>%
+  # only process data from enrolled participants
+  filter(enrolled == "yes") %>%
+  # only keep needed columns
+  select(
+    study_id, enrolled,
+    matches(
+      paste(
+        c(
+          "s6_date", "s6_arm",
+          "m10_date", "m11_date", "h42_date", "h50_date"
+        ),
+        collapse = "|"
+      )
+    )
+  ) %>%
   rownames_to_column() %>%
   gather(key = variable, value = value, matches("[.]")) %>%
   separate(
@@ -531,7 +547,6 @@ visits <- classified %>%
   ) %>%
   filter(!is.na(value)) %>%
   spread(variable, value) %>%
-  filter(enrolled == "yes") %>%
   transmute(
     arm = arm,
     visit = visit,
