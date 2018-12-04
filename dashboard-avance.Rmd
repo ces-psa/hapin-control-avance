@@ -19,289 +19,27 @@ source(file = "scripts/zz_output.R")
 
 
 
-```{r get_z10}
-#------------------------------------------------------------------------------*
-# Datos de contacto de participantes ----
-#------------------------------------------------------------------------------*
+```{r get-uvg-data}
+# Participant information (z10)
+source(file = "scripts/0_get_participants.R", encoding = "UTF-8")
 
-data_base <- DBI::dbConnect(odbc::odbc(), "hapin-gt", dbname = "hapindb")
+# Pre-screening information (s0)
+source(file = "scripts/0_get_prescreening.R", encoding = "UTF-8")
 
-z10_vars <- c(
-  "record", "record_id", "id_estudio",  "municipio", "z10_village", "com_jalapa", 
-  "com_jalapa_new", "z10_alti_gps", "z10_lati_gps", "z10_long_gps", "z10_arm",
-  "type_goelocation"
-)
-
-gt_z10 <- DBI::dbGetQuery(
-  conn = data_base,
-  statement = paste(
-    "select *",
-    "from redcap_data",
-    "where project_id = 39",
-    # "in \"(select project_id from redcap_projects where project_name = 'main_study_gt'\") A",
-    "and field_name in",
-    paste0(
-      "('",
-      paste(
-        z10_vars,
-        collapse = "', '"
-      ),
-      "')"
-    ),
-    # get specifically for z10
-    "and event_id = 161"
-  )
-) %>%
-  select(record, field_name, value) %>%
-  spread(field_name, value) %>%
-  select(!!!z10_vars) %>%
-  as_tibble()
-
-
-# Disconnect from database
-DBI::dbDisconnect(conn = data_base)
-
-
-#------------------------------------------------------------------------------*
-# Clean up z10 data ----
-#------------------------------------------------------------------------------*
-
-# Hard limits on geo-data
-gt_participants <- gt_z10 %>%
-  # GPS data as numbers
-  mutate_at(
-    vars(matches("alti|lati|long")),
-    funs(
-      gsub("[^-0-9.]", "", .) %>%
-        as.numeric()
-    )
-  ) %>%
-  # Select GPS data given source type
-  mutate(
-    long = case_when(
-      # type_goelocation == "1" ~ z10_long_tablet,
-      type_goelocation == "2" ~ z10_long_gps,
-      TRUE ~ NA_real_
-    ),
-    lat = case_when(
-      # type_goelocation == "1" ~ z10_lati_tablet,
-      type_goelocation == "2" ~ z10_lati_gps,
-      TRUE ~ NA_real_
-    ),
-    elevation = case_when(
-      # type_goelocation == "1" ~ z10_alti_tablet,
-      type_goelocation == "2" ~ z10_alti_gps,
-      TRUE ~ NA_real_
-    )
-  ) %>%
-  select(-matches("(long|lati|alti)_(gps|tablet)")) %>%
-  # Common fixes for GPS data
-  mutate(
-    # Longitude should be roughly in -90.266 to -89.61
-    # and latitude roughly in 14.42 to 14.87
-    # If these appear to be reversed, switch
-    long_lat_switched = (
-      # latitude is negative and < -80
-      lat < -80 |
-      # longitude is positive and < 80
-      between(long, 0, 80)
-    ),
-    gps_d_temp = if_else(long_lat_switched, long, lat),
-    long = if_else(long_lat_switched, lat, long),
-    lat = if_else(long_lat_switched, gps_d_temp, lat),
-    # Longitude in Jalapa has to be negative
-    long = case_when(long > 0 ~ long * -1, TRUE ~ long),
-    # Latitude in Jalapa has to be positive,
-    lat = case_when(lat < 0 ~ lat * -1, TRUE ~ lat),
-    # Elevation can not be below 100 meters
-    elevation = case_when(
-      elevation < 100 ~ elevation * 100,
-      TRUE ~ elevation
-    )
-  )
-```
-
-
-```{r pregnancy-pre-screening}
-#------------------------------------------------------------------------------*
-# Datos de contacto de participantes ----
-#------------------------------------------------------------------------------*
-
-data_base <- DBI::dbConnect(odbc::odbc(), "hapin-gt", dbname = "hapindb")
-
-
-s0 <- DBI::dbGetQuery(
-  conn = data_base,
-  statement = paste(
-    "select *",
-    "from redcap_data",
-    "where project_id = 39",
-    # get specifically for s0
-    "and event_id = 193"
-  )
-) %>%
-  select(record, field_name, value) %>%
-  spread(field_name, value) %>%
-  as_tibble()
-
-
-# Disconnect from database
-DBI::dbDisconnect(conn = data_base)
-```
-
-
-
-```{r get-gt-exposure, eval=TRUE}
-#------------------------------------------------------------------------------*
-# Datos de inicio de actividades de exposure ----
-#------------------------------------------------------------------------------*
-
-data_base <- DBI::dbConnect(odbc::odbc(), "hapin-gt", dbname = "hapindb")
-
-
-gt_exposure_events <- DBI::dbGetQuery(
-  conn = data_base,
-  statement = paste(
-    "select event_id, descrip",
-    "from redcap_events_metadata",
-    "where arm_id in",
-    paste(
-        "(select arm_id",
-        "from redcap_events_arms",
-        "where project_id in",
-        "(select project_id from redcap_projects",
-        " where project_name = 'hapin_guatemala_exposure'))"
-    )
-  )
-)
-
-
-gt_exposure_start <- DBI::dbGetQuery(
-  conn = data_base,
-  statement = paste(
-    "select *",
-    "from redcap_data",
-    "where project_id in (select project_id from redcap_projects where project_name = 'hapin_guatemala_exposure')"
-  )
-) %>%
-  left_join(gt_exposure_events) %>%
-  mutate(
-    visit = recode_factor(
-      paste0(descrip, "_arm_2"),
-      linea_de_base_arm_2 = "baseline",
-      p1_arm_2 = "p1",
-      p2_arm_2 = "p2",
-      b1_y_crecimiento_m_arm_2 = "b1",
-      b2_y_crecimiento_m_arm_2 = "b2",
-      b3_y_crecimiento_m_arm_2 = "b3",
-      b4_arm_2 = "b4",
-      .default = descrip,
-      .ordered = TRUE
-    )
-  ) %>%
-  select(visit, record, field_name, value) %>%
-  spread(field_name, value) %>%
-  as_tibble()
-
-
-# Disconnect from database
-DBI::dbDisconnect(conn = data_base)
-
+# Exposure supporting data (h41 start)
+source(file = "scripts/0_get_exposure_start.R", encoding = "UTF-8")
 ```
 
 
 
 
+```{r get_data}
+# Emory RedCap dictionary
+source(file = "scripts/0_get_emory_dictionary.R", encoding = "UTF-8")
 
-```{r get_emory_dictionary}
-# Get screening data from Emory export
-gt_emory_dict_file <- list.files(
-  path = "data/dictionaries", pattern = "MainSt.+csv", full.names = TRUE
-) %>%
-  data_frame(
-    file = .,
-    export_time = file %>%
-      gsub(".+?_([-0-9_]+).csv", "\\1", .) %>%
-      lubridate::ymd(tz = "America/New_York")
-  ) %>%
-  slice(which.max(export_time))
-
-gt_emory_dictionary <- gt_emory_dict_file %>%
-  pull(file) %>%
-  read_csv() %>%
-  set_names(
-    names(.) %>%
-      make.names(unique = TRUE, allow_ = TRUE) %>%
-      tolower() %>%
-      gsub("[.]+", "_", .)
-  ) %>%
-  rownames_to_column() %>%
-  extract(form_name, into = c("crf", "title"), regex = "^([^_]+)_(.*)") %>%
-  select(
-    rowname, crf, variable = variable_field_name, field_type,
-    title, text = field_label,
-    config = choices_calculations_or_slider_labels,
-    valid_min = text_validation_min, valid_max = text_validation_max,
-    relevance = branching_logic_show_field_only_if_,
-    required = required_field_
-  )
+# Emory RedCap export data
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
 ```
-
-
-
-
-```{r get-emory-data}
-# Get screening data from Emory export
-gt_emory_file <- list.files(
-  path = "data/exports", pattern = "MainSt.+csv", full.names = TRUE
-) %>%
-  data_frame(
-    file = .,
-    export_time = file %>%
-      gsub(".+?_([-0-9_]+).csv", "\\1", .) %>%
-      lubridate::ymd_hm(tz = "America/New_York")
-  ) %>%
-  slice(which.max(export_time))
-
-gt_emory_data <- gt_emory_file %>%
-  pull(file) %>%
-  read_csv() %>%
-  # Manual removes
-  filter(
-    !(redcap_event_name == "elegibilidad_arm_1" & id == "33010"),
-    !(redcap_event_name == "elegibilidad_arm_1" & id == "G004"),
-    !(id == "99999")
-  ) %>%
-  mutate(
-    # Default change for all "monthly" visits
-    visit = gsub(
-      pattern = "m([0-9]+).+.",
-      replacement = "mensual\\1",
-      redcap_event_name
-    ),
-    # Assign routine names to the event-visit combinations
-    visit = recode_factor(
-      redcap_event_name,
-      elegibilidad_arm_1 = "tamizaje",
-      linea_de_base_arm_2 = "baseline",
-      p1_arm_2 = "p1",
-      p2_arm_2 = "p2",
-      birth_arm_2 = "parto",
-      b1_y_crecimiento_m_arm_2 = "b1",
-      b2_y_crecimiento_m_arm_2 = "b2",
-      b3_y_crecimiento_m_arm_2 = "b3",
-      b4_arm_2 = "b4",
-      salida_del_estudio_arm_2 = "salida",
-      segun_sea_necesari_arm_2 = "libres1",
-      segun_sea_necesari_arm_2b = "libres2",
-      segun_sea_necesari_arm_2c = "libres3",
-      .default = visit,
-      .ordered = TRUE
-    )
-  ) %>%
-  select(redcap_event_name, visit, id, everything())
-```
-
 
 
 
@@ -312,8 +50,6 @@ gt_emory_data %>%
   filter(s1_ultra == 1) %>%
   print(n = Inf)
 ```
-
-
 
 
 

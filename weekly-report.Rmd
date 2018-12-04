@@ -10,10 +10,16 @@ editor_options:
 ```{r setup-report, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 
-# prepare data from report
-knitr::knit(input = "dashboard-avance.Rmd", tangle = TRUE)
-source(file = "dashboard-avance.R")
-file.remove("dashboard-avance.R")
+
+# Get pre-screening information (s0)
+source(file = "scripts/0_get_prescreening.R", encoding = "UTF-8")
+
+# Get Emory RedCap dictionary
+source(file = "scripts/0_get_emory_dictionary.R", encoding = "UTF-8")
+
+# Get Emory RedCap export data
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+
 
 # Utility functions
 bold_all <- . %>%
