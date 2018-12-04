@@ -171,7 +171,8 @@ screening_data <- all_data %>%
         filter(arm == "tamizaje") %>%
         pull(var_name)
     )
-  )
+  ) %>%
+  print()
 
 
 main_data <- all_data %>%
@@ -199,7 +200,8 @@ main_data <- all_data %>%
         filter(arm == "estudio") %>%
         pull(var_name)
     )
-  )
+  ) %>%
+  print()
 
 
 monthly_data <- all_data %>%
@@ -214,7 +216,8 @@ monthly_data <- all_data %>%
         filter(arm == "mensual") %>%
         pull(var_name)
     )
-  )
+  ) %>%
+  print()
 
 
 classified <- screening_data %>%
@@ -248,7 +251,8 @@ classified <- screening_data %>%
     funs(
       if_else(condition = ., "yes", "no") %>% factor(levels = c("yes", "no"))
     )
-  )
+  ) %>%
+  print()
 
 
 classified %>%
