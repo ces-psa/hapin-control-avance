@@ -11,6 +11,9 @@ data/
 output/
 *.html
 
+# Ignore testing scripts
+scripts/scraps/
+
 # Ignore common binary files
 *.zip
 *.pdf
