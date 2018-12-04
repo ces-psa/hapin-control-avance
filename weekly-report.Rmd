@@ -385,7 +385,7 @@ ga_fcf <- gt_emory_data %>%
   select(id, m17_date, fpp, fcf, conception, ga) %>%
   filter(!is.na(ga))
 
-writexl::write_xlsx(ga_fcf, "m17_edad_y_frecuencia.xlsx")
+writexl::write_xlsx(ga_fcf, "output/m17_edad_y_frecuencia.xlsx")
 
 
 labels <- ga_fcf %>%
