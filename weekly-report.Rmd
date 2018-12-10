@@ -674,8 +674,12 @@ visits <- classified %>%
   mutate(
     week = as.character(week)
   )
+```
 
 
+
+
+```{r include=FALSE}
 # Free memory
 gc(verbose = FALSE)
 ```
