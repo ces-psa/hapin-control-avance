@@ -375,22 +375,46 @@ date_events %>%
 
 ```{r}
 ga_fcf <- gt_emory_data %>%
-  filter(visit == "tamizaje", s4_consent == 1) %>%
+  filter(visit == "tamizaje") %>%
   mutate(
+    # Exact characteristics
     fpp = m17_ga,
     fcf = m17_hr_bpm,
     conception = m17_ga - lubridate::days(280),
     ga = as.numeric(m17_date - conception, unit = "weeks"),
-    in_limits = between(fcf, 120, 160) & between(ga, 9, 20)
+    # Categories
+    in_limits = between(fcf, 120, 160) & between(ga, 9, 20),
+    study_group = case_when(
+      s4_consent == 1 ~ "Inscritas",
+      TRUE ~ "No inscritas"
+    ),
+    ga_group = case_when(
+      ga < 9 ~ "Edad < 9s",
+      between(ga, 9, 20) ~ "Edad >=9 y <=20 semanas",
+      ga > 20 ~ "Edad > 20s"
+    ),
+    fcf_group = case_when(
+      fcf < 120 ~ "FCF baja",
+      between(fcf, 120, 160) ~ "FCF normal",
+      fcf > 160 ~ "FCF alta",
+      is.na(fcf) ~ "No datos de FCF"
+    ),
+    fcf_group = factor(
+      fcf_group,
+      levels = c("FCF baja", "FCF normal", "FCF alta", "No datos de FCF")
+    )
   ) %>%
-  select(id, m17_date, fpp, fcf, conception, ga, in_limits) %>%
+  select(
+    id, m17_date, fpp, fcf, conception, ga,
+    in_limits, study_group, ga_group, fcf_group
+  ) %>%
   filter(!is.na(ga))
 
 writexl::write_xlsx(ga_fcf, "output/m17_edad_y_frecuencia.xlsx")
 
 
 labels <- ga_fcf %>%
-  filter(!between(ga, 9, 20)) %>%
+  filter(study_group == "Inscritas", !between(ga, 9, 20)) %>%
   mutate(
     vjust = if_else(
       condition = fcf > 180,
@@ -401,7 +425,7 @@ labels <- ga_fcf %>%
 
 
 ga_fcf %>%
-  filter(!is.na(fcf)) %>%
+  filter(study_group == "Inscritas", !is.na(fcf)) %>%
   ggplot() +
   geom_rect(
     aes(xmin = 9, xmax = 20, ymin = 120, ymax = 160),
@@ -434,6 +458,48 @@ ga_fcf %>%
     legend.key = element_blank()
   )
 ```
+
+
+
+
+```{r}
+ga_fcf %>%
+  group_by(study_group, ga_group, fcf_group) %>%
+  summarize(value = n()) %>%
+  bind_rows(
+    ungroup(.) %>%
+      mutate(study_group = "Total", ga_group = "Total") %>%
+      group_by(study_group, ga_group, fcf_group) %>%
+      summarize(value = sum(value)) %>%
+      ungroup()
+  ) %>%
+  group_by(study_group, ga_group) %>%
+  mutate(
+    value = paste0(
+      round(value / sum(value) * 100, 1),
+      "% (", value, " / ", sum(value), ")"
+    )
+  ) %>%
+  ungroup() %>%
+  spread(fcf_group, value, fill = "") %>%
+  mutate(
+    study_group = if_else(
+      condition = duplicated(study_group),
+      true = "",
+      false = study_group
+    )
+  ) %>%
+  rename(
+    "Grupo" = study_group,
+    "Edad gestacional" = ga_group
+  ) %>%
+  knitr::kable(
+    caption = paste(
+      "Porcentaje de mujeres según grupo de edad gestacional y frecuenca cardiaca fetal (FCF). Incluye participantes inscritas y mujeres tamizadas no inscritas."
+    )
+  )
+```
+
 
 
 
