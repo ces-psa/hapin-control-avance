@@ -173,7 +173,8 @@ main_study <- exposure_data %>%
 # bind main exposure measure and duplicates
 all_instruments <- main_study %>%
   bind_rows(duplicates) %>%
-  arrange(id, visit, date_start)
+  arrange(id, visit, date_start) %>%
+  filter(!grepl("^*8{3,}", instrument_id))
 
 
 # export for input into file loader

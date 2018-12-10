@@ -816,7 +816,7 @@ all_instruments %>%
       count(visit)
   ) %>%
   mutate_at(
-    vars(ecm, pump, lascar, logger),
+    vars(ecm, pump, lascar),
     funs(
       if_else(
         condition = . == ".",
@@ -829,8 +829,7 @@ all_instruments %>%
     Visit = visit,
     Households = n,
     Target = target,
-    ecm, pump, lascar,
-    "beacon logger" = logger
+    ecm, pump, lascar
   ) %>%
   knitr::kable(
     caption = paste(
