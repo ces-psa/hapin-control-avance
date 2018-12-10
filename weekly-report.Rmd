@@ -380,16 +380,17 @@ ga_fcf <- gt_emory_data %>%
     fpp = m17_ga,
     fcf = m17_hr_bpm,
     conception = m17_ga - lubridate::days(280),
-    ga = as.numeric(m17_date - conception, unit = "weeks")
+    ga = as.numeric(m17_date - conception, unit = "weeks"),
+    in_limits = between(fcf, 120, 160) & between(ga, 9, 20)
   ) %>%
-  select(id, m17_date, fpp, fcf, conception, ga) %>%
+  select(id, m17_date, fpp, fcf, conception, ga, in_limits) %>%
   filter(!is.na(ga))
 
 writexl::write_xlsx(ga_fcf, "output/m17_edad_y_frecuencia.xlsx")
 
 
 labels <- ga_fcf %>%
-  filter(!between(ga, 9, 20) | !between(fcf, 115, 180)) %>%
+  filter(!between(ga, 9, 20)) %>%
   mutate(
     vjust = if_else(
       condition = fcf > 180,
@@ -400,9 +401,10 @@ labels <- ga_fcf %>%
 
 
 ga_fcf %>%
+  filter(!is.na(fcf)) %>%
   ggplot() +
   geom_rect(
-    aes(xmin = 9, xmax = 20, ymin = 115, ymax = 180),
+    aes(xmin = 9, xmax = 20, ymin = 120, ymax = 160),
     color = "green", linetype = "dashed", fill = NA
   ) +
   geom_text(
@@ -411,25 +413,23 @@ ga_fcf %>%
     angle = 30
   ) +
   geom_jitter(
-    aes(x = ga, y = fcf)
+    aes(x = ga, y = fcf, color = in_limits)
   ) +
   labs(
-    title = "Frecuencia cardiaca fetal según edad gestacional",
+    title = "Frecuencia cardiaca fetal según edad gestacional en participantes",
     x = "Edad gestacional en semanas",
     y = "Frecuencia cardiaca fetal",
-    alpha = "Tipo de embarazada"
+    color = "Frecuencia cardiaca\ny edad gestacional\ndentro de límites"
   ) +
   scale_x_continuous(
     breaks = c(9, 12, 15, 18, 20, ceiling(max(ga_fcf$ga)))
   ) +
-  scale_color_brewer(palette = "Set1", direction = -1) +
+  scale_color_brewer(palette = "Set1") +
   scale_alpha_manual(values = c(1, 0.5)) +
   theme_bw() +
   theme(
     title = element_text(face = "bold"),
     plot.subtitle = element_text(face = "plain"),
-    legend.position = c(0, 0),
-    legend.justification = c(-0.01, -0.01),
     legend.background = element_blank(),
     legend.key = element_blank()
   )
