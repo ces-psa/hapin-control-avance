@@ -531,8 +531,17 @@ classified %>%
       condition = ga >= 9 & ga < 20 & !is.na(ga),
       true = "eligible",
       false = "not_eligible"
+    ),
+    week = case_when(
+      week < max(week) ~ "Anteriores",
+      week == max(week) ~ as.character(week)
+    ),
+    week = factor(week, levels = c(
+      unique(week[week == "Anteriores"]),
+      unique(week[!is.na(as.numeric(week))])
     )
-  ) %>%
+    )
+  )%>%
   group_by(week) %>%
   mutate(
     dates = date %>%
