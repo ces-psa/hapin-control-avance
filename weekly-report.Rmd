@@ -556,8 +556,7 @@ bind_rows(
   mutate(
     dates = date %>%
       unique() %>%
-      range() %>%
-      paste(collapse = " a ")
+      min()
   ) %>%
   group_by(week, dates, eligibility) %>%
   summarize(
@@ -586,12 +585,12 @@ bind_rows(
   spread(eligibility, ga, fill = "--") %>%
   select(
     Semana = week,
-    Fechas = dates,
+    "Fecha inicio" = dates,
     Realizados = n,
     "# elegibles" = count,
-    "EG no elegibles < 9 semanas" = not_eligible_early,
+    "EG < 9 semanas" = not_eligible_early,
     "Promedio EG elegibles" = eligible,
-    "EG no elegibles >= 20 semanas" = not_eligible_late
+    "EG >= 20 semanas" = not_eligible_late
   ) %>%
   knitr::kable()
 ```
