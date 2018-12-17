@@ -380,6 +380,7 @@ ga_fcf <- gt_emory_data %>%
     # Exact characteristics
     fpp = m17_ga,
     fcf = m17_hr_bpm,
+    viable_fetus = s2_fetus,
     conception = m17_ga - lubridate::days(280),
     ga = as.numeric(m17_date - conception, unit = "weeks"),
     # Categories
@@ -389,8 +390,8 @@ ga_fcf <- gt_emory_data %>%
       TRUE ~ "No inscritas"
     ),
     ga_group = case_when(
-      ga < 9 ~ "Edad < 9s",
-      between(ga, 9, 20) ~ "Edad >=9 y <=20 semanas",
+      ga < 14 ~ "Edad < 14s",
+      between(ga, 9, 20) ~ "Edad >=14 y <=20 semanas",
       ga > 20 ~ "Edad > 20s"
     ),
     fcf_group = case_when(
@@ -405,12 +406,15 @@ ga_fcf <- gt_emory_data %>%
     )
   ) %>%
   select(
-    id, m17_date, fpp, fcf, conception, ga,
-    in_limits, study_group, ga_group, fcf_group
+    study_group, viable_fetus, fcf,
+    id, m17_date, m17_by, fpp, conception, ga,
+    in_limits, ga_group, fcf_group
   ) %>%
   filter(!is.na(ga))
 
-writexl::write_xlsx(ga_fcf, "output/m17_edad_y_frecuencia.xlsx")
+ga_fcf %>%
+  arrange(!is.na(fcf) & !is.na(viable_fetus), study_group, desc(fcf)) %>%
+  writexl::write_xlsx("output/m17_edad_y_frecuencia.xlsx")
 
 
 labels <- ga_fcf %>%
@@ -463,35 +467,35 @@ ga_fcf %>%
 
 
 ```{r}
-ga_fcf %>%
-  group_by(study_group, ga_group, fcf_group) %>%
-  summarize(value = n()) %>%
-  bind_rows(
-    ungroup(.) %>%
-      mutate(study_group = "Total", ga_group = "Total") %>%
-      group_by(study_group, ga_group, fcf_group) %>%
-      summarize(value = sum(value)) %>%
-      ungroup()
-  ) %>%
-  group_by(study_group, ga_group) %>%
+bind_rows(
+  mutate(ga_fcf, table_group = "Total"),
+  mutate(ga_fcf, table_group = "Inscritas") %>%
+    filter(study_group == "Inscritas"),
+  mutate(ga_fcf, table_group = "No inscritas") %>%
+    filter(study_group == "No inscritas"),
+  mutate(ga_fcf, table_group = "Edad gestacional < 14 semanas") %>%
+    filter(ga < 14),
+  mutate(ga_fcf, table_group = "Edad gestacional >= 14 and <= 20 semanas") %>%
+    filter(between(ga, 14, 20)),
+  mutate(ga_fcf, table_group = "Edad gestacional > 20 semanas") %>%
+    filter(ga > 20)
+) %>%
   mutate(
-    value = paste0(
-      round(value / sum(value) * 100, 1),
-      "% (", value, " / ", sum(value), ")"
+    table_group = factor(table_group, levels = unique(table_group))
+  ) %>%
+  count(table_group, fcf_group) %>%
+  group_by(table_group) %>%
+  mutate(
+    Total = sum(n),
+    n = paste0(
+      round(n / Total * 100, 1),
+      " (", n, ")"
     )
   ) %>%
   ungroup() %>%
-  spread(fcf_group, value, fill = "") %>%
-  mutate(
-    study_group = if_else(
-      condition = duplicated(study_group),
-      true = "",
-      false = study_group
-    )
-  ) %>%
+  spread(fcf_group, n, fill = ".")  %>%
   rename(
-    "Grupo" = study_group,
-    "Edad gestacional" = ga_group
+    "Grupo" = table_group
   ) %>%
   knitr::kable(
     caption = paste(
