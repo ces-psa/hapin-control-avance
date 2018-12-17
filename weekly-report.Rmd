@@ -540,12 +540,17 @@ classified %>%
       week < max(week) ~ "Anteriores",
       week == max(week) ~ as.character(week)
     ),
-    week = factor(week, levels = c(
-      unique(week[week == "Anteriores"]),
-      unique(week[!is.na(as.numeric(week))])
+    week = factor(
+      week, levels = c(
+        unique(week[week == "Anteriores"]),
+        unique(week[!is.na(as.numeric(week))]),
+        "Todas"
+      )
     )
-    )
-  )%>%
+  ) %>%
+bind_rows(
+    mutate(., week = factor("Todas", levels = levels(week)))
+) %>%
   group_by(week) %>%
   mutate(
     dates = date %>%
@@ -578,19 +583,6 @@ classified %>%
   ungroup() %>%
   select(-range) %>%
   spread(eligibility, ga, fill = "--") %>%
-  # Add totals
-  rbind(
-    summarize(
-      .,
-      week = "Total",
-      dates = "",
-      n = sum(n, na.rm = TRUE),
-      count = sum(count, na.rm = TRUE),
-      eligible = "--",
-      not_eligible = "--"
-    ) %>%
-      bold_all()
-  ) %>%
   rename(
     Semana = week,
     Fechas = dates,
