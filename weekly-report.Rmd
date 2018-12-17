@@ -322,6 +322,21 @@ El total de las inscritas excluye a las que han dejado el estudio.
 
 ```{r}
 date_events %>%
+  mutate(
+    week = case_when(
+      week <= 30 ~ "Semanas 1 - 30",
+      week > 30 & week < max(week) ~ paste("Semanas 30 -", max(week)),
+      week == max(week) ~ as.character(week)
+    ),
+    week = factor(
+      week, levels = c(
+        "Semanas 1 - 30",
+        unique(week[grepl("Semanas 30", week)]),
+        unique(week[!is.na(as.numeric(week))]),
+        "Total"
+      )
+    )
+  ) %>%
   group_by(week) %>%
   mutate(
     dates = date %>%
@@ -335,21 +350,18 @@ date_events %>%
     vars(pre_screened, pre_eligible),
     funs(
       if_else(
-        condition = week < 31,
+        condition = grepl("Semanas 1", week),
         true = "--",
         false = as.character(.)
       )
     )
   ) %>%
   ungroup() %>%
-  mutate(
-    week = as.character(week)
-  ) %>%
   # Add totals
   rbind(
     summarize(
       .,
-      week = "Total",
+      week = factor("Total", levels = levels(week)),
       dates = "",
       pre_screened = as.character(sum(as.integer(pre_screened), na.rm = TRUE)),
       pre_eligible = as.character(sum(as.integer(pre_eligible), na.rm = TRUE)),
