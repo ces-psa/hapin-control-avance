@@ -528,13 +528,14 @@ classified %>%
     ) %>%
       gsub("([0-9]+)([.]([0-9]*))?", "\\1;\\3", .)
   ) %>%
+  filter(!is.na(ga)) %>%
   separate(ga, into = c("weeks", "days"), convert = TRUE) %>%
   mutate(
     ga = weeks + ifelse(is.na(days), 0, days) / 7,
-    eligibility = if_else(
-      condition = ga >= 9 & ga < 20 & !is.na(ga),
-      true = "eligible",
-      false = "not_eligible"
+    eligibility = case_when(
+      ga < 9 & !is.na(ga) ~ "not_eligible_early",
+      ga >= 9 & ga < 20 & !is.na(ga) ~ "eligible",
+      ga >= 20 & !is.na(ga) ~ "not_eligible_late"
     ),
     week = case_when(
       week < max(week) ~ "Anteriores",
@@ -583,13 +584,14 @@ bind_rows(
   ungroup() %>%
   select(-range) %>%
   spread(eligibility, ga, fill = "--") %>%
-  rename(
+  select(
     Semana = week,
     Fechas = dates,
     Realizados = n,
     "# elegibles" = count,
+    "EG no elegibles < 9 semanas" = not_eligible_early,
     "Promedio EG elegibles" = eligible,
-    "Promedio EG no elegibles" = not_eligible
+    "EG no elegibles >= 20 semanas" = not_eligible_late
   ) %>%
   knitr::kable()
 ```
