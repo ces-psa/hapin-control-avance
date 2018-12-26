@@ -9,7 +9,7 @@ library(package = "tidyverse")
 gt_emory_file <- list.files(
   path = "data/exports", pattern = "MainSt.+csv", full.names = TRUE
 ) %>%
-  data_frame(
+  tibble(
     file = .,
     export_time = file %>%
       gsub(".+?_([-0-9_]+).csv", "\\1", .) %>%

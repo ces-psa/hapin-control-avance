@@ -3,7 +3,7 @@
 gt_emory_dict_file <- list.files(
   path = "data/dictionaries", pattern = "MainSt.+csv", full.names = TRUE
 ) %>%
-  data_frame(
+  tibble(
     file = .,
     export_time = file %>%
       gsub(".+?_([-0-9_]+).csv", "\\1", .) %>%
