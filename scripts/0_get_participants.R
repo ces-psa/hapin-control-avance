@@ -12,6 +12,13 @@ z10_vars <- c(
   "type_goelocation"
 )
 
+private_vars <- c(
+  "z10_p_name", "z10_p_lastname_2",
+  "z10_aow_name", "z10_aow_lastname",
+  "z10_hh_name", "z10_hh_lastname_2",
+  "z10_dpi", "z10_dob", "fecha_parto", "fecha_nacimiento_bb"
+)
+
 gt_z10 <- DBI::dbGetQuery(
   conn = data_base,
   statement = paste(
@@ -23,7 +30,7 @@ gt_z10 <- DBI::dbGetQuery(
     paste0(
       "('",
       paste(
-        z10_vars,
+        c(z10_vars, private_vars),
         collapse = "', '"
       ),
       "')"
@@ -34,12 +41,68 @@ gt_z10 <- DBI::dbGetQuery(
 ) %>%
   select(record, field_name, value) %>%
   spread(field_name, value) %>%
-  select(!!!z10_vars) %>%
+  select(!!!z10_vars, !!!private_vars) %>%
   as_tibble()
 
 
 # Disconnect from database
 DBI::dbDisconnect(conn = data_base)
+
+
+
+
+#------------------------------------------------------------------------------*
+# Generate participant lookup table ----
+#------------------------------------------------------------------------------*
+
+gt_z10 %>%
+  mutate_all(
+    funs(iconv(., from = "Latin1", to = "UTF-8"))
+  ) %>%
+  mutate_at(
+    vars(
+      z10_p_name, z10_p_lastname_2,
+      z10_aow_name, z10_aow_lastname,
+      z10_hh_name, z10_hh_lastname_2
+    ),
+    funs(
+      if_else(
+        condition = is.na(.),
+        true = "",
+        false = .
+      )
+    )
+  ) %>%
+  mutate(
+    embarazada = paste(z10_p_name, z10_p_lastname_2),
+    adulta = paste(z10_aow_name, z10_aow_lastname),
+    esposo = paste(z10_hh_name, z10_hh_lastname_2)
+  ) %>%
+  select(
+    "ID tamizaje" = record_id,
+    "ID estudio" = id_estudio,
+    "Nombre embarazada" = embarazada,
+    "DPI embarazada" = z10_dpi,
+    "Fecha nacimiento embarazada" = z10_dob,
+    "Nombre esposo" = esposo,
+    "Fecha esperada de parto" = fecha_parto,
+    "Fecha del parto" = fecha_nacimiento_bb,
+    "Nombre otra adulta" = adulta
+  ) %>%
+  DT::datatable() %>%
+  htmlwidgets::saveWidget(file = "participants.html")
+
+file.rename(
+  from = "participants.html",
+  to = "output/reference/participants.html"
+)
+
+
+# Drop identifiable information
+gt_z10 <- gt_z10 %>%
+  select(!!! setdiff(z10_vars, private_vars))
+
+
 
 
 #------------------------------------------------------------------------------*
