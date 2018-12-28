@@ -440,6 +440,76 @@ labels <- ga_fcf %>%
   )
 
 
+# all fhr ----
+all_fhr <- ga_fcf %>%
+  mutate(
+     study_group = recode(
+         study_group,
+         Inscritas = "Enrolled",
+         "No inscritas" = "Not enrolled"
+     )
+  ) %>%
+    filter(ga > 0, ga < 40, id != "G0660") %>%
+    ggplot() +
+  geom_rect(
+    aes(xmin = 9, xmax = 20, ymin = 120, ymax = 160),
+    color = "green", linetype = "dashed", fill = NA
+  ) +
+  geom_text(
+    data = labels %>% filter(id != "G0660"),
+    aes(x = ga, y = fcf, label = id, vjust = vjust),
+    angle = 30
+  ) +
+  # geom_smooth(
+  #   aes(x = ga, y = fcf),
+  #   method = "lm", formula = y ~ x + I(x^2),
+  #   color = "gray30"
+  # ) +
+  geom_jitter(
+    aes(x = ga, y = fcf, color = study_group),
+    alpha = 0.6, height = 0.8, width = 0
+  ) +
+  labs(
+    title = paste(
+      "Fetal heart rate and gestational age at screening."
+    ),
+    subtitle = paste(
+      "Data points for women enrolled in the study shown in blue,",
+      "and women screened but not enrolled shown in light gray.",
+      "\nWomen in Guatemala were initially screened regardless of appearance",
+      "of pregnancy (i.e. including obviously advanced",
+      "\npregnancies in screening) to guarantee that all screening procedures",
+      "where documented (i.e. not relying on hearsay or",
+      "\nunreliable health service records), thus the abundant data past 20",
+      "weeks of gestational age.",
+      "\nCurrent HAPIN GA and FHR thresholds shown as a dashed rectangle."
+    ),
+    x = "Gestational age (weeks)",
+    y = "Fetal heart rate (bpm)",
+    color = "Pregnant woman status in HAPIN"
+  ) +
+  scale_x_continuous(
+    breaks = c(6, 9, 12, 15, 18, 20, ceiling(max(ga_fcf$ga)), 40)
+  ) +
+  scale_color_manual(values = c("#377EB8", "grey80")) +
+  scale_alpha_manual(values = c(1, 0.5)) +
+  expand_limits(x = c(6, 40), y = c(120, 180)) +
+    theme_bw() +
+  theme(
+    title = element_text(face = "bold"),
+    plot.subtitle = element_text(face = "plain"),
+    legend.position = c(1, 1),
+    legend.justification = c(1.01, 1.01),
+    legend.background = element_blank(),
+    legend.key = element_blank()
+  )
+
+ggsave(
+  filename = "output/hapin-gt-all-fhr.pdf", plot = all_fhr,
+  width = 9, height = 6.5
+)
+
+
 ga_fcf %>%
   filter(study_group == "Inscritas", !is.na(fcf)) %>%
   ggplot() +
