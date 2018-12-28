@@ -20,12 +20,6 @@ gt_emory_file <- list.files(
 gt_emory_data <- gt_emory_file %>%
   pull(file) %>%
   read_csv() %>%
-  # Manual removes
-  filter(
-    !(redcap_event_name == "elegibilidad_arm_1" & id == "33010"),
-    !(redcap_event_name == "elegibilidad_arm_1" & id == "G004"),
-    !(id == "99999")
-  ) %>%
   mutate(
     # Default change for all "monthly" visits
     visit = gsub(
