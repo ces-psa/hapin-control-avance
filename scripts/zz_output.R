@@ -108,7 +108,7 @@ tabla_interactiva <- function(.data, ...){
       options = list(
         dom = "Bfrtip",
         scrollX = TRUE, scrollY = TRUE,
-        fixedColumns = list(leftColumns = 2),
+        fixedColumns = list(leftColumns = 4),
         # fixedHeader = TRUE,
         extend = "collection",
         buttons = c("csv", "excel"),
