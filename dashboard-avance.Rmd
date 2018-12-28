@@ -90,21 +90,34 @@ source("scripts/zz_events_quehacer.R", encoding = "UTF-8")
 
 
 all_events %>%
-  arrange(valid_days) %>%
-  filter(event_relevant) %>%
-  # Calculate gestational age in weeks and days
+  filter(event_relevant, visit != "parto") %>%
+  group_by(study_id) %>%
   mutate(
+    min_valid = min(valid_days, na.rm = TRUE),
     ga = paste0(
       current_days_pregnancy %/% 7, "s ",
       current_days_pregnancy %% 7, "d"
     )
   ) %>%
+  mutate_at(
+    vars(matches("salida_")),
+    funs(
+      if_else(
+        condition = .,
+        true = "sí",
+        false = ""
+      )
+    )
+  ) %>%
+  arrange(min_valid, study_id, valid_days) %>%
+  # Calculate gestational age in weeks and days
   select(
     "Fecha de reporte" = report_date,
+    "ID estudio" = study_id,
+    "Visita" = visit,
     "Comunidad" = community,
     "Brazo del estudio" = hh_arm,
     "ID tamizaje" = screening_id,
-    "ID estudio" = id,
     "Fecha tamizaje" = screening_date,
     "Fecha inscripción" = enrollment_date,
     "Fecha aleatorización" = randomization_date,
@@ -112,11 +125,15 @@ all_events %>%
     "Método FPP" = fpp_method,
     "FUR" = fur,
     "Edad gestacional" = ga,
+    "Fecha de parto" = fecha_parto,
+    "Pérdida de infante" = loss_type,
+    "Fecha de pérdida" = loss_date,
     "Evento" = event_name,
     "Pendientes" = pending,
     "Dias restantes" = valid_days,
     "Salida de embarazada" = salida_pw,
-    "Salida de otra adulta" = salida_owa
+    "Salida de otra adulta" = salida_oaw,
+    "Salida de infante" = salida_c
   ) %>%
   tabla_interactiva()
 ```
@@ -487,7 +504,7 @@ inscritas %>%
       .missing = "no-aleatorizadas" 
     ),
     report_date = last_report_day,
-    conception_date = fpp - days(280),
+    conception_date = fpp - lubridate::days(280),
     # Calculate reference days
     early_birth = fpp - lubridate::weeks(4),
     preterm_birth = fpp - lubridate::weeks(6),
@@ -495,7 +512,7 @@ inscritas %>%
     preterm_month = lubridate::month(preterm_birth)
   ) %>%
   select(
-    screening_id, id, hh_arm,
+    screening_id, study_id = id, hh_arm,
     # Add the community name
     community,
     # Leave these dates as reference for the field team
@@ -503,6 +520,8 @@ inscritas %>%
     preterm_year, preterm_month,
     fpp, early_birth, preterm_birth
   ) %>%
+  anti_join(births) %>%
+  anti_join(losses) %>%
   arrange(fpp < Sys.Date(), preterm_birth) %>%
   tabla_interactiva()
 ```
