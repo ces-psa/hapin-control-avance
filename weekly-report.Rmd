@@ -631,9 +631,9 @@ classified %>%
       )
     )
   ) %>%
-bind_rows(
+  bind_rows(
     mutate(., week = factor("Todas", levels = levels(week)))
-) %>%
+  ) %>%
   group_by(week) %>%
   mutate(
     dates = date %>%
