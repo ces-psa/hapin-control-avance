@@ -262,7 +262,13 @@ classified <- screening_data %>%
   print()
 
 
-classified %>%
+subset(
+  classified,
+  select = c(
+    "arm", "visit",
+    "pre_screened", "pre_eligible", "screened", "eligible", "enrolled", "left"
+  )
+) %>%
   count(
     arm, visit,
     pre_screened, pre_eligible, screened, eligible, enrolled, left
@@ -274,14 +280,16 @@ classified %>%
 
 
 ```{r weekly-summary}
-date_events <- classified %>%
-  select(
-    matches("(s[0-4]|e3)_date$"),
-    screening_id, study_id,
-    pre_screened, pre_eligible,
-    screened, eligible, enrolled,
-    left
-  ) %>%
+date_events <- subset(
+  classified,
+  select = c(
+    grep("(s[0-4]|e3)_date$", names(classified), value = TRUE),
+    "screening_id", "study_id",
+    "pre_screened", "pre_eligible",
+    "screened", "eligible", "enrolled",
+    "left"
+  )
+) %>%
   rownames_to_column() %>%
   mutate(
     rowname = as.integer(rowname)
@@ -596,8 +604,14 @@ el número que fueron elegibles, y el promedio de edad gestacional para las
 mujeres elegibles y para las mujeres no elegibles.
 
 ```{r}
-classified %>%
-  select(id = study_id, date = m17_date, matches("m17")) %>%
+subset(
+  classified,
+  select = c(
+    "study_id",
+    grep("m17", names(classified), value = TRUE)
+  )
+) %>%
+  rename(id = study_id, date = m17_date) %>%
   filter(!is.na(date)) %>%
   transmute(
     id = id,
@@ -684,20 +698,23 @@ classified %>%
 
 
 ```{r, results='asis'}
-visits <- classified %>%
-  # only process data from enrolled participants
-  filter(enrolled == "yes") %>%
-  # only keep needed columns
-  select(
-    study_id, enrolled,
-    matches(
-      paste(
-        c(
-          "s6_date", "s6_arm",
-          "m10_date", "m11_date", "h42_date", "h50_date",
-          "c30_date"
+visits <- subset(
+    classified,
+    # only process data from enrolled participants
+    enrolled == "yes",
+    select = c(
+      "study_id", "enrolled",
+      grep(
+        paste(
+          c(
+            "s6_date", "s6_arm",
+            "m10_date", "m11_date", "h42_date", "h50_date",
+            "c30_date"
+          ),
+          collapse = "|"
         ),
-        collapse = "|"
+        names(classified),
+        value = TRUE
       )
     )
   ) %>%
@@ -828,7 +845,13 @@ como las que tienen mujer embarazada y también otra mujer adulta (IDs 35###).
 
 
 ```{r}
-classified %>%
+subset(
+  classified,
+  select = c(
+    "study_id", "left_p", "left_oaw", "left_c", "s4_date", "enrolled",
+    "estudio.parto.c30_date"
+  )
+) %>%
   filter(enrolled == "yes") %>%
   mutate(
     type = if_else(
@@ -946,8 +969,14 @@ Esta tabla muestra las salidas del estudio según el tipo de participante.
 
 
 ```{r}
-classified %>%
-  select(study_id, enrolled, matches("^left"), matches("e3_date")) %>%
+subset(
+  classified,
+  select = c(
+    "study_id", "enrolled",
+    grep("^left", names(classified), value = TRUE),
+    grep("e3_date", names(classified), value = TRUE)
+  )
+) %>%
   filter(enrolled == "yes") %>%
   gather(column, value, matches("e3_date"), na.rm = TRUE) %>%
   gather(type, left, matches("left_")) %>%
