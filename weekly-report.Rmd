@@ -795,7 +795,8 @@ visits %>%
       randomized = sum(randomized, na.rm = TRUE),
       control = sum(control, na.rm = TRUE),
       intervention = sum(intervention, na.rm = TRUE),
-      installed = sum(installed, na.rm = TRUE)
+      installed = sum(installed, na.rm = TRUE),
+      born = sum(born, na.rm = TRUE)
     ) %>%
       bold_all()
   ) %>%
@@ -806,7 +807,8 @@ visits %>%
     Aleatorizadas = randomized,
     Control = control,
     Intervención = intervention,
-    Instaladas = installed
+    Instaladas = installed,
+    Nacidos = born
   ) %>%
   # Present a table
   knitr::kable(
@@ -834,30 +836,58 @@ classified %>%
       true = "oaw",
       false = "pw"
     ),
+    year = lubridate::year(as.Date(s4_date) + lubridate::days(3)),
     week = lubridate::week(as.Date(s4_date) + lubridate::days(3)) - 1
   ) %>%
-  group_by(week) %>%
+  group_by(year, week) %>%
   summarize(
     left_pw = sum(left_p == "yes", na.rm = TRUE),
     left_oaw = sum(left_oaw == "yes", na.rm = TRUE),
+    left_c = sum(left_c == "yes", na.rm = TRUE),
     oaw = sum(type == "oaw", na.rm = TRUE),
     pw = sum(type == "pw", na.rm = TRUE) + oaw
   ) %>%
+  left_join(
+    subset(classified, select = "estudio.parto.c30_date") %>%
+      rename(born = estudio.parto.c30_date) %>%
+      filter(complete.cases(.)) %>%
+      mutate(
+        year = lubridate::year(as.Date(born) + lubridate::days(3)),
+        week = lubridate::week(as.Date(born) + lubridate::days(3)) - 1
+      ) %>%
+      group_by(year, week) %>%
+      summarize(
+        born = n()
+      )
+  ) %>%
+  mutate(
+    born = if_else(
+      condition = is.na(born),
+      true = 0L,
+      false = born
+    )
+  ) %>%
+  ungroup() %>%
   rbind(
     summarize(
       .,
+      year = "",
       week = "Total",
       left_pw = sum(left_pw),
       left_oaw = sum(left_oaw),
+      left_c = sum(left_c),
       oaw = sum(oaw) - left_oaw,
-      pw = sum(pw) - left_pw
+      pw = sum(pw) - left_pw,
+      born = sum(born) - left_c
     ) %>%
       bold_all()
   ) %>%
   select(
+    Año = year,
     Semana = week,
     "Embarazadas" = pw,
-    "Otras mujeres adultas" = oaw
+    "Otras mujeres adultas" = oaw,
+    "Nacidos vivos" = born
   ) %>%
   knitr::kable(
     caption = "Hogares inscritos según los tipos de participantes."
