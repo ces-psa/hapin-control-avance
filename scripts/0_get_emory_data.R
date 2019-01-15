@@ -19,7 +19,7 @@ gt_emory_file <- list.files(
 
 gt_emory_data <- gt_emory_file %>%
   pull(file) %>%
-  read_csv() %>%
+  read_csv(col_types = cols(.default = col_character())) %>%
   mutate(
     # Default change for all "monthly" visits
     visit = gsub(
@@ -55,4 +55,9 @@ gt_emory_data <- gt_emory_file %>%
       .ordered = TRUE
     )
   ) %>%
-  select(redcap_event_name, visit, id, everything())
+  select(redcap_event_name, visit, id, everything()) %>%
+  mutate_at(
+    vars(matches("date"), m17_ga),
+    funs(as.Date)
+  )
+  
