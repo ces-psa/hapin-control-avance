@@ -43,6 +43,13 @@ source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
 
 
 
+```{r export-stove-use-report, include=FALSE}
+# Stops knitting if lpg delivery data is not up to date
+source(file = "scripts/uso-estufas.R", encoding = "UTF-8")
+```
+
+
+
 
 ```{r, include=FALSE}
 gt_emory_data %>%
