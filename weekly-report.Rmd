@@ -955,39 +955,58 @@ subset(
       true = "oaw",
       false = "pw"
     ),
-    year = lubridate::year(as.Date(s4_date) + lubridate::days(3)),
-    week = ordered_week(as.Date(s4_date)),
-    
+    year = lubridate::year(as.Date(s4_date)),
+    week = ordered_week(as.Date(s4_date))
   ) %>%
-  group_by(year, week) %>%
-  summarize(
-    left_pw = sum(left_p == "yes", na.rm = TRUE),
-    left_oaw = sum(left_oaw == "yes", na.rm = TRUE),
-    left_c = sum(left_c == "yes", na.rm = TRUE),
-    oaw = sum(type == "oaw", na.rm = TRUE),
-    pw = sum(type == "pw", na.rm = TRUE) + oaw
+  group_by(date = s4_date, year, week) %>%
+  transmute(
+    left_pw = as.numeric(left_p == "yes", na.rm = TRUE),
+    left_oaw = as.numeric(left_oaw == "yes", na.rm = TRUE),
+    left_c = as.numeric(left_c == "yes", na.rm = TRUE),
+    oaw = as.numeric(type == "oaw", na.rm = TRUE),
+    pw = as.numeric(type == "pw", na.rm = TRUE) + oaw
   ) %>%
-  left_join(
-    subset(classified, select = "estudio.parto.c30_date") %>%
+    ungroup() %>%
+    gather(type, value, -date, -year, -week) %>%
+    bind_rows(
+        subset(classified, select = "estudio.parto.c30_date") %>%
       rename(born = estudio.parto.c30_date) %>%
       filter(complete.cases(.)) %>%
       mutate(
-        year = lubridate::year(as.Date(born) + lubridate::days(3)),
-        week = lubridate::week(as.Date(born) + lubridate::days(3)) - 1
+        year = lubridate::year(as.Date(born)),
+        week = ordered_week(as.Date(born)),
+        birth = as.numeric(!is.na(born))
       ) %>%
-      group_by(year, week) %>%
-      summarize(
-        born = n()
-      )
+      group_by(date = born, year, week) %>%
+      gather(type, value, birth) %>%
+          select(-born)
+    ) %>%
+    mutate(
+    is_max_year = year == max(year)
   ) %>%
+  group_by(year) %>%
   mutate(
-    born = if_else(
-      condition = is.na(born),
-      true = 0L,
-      false = born
+    week_num = week,
+    week = case_when(
+      !is_max_year ~ "Todas",
+      is_max_year & week < max(week) ~ "Anteriores",
+      is_max_year & week == max(week) ~ as.character(week)
     )
   ) %>%
   ungroup() %>%
+  mutate(
+    week = factor(
+      week, levels = c(
+        "Todas",
+        "Anteriores",
+        unique(week[!is.na(as.numeric(week))]),
+        "Total"
+      )
+    ),
+    type = factor(type, levels = unique(type))
+  ) %>%
+  count(year, week, type, wt = value) %>%
+    spread(type, n, fill = 0) %>%
   rbind(
     summarize(
       .,
@@ -998,7 +1017,7 @@ subset(
       left_c = sum(left_c),
       oaw = sum(oaw) - left_oaw,
       pw = sum(pw) - left_pw,
-      born = sum(born) - left_c
+      birth = sum(birth)
     ) %>%
       bold_all()
   ) %>%
@@ -1007,7 +1026,7 @@ subset(
     Semana = week,
     "Embarazadas" = pw,
     "Otras mujeres adultas" = oaw,
-    "Nacidos vivos" = born
+    "Nacidos vivos" = birth
   ) %>%
   knitr::kable(
     caption = "Hogares inscritos según los tipos de participantes."
