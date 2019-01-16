@@ -407,7 +407,7 @@ date_events %>%
     vars(pre_screened, pre_eligible),
     funs(
       if_else(
-        condition = grepl("Semanas 1", week),
+        condition = year == 2018 & grepl("Semanas 1", week),
         true = "--",
         false = as.character(.)
       )
