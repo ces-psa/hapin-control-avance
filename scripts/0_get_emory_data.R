@@ -56,8 +56,13 @@ gt_emory_data <- gt_emory_file %>%
     )
   ) %>%
   select(redcap_event_name, visit, id, everything()) %>%
+  # fix types
   mutate_at(
     vars(matches("date"), m17_ga),
     funs(as.Date)
+  ) %>%
+  mutate_at(
+    vars(m17_hr_bpm),
+    funs(as.numeric)
   )
   
