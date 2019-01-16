@@ -235,9 +235,23 @@ classified <- screening_data %>%
   #   pre_screened, pre_eligible,
   #   screened, eligible, enrolled
   # ) %>%
+  mutate_at(
+    vars(
+      pre_screened, pre_eligible,
+      screened, eligible, enrolled
+    ),
+    funs(
+      if_else(condition = ., "yes", "no") %>% factor(levels = c("yes", "no"))
+    )
+  ) %>%
   left_join(
     main_data %>%
       ungroup() %>%
+      mutate_at(
+        vars(matches("^left(_|$)")),
+        funs(
+          if_else(condition = ., "yes", "no") %>% factor(levels = c("yes", "no"))
+        )) %>%
       gather(
         key = variable, value = value,
         -c(arm, visit, study_id, matches("^left")),
@@ -248,16 +262,6 @@ classified <- screening_data %>%
       ) %>%
       select(-arm, -visit) %>%
       spread(variable, value)
-  ) %>%
-  mutate_at(
-    vars(
-      pre_screened, pre_eligible,
-      screened, eligible, enrolled,
-      matches("^left(_|$)")
-    ),
-    funs(
-      if_else(condition = ., "yes", "no") %>% factor(levels = c("yes", "no"))
-    )
   ) %>%
   print()
 
