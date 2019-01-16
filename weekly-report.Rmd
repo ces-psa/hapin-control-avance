@@ -759,25 +759,25 @@ subset(
 
 ```{r, results='asis'}
 visits <- subset(
-    classified,
-    # only process data from enrolled participants
-    enrolled == "yes",
-    select = c(
-      "study_id", "enrolled",
-      grep(
-        paste(
-          c(
-            "s6_date", "s6_arm",
-            "m10_date", "m11_date", "h42_date", "h50_date",
-            "c30_date"
-          ),
-          collapse = "|"
+  classified,
+  # only process data from enrolled participants
+  enrolled == "yes",
+  select = c(
+    "study_id", "enrolled",
+    grep(
+      paste(
+        c(
+          "s6_date", "s6_arm",
+          "m10_date", "m11_date", "h42_date", "h50_date",
+          "c30_date"
         ),
-        names(classified),
-        value = TRUE
-      )
+        collapse = "|"
+      ),
+      names(classified),
+      value = TRUE
     )
-  ) %>%
+  )
+) %>%
   rownames_to_column() %>%
   gather(key = variable, value = value, matches("[.]")) %>%
   separate(
@@ -809,8 +809,8 @@ visits <- subset(
   ) %>%
   gather(
     key = event, value = happened,
-    visit_started, visit_complete, randomized, control, intervention, installed,
-    born,
+    visit_started, visit_complete, randomized, control, intervention,
+    installed, born,
     factor_key = TRUE
   ) %>%
   gather(
@@ -830,8 +830,28 @@ visits <- subset(
   ) %>%
   mutate(
     year = lubridate::year(as.Date(date)),
-    week = as.Date(date) %>%
-      ordered_week()
+    week = ordered_week(as.Date(date)),
+    is_max_year = year == max(year)
+  ) %>%
+  group_by(year) %>%
+  mutate(
+    week_num = week,
+    week = case_when(
+      !is_max_year ~ "Todas",
+      is_max_year & week < max(week) ~ "Anteriores",
+      is_max_year & week == max(week) ~ as.character(week)
+    )
+  ) %>%
+  ungroup() %>%
+  mutate(
+    week = factor(
+      week, levels = c(
+        "Todas",
+        "Anteriores",
+        unique(week[!is.na(as.numeric(week))]),
+        "Total"
+      )
+    )
   ) %>%
   group_by(visit, year, week) %>%
   mutate(
@@ -936,7 +956,8 @@ subset(
       false = "pw"
     ),
     year = lubridate::year(as.Date(s4_date) + lubridate::days(3)),
-    week = ordered_week(as.Date(s4_date))
+    week = ordered_week(as.Date(s4_date)),
+    
   ) %>%
   group_by(year, week) %>%
   summarize(
