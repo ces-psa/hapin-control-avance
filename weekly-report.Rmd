@@ -33,6 +33,24 @@ bold_all <- . %>%
     )
   )
 
+
+# ordered weeks within year
+ordered_week <- function(date){
+    if(class(date) != "Date") date <- as.Date(date)
+    first_day <- date %>%
+        as.character() %>%
+        substr(1, 5) %>%
+        paste0("01-01") %>%
+        as.Date()
+    
+    total_days <- as.numeric(date - first_day)
+    
+    ordered_weeks <- (total_days %/% 7) + 1
+    
+    ordered_weeks
+}
+
+
 # Free memory
 gc()
 ```
@@ -317,7 +335,8 @@ date_events <- subset(
   arrange(date) %>%
   # Get event week
   mutate(
-    week = lubridate::week(as.Date(date) + lubridate::days(3)) - 1
+    year = lubridate::year(as.Date(date)),
+    week = ordered_week(as.Date(date))
   )
 
 
@@ -335,28 +354,54 @@ El total de las inscritas excluye a las que han dejado el estudio.
 ```{r}
 date_events %>%
   mutate(
+    is_max_year = year == max(year)
+  ) %>%
+  group_by(year) %>%
+  mutate(
     week = case_when(
-      week <= 30 ~ "Semanas 1 - 30",
-      week > 30 & week < max(week) ~ paste("Semanas 30 -", max(week)),
-      week == max(week) ~ as.character(week)
-    ),
+      year == 2018 & week <= 30 ~ "Semanas 1 a 30",
+      year == 2018 & 
+        week > 30 &
+        week <= max(week) ~ paste("Semanas 30 a", max(week)),
+      !is_max_year  ~ paste(
+        "Semanas", min(week), "a", max(week)
+      ),
+      is_max_year & week < max(week) ~ paste(
+        "Semanas", min(week), "a", max(week) -1
+      ),
+      is_max_year & week == max(week) ~ as.character(week)
+    )
+  ) %>%
+  ungroup() %>%
+  mutate(
     week = factor(
       week, levels = c(
-        "Semanas 1 - 30",
-        unique(week[grepl("Semanas 30", week)]),
-        unique(week[!is.na(as.numeric(week))]),
+        unique(
+          c(
+            "Semanas 1 a 30",
+            week[year == 2018 & grepl("Semanas 30", week)],
+            week[grepl("Semanas", week)][
+              week[grepl("Semanas", week)] %>%
+                sub("Semanas ", "", .) %>%
+                sub(" a.+", "", .) %>%
+                as.numeric() %>%
+                order()
+              ],
+            week[!is.na(as.numeric(week))]
+          )
+        ),
         "Total"
       )
     )
   ) %>%
-  group_by(week) %>%
+  group_by(year, week) %>%
   mutate(
     dates = date %>%
       unique() %>%
       range() %>%
       paste(collapse = " a ")
   ) %>%
-  count(week, dates, type) %>%
+  count(year, week, dates, type) %>%
   spread(type, n, fill = 0) %>%
   mutate_at(
     vars(pre_screened, pre_eligible),
@@ -369,10 +414,12 @@ date_events %>%
     )
   ) %>%
   ungroup() %>%
+  arrange(year, week) %>%
   # Add totals
   rbind(
     summarize(
       .,
+      year = "",
       week = factor("Total", levels = levels(week)),
       dates = "",
       pre_screened = as.character(sum(as.integer(pre_screened), na.rm = TRUE)),
@@ -384,6 +431,7 @@ date_events %>%
       bold_all()
   ) %>%
   rename(
+    "Año" = year,
     Semana = week,
     Fechas = dates,
     "Pre-tamizadas s0" = pre_screened,
@@ -620,16 +668,19 @@ subset(
   transmute(
     id = id,
     date = date,
-    week = lubridate::week(as.Date(date) + lubridate::days(3)) - 1,
+    year = lubridate::year(as.Date(date)),
+    week = ordered_week(as.Date(date)),
     ga = if_else(
       condition = m17_ga_method == 1,
       true = m17_lmp_ga,
       false = m17_ultra_ga
     ) %>%
-      gsub("([0-9]+)([.]([0-9]*))?", "\\1;\\3", .)
+      gsub("([0-9]+)([.]([0-9]*))?", "\\1;\\3", .),
+    is_max_year = year == max(year)
   ) %>%
   filter(!is.na(ga)) %>%
   separate(ga, into = c("weeks", "days"), convert = TRUE) %>%
+  group_by(year) %>%
   mutate(
     ga = weeks + ifelse(is.na(days), 0, days) / 7,
     eligibility = case_when(
@@ -638,9 +689,12 @@ subset(
       ga >= 20 & !is.na(ga) ~ "not_eligible_late"
     ),
     week = case_when(
-      week < max(week) ~ "Anteriores",
+      !is_max_year | week < max(week) ~ "Anteriores",
       week == max(week) ~ as.character(week)
-    ),
+    )
+  ) %>%
+  ungroup() %>%
+  mutate(
     week = factor(
       week, levels = c(
         unique(week[week == "Anteriores"]),
@@ -649,14 +703,16 @@ subset(
       )
     )
   ) %>%
-  bind_rows(
-    mutate(., week = factor("Todas", levels = levels(week)))
-  ) %>%
   group_by(week) %>%
   mutate(
     dates = date %>%
       unique() %>%
-      min()
+      min() %>%
+      as.character()
+  ) %>%
+  ungroup() %>%
+  bind_rows(
+    mutate(., week = factor("Todas", levels = levels(week)), dates = "")
   ) %>%
   group_by(week, dates, eligibility) %>%
   summarize(
@@ -773,19 +829,22 @@ visits <- subset(
     !is.na(date), happened
   ) %>%
   mutate(
-    week = lubridate::week(as.Date(date) + lubridate::days(3)) - 1
+    year = lubridate::year(as.Date(date)),
+    week = as.Date(date) %>%
+      ordered_week()
   ) %>%
-  group_by(visit, week) %>%
+  group_by(visit, year, week) %>%
   mutate(
     dates = date %>%
       unique() %>%
       range() %>%
       paste(collapse = " a ")
   ) %>%
-  count(week, dates, event) %>%
+  count(year, week, dates, event) %>%
   spread(event, n, fill = 0) %>%
   ungroup() %>%
   mutate(
+    year = as.character(year),
     week = as.character(week)
   )
 ```
@@ -810,6 +869,7 @@ visits %>%
   rbind(
     summarize(
       .,
+      year = "",
       week = "Total",
       dates = "",
       visit_started = sum(visit_started, na.rm = TRUE),
@@ -864,7 +924,7 @@ subset(
       false = "pw"
     ),
     year = lubridate::year(as.Date(s4_date) + lubridate::days(3)),
-    week = lubridate::week(as.Date(s4_date) + lubridate::days(3)) - 1
+    week = ordered_week(as.Date(s4_date))
   ) %>%
   group_by(year, week) %>%
   summarize(
@@ -934,13 +994,14 @@ visits %>%
   walk(
     ~ {
       visit <- first(.$visit)
-      events <- select(., week, dates, visit_started, visit_complete)
+      events <- select(., year, week, dates, visit_started, visit_complete)
       
       events %>%
         # Add a summary
         rbind(
           summarize(
             .,
+            year = "",
             week = "Total",
             dates = "",
             visit_started = sum(visit_started, na.rm = TRUE),
@@ -949,6 +1010,7 @@ visits %>%
             bold_all()
         ) %>%
         rename(
+          "Año" = year,
           Semana = week,
           Fechas = dates,
           Inicia = visit_started,
@@ -1002,10 +1064,13 @@ subset(
   spread(variable, value) %>%
   arrange(type, study_id) %>%
   mutate(
-    week = lubridate::week(as.Date(date))
+    year = lubridate::year(as.Date(date)),
+    week = ordered_week(as.Date(date))
   ) %>%
-  count(week, type) %>%
-  complete(week, type = c("m", "o", "c"), fill = list(n = 0)) %>%
+  count(year, week, type) %>%
+  complete(
+    nesting(year, week), type = c("m", "o", "c"), fill = list(n = 0)
+  ) %>%
   spread(type, n, fill = 0) %>%
   rbind(
     summarize_at(
@@ -1013,10 +1078,11 @@ subset(
       vars(one_of(c("m", "o", "c"))),
       funs(sum)
     ) %>%
-      mutate(week = "Total") %>%
+      mutate(year = "", week = "Total") %>%
       bold_all()
   ) %>%
   select(
+    "Año" = year,
     Semana = week,
     "Embarazadas" = m,
     "Otras mujeres adultas" = o,
