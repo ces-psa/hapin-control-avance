@@ -865,7 +865,19 @@ gc(verbose = FALSE)
 ```{r, results='asis'}
 visits %>%
   filter(visit == "baseline") %>%
-  select(-visit, -visit_complete) %>%
+  select(-visit, -visit_complete, -born) %>%
+  left_join(
+    visits %>%
+      filter(visit == "parto") %>%
+      select(year, week, born)
+  ) %>%
+  mutate(
+    born = if_else(
+      condition = is.na(born),
+      true = 0,
+      false = born
+    )
+  ) %>%
   rbind(
     summarize(
       .,
@@ -988,7 +1000,7 @@ subset(
 
 ```{r, results='asis'}
 visits %>%
-  filter(visit != "baseline") %>%
+  filter(!visit %in% c("baseline", "parto")) %>%
   # For each visit type
   split(.$visit) %>%
   walk(
