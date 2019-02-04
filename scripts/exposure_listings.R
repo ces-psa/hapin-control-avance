@@ -182,7 +182,7 @@ all_instruments %>%
   arrange(visit, id) %>%
   write_csv(
     path = paste0(
-      "output/instruments",
+      "output/instruments/",
       gsub("[: ]", "-", Sys.time()), "_",
       "all_instruments.csv"
     )
