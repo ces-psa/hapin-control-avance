@@ -156,6 +156,17 @@ gt_participants <- gt_z10 %>%
     long = case_when(long > 0 ~ long * -1, TRUE ~ long),
     # Latitude in Jalapa has to be positive,
     lat = case_when(lat < 0 ~ lat * -1, TRUE ~ lat),
+    # more drastic fixes
+    long = case_when(
+      abs(long) > 100 ~ long %>%
+        sub("(-[0-9]{2})(.+)", "\\1.\\2") %>%
+        as.double()
+    ),
+    lat = case_when(
+      abs(lat) > 100 ~ lat %>%
+        sub("(-[0-9]{2})(.+)", "\\1.\\2") %>%
+        as.double()
+    ),
     # Elevation can not be below 100 meters
     elevation = case_when(
       elevation < 100 ~ elevation * 100,
