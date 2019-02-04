@@ -440,7 +440,7 @@ date_events %>%
     "Elegibles" = eligible,
     "Inscritas" = enrolled
   ) %>%
-  knitr::kable(format = "markdown")
+  knitr::kable()
 ```
 
 
@@ -748,7 +748,7 @@ subset(
     "Promedio EG elegibles" = eligible,
     "EG >= 20 semanas" = not_eligible_late
   ) %>%
-  knitr::kable(format = "markdown")
+  knitr::kable()
 ```
 
 
@@ -925,7 +925,6 @@ visits %>%
   ) %>%
   # Present a table
   knitr::kable(
-    format = "markdown",
     caption = "Total de visitas de baseline"
   )
 ```
@@ -1030,7 +1029,6 @@ subset(
     "Nacidos vivos" = birth
   ) %>%
   knitr::kable(
-    format = "markdown",
     caption = "Hogares inscritos según los tipos de participantes."
   )
 ```
@@ -1072,7 +1070,6 @@ visits %>%
         ) %>%
         # Present a table
         knitr::kable(
-          format = "markdown",
           caption = paste("Total de visitas de", tolower(visit))
         ) %>%
         print()
@@ -1144,7 +1141,6 @@ subset(
     "Bebés" = c
   ) %>%
   knitr::kable(
-    format = "markdown",
     caption = "Salidas del estudio según los tipos de participantes."
   )
 ```
@@ -1194,7 +1190,6 @@ all_instruments %>%
     ecm, pump, lascar
   ) %>%
   knitr::kable(
-    format = "markdown",
     caption = paste(
       "**All exposure monitoring sessions.**",
       "This table shows all exposure monitoring sessions recorded in RedCap,",
@@ -1223,7 +1218,6 @@ ecm_duplicates %>%
     Target = target, everything()
   ) %>%
   knitr::kable(
-    format = "markdown",
     caption = paste(
       "**Duplicate ECM sessions.**",
       "This table shows sessions that have included duplicate ECM instruments."
@@ -1257,7 +1251,6 @@ all_instruments %>%
     Target = target, everything()
   ) %>%
   knitr::kable(
-    format = "markdown",
     caption = paste(
       "**ECM and Casella pump co-locations.**",
       "This table shows sessions that have included both ECM and Casella pump."
