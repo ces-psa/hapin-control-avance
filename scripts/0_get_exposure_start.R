@@ -49,7 +49,29 @@ gt_exposure_start <- DBI::dbGetQuery(
   ) %>%
   select(visit, record, field_name, value) %>%
   spread(field_name, value) %>%
-  as_tibble()
+  as_tibble() %>%
+  mutate_at(
+    vars(matches("long|lat|elev")),
+    funs(as.double)
+  ) %>%
+  mutate(
+    gth4x_long = case_when(gth4x_long > 0 ~ gth4x_long * -1, TRUE ~ gth4x_long),
+    # gthx_latitude in Jalapa has to be positive,
+    gthx_lat = case_when(gthx_lat < 0 ~ gthx_lat * -1, TRUE ~ gthx_lat),
+    # more drastic fixes
+    gth4x_long = case_when(
+      abs(gth4x_long) > 100 ~ gth4x_long %>%
+        sub("(-[0-9]{2})(.+)", "\\1.\\2") %>%
+        as.double(),
+      TRUE ~ gth4x_long
+    ),
+    gthx_lat = case_when(
+      abs(gthx_lat) > 100 ~ gthx_lat %>%
+        sub("(-[0-9]{2})(.+)", "\\1.\\2") %>%
+        as.double(),
+      TRUE ~ gthx_lat
+    )
+  )
 
 
 # Disconnect from database
