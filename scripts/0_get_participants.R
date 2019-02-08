@@ -160,12 +160,14 @@ gt_participants <- gt_z10 %>%
     long = case_when(
       abs(long) > 100 ~ long %>%
         sub("(-[0-9]{2})(.+)", "\\1.\\2") %>%
-        as.double()
+        as.double(),
+      TRUE ~ long
     ),
     lat = case_when(
       abs(lat) > 100 ~ lat %>%
         sub("(-[0-9]{2})(.+)", "\\1.\\2") %>%
-        as.double()
+        as.double(),
+      TRUE ~ lat
     ),
     # Elevation can not be below 100 meters
     elevation = case_when(
