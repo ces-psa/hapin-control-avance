@@ -159,13 +159,13 @@ gt_participants <- gt_z10 %>%
     # more drastic fixes
     long = case_when(
       abs(long) > 100 ~ long %>%
-        sub("(-[0-9]{2})(.+)", "\\1.\\2") %>%
+        sub("(-[0-9]{2})(.+)", "\\1.\\2", .) %>%
         as.double(),
       TRUE ~ long
     ),
     lat = case_when(
       abs(lat) > 100 ~ lat %>%
-        sub("(-[0-9]{2})(.+)", "\\1.\\2") %>%
+        sub("(-[0-9]{2})(.+)", "\\1.\\2", .) %>%
         as.double(),
       TRUE ~ lat
     ),

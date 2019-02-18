@@ -61,13 +61,13 @@ gt_exposure_start <- DBI::dbGetQuery(
     # more drastic fixes
     gth4x_long = case_when(
       abs(gth4x_long) > 100 ~ gth4x_long %>%
-        sub("(-[0-9]{2})(.+)", "\\1.\\2") %>%
+        sub("(-[0-9]{2})(.+)", "\\1.\\2", .) %>%
         as.double(),
       TRUE ~ gth4x_long
     ),
     gthx_lat = case_when(
       abs(gthx_lat) > 100 ~ gthx_lat %>%
-        sub("(-[0-9]{2})(.+)", "\\1.\\2") %>%
+        sub("(-[0-9]{2})(.+)", "\\1.\\2", .) %>%
         as.double(),
       TRUE ~ gthx_lat
     )
