@@ -181,6 +181,7 @@ Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Gu
 # Prepare data for eligibles table and map
 mapa_elegibles <- elegibles %>%
   filter(pending) %>%
+  select(-eligible, -enrolled, -pending) %>%
   # Keep reference values
   mutate(
     fpp = m17_ga,
@@ -252,7 +253,7 @@ mapa_inscritas <- inscritas %>%
     ~ .x %>%
       datos_tabla(
         hh_arm, screening_date, enrollment_date, randomization_date,
-        ga, lat, long
+        ga, lat, long, fpp_method, community, fur
       ) %>%
       mutate(
         screening_id = gsub("[^- ]+[- ]*([G0-9]+)", "\\1", id),
