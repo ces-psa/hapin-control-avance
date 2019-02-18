@@ -33,38 +33,19 @@ datos_tabla <- function(.data, ...){
       crf = factor(crf, levels = unique(crf))
     ) %>%
     arrange(id, crf, variable) %>%
+    filter(!grepl("_complete", variable)) %>%
     # For each participant, event and crf
     group_by(id, visit, crf, fpp, !!!dots) %>%
-    # TODO: status for crfs without {crf}_complete variable
-    mutate(
-      status = value[grepl("_complete", variable)] %>%
-        recode(
-          `0` = "incomplete",
-          `1` = "unverified",
-          `2` = "complete"
-        ) %>%
-        recode(
-          `0` = "incomplete",
-          `1` = "unverified",
-          `2` = "complete"
-        ) %>%
-        unique() %>%
-        paste(collapse = "")
-    ) %>%
-    filter(!grepl("_complete", variable)) %>%
-    # Label if there is data
     summarize(
       date = first(value[grepl(paste0(first(crf), "_date$"), variable)]),
-      data = ifelse(
-        any(!is.na(value)),
-        first(status),
-        "no-data"
+      data = if_else(
+        condition = all( is.na(value[grepl(paste0(first(crf), "_date$"), variable)]) ),
+        true = "no-data",
+        false = "data"
       ) %>%
         recode(
-          incomplete = "red",
-          unverified = "yellow",
-          complete = "green",
           "no-data" = "gray",
+          "data" = "yellow",
           .missing = "error"
         ) %>%
         # Include semaphore image
