@@ -25,6 +25,20 @@ h54 <- gt_repeated %>%
       mutate_all(as.character) %>%
       filter(!is.na(h54_date))
   ) %>%
+  # fix errors in record ids
+  mutate(
+    id = case_when(
+      # keep if correct
+      grepl("^3[35][0-9]{3}$", id) ~ id,
+      # if missing use manual entry if, correct format
+      is.na(id) & !is.na(record_id) & grepl("3[35][0-9]{3}", record_id) ~
+        sub(" *(3[35][0-9]{3}).*", "\\1", record_id),
+      !grepl("^3[35][0-9]{3}$", id) & !is.na(record_id) &
+        grepl("3[35][0-9]{3}", record_id) ~
+        sub(" *(3[35][0-9]{3}).*", "\\1", record_id),
+      TRUE ~ "error"
+    )
+  ) %>%
   filter(!is.na(id)) %>%
   rownames_to_column() %>%
   gather(column, value, -id, -record_id, -rowname, na.rm = TRUE) %>%
