@@ -17,16 +17,17 @@ days_diff <- function(date1, date2){
 # dots download ----
 h54 <- gt_repeated %>%
   filter(crf == "h54") %>%
-  select(record_id, matches("h54_")) %>%
+  select(id = record_id, record, matches("h54_")) %>%
+  rename(record_id = record) %>%
   bind_rows(
     gt_emory_data %>%
-      select(record_id = id, matches("h54_")) %>%
+      select(id, matches("h54_")) %>%
       mutate_all(as.character) %>%
       filter(!is.na(h54_date))
   ) %>%
-  filter(!is.na(record_id)) %>%
+  filter(!is.na(id)) %>%
   rownames_to_column() %>%
-  gather(column, value, -record_id, -rowname, na.rm = TRUE) %>%
+  gather(column, value, -id, -record_id, -rowname, na.rm = TRUE) %>%
   mutate(
     column = if_else(
       condition = !grepl("_v[0-9]+$", column),
@@ -55,8 +56,8 @@ h54_mes <- h54 %>%
   filter(!is.na(date)) %>%
   left_join(
     gt_emory_data %>%
-      filter(!is.na(s6_date)) %>%
-      select(record_id = id, brazo = s6_arm)
+      filter(!is.na(s6_date) | visit == "baseline") %>%
+      select(id, brazo = s6_arm)
   ) %>%
   mutate(
     year = date %>%
@@ -64,7 +65,7 @@ h54_mes <- h54 %>%
     month = date %>%
       lubridate::month(label = TRUE, abbr = FALSE)
   ) %>%
-  group_by(brazo, id = record_id, year, month) %>%
+  group_by(brazo, id, year, month) %>%
   summarize(
     registros_h54 = n(),
     usos_estufa = sum(stove_use == 1, na.rm = TRUE)
