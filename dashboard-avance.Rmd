@@ -534,3 +534,98 @@ inscritas %>%
   tabla_interactiva()
 ```
 
+
+
+# Gas y uso de estufa
+
+
+Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+
+
+## Tabla
+
+```{r}
+gt_emory_repeat_data %>%
+  select(id, date = h51_date, h51_by) %>%
+  filter(
+    date >= lubridate::floor_date(
+      Sys.Date()-7,
+      unit = "week",
+      week_start = 1
+    )
+  ) %>%
+  mutate(
+    h51_by = if_else(
+      condition = is.na(h51_by),
+      true = "?",
+      false = h51_by
+    )
+  ) %>%
+  filter(
+    lubridate::floor_date(date, unit = "week", week_start = 1) ==
+      lubridate::floor_date(Sys.Date(), unit = "week", week_start = 1)
+  ) %>%
+  full_join(
+    select(h54, id, h54_by = by, date) %>%
+      filter(!is.na(date) | !is.na(h54_by)) %>%
+      mutate(
+        h54_by = if_else(
+          condition = is.na(h54_by),
+          true = "?",
+          false = h54_by
+        )
+      ) %>%
+      filter(
+        lubridate::floor_date(date, unit = "week", week_start = 1) ==
+          lubridate::floor_date(Sys.Date(), unit = "week", week_start = 1)
+      )
+  ) %>%
+  group_by(id, date) %>%
+  summarize_at(
+    vars(h51_by, h54_by),
+    funs(
+      na.omit(.) %>% unique() %>% paste(collapse = ";")
+    )
+  ) %>%
+  ungroup() %>%
+  mutate_at(
+    vars(h51_by, h54_by),
+    funs(
+      if_else(
+        condition = . == "",
+        true = NA_character_,
+        false = .
+      )
+    )
+  ) %>%
+  mutate(
+    week = lubridate::floor_date(date, unit = "week", week_start = 1),
+    day = lubridate::wday(date, label = TRUE, abbr = FALSE, week_start = 1),
+    day = factor(
+      iconv(day, to = "ASCII//TRANSLIT"),
+      levels = iconv(levels(day), to = "ASCII//TRANSLIT"),
+      labels = iconv(levels(day), to = "ASCII//TRANSLIT")
+    )
+  ) %>%
+  gather(crf, value, matches("by"), na.rm = TRUE) %>%
+  separate(crf, into = c("crf", NA)) %>%
+  unite(value, date, value, sep = " ") %>%
+  spread(day, value, drop = FALSE) %>%
+  arrange(
+    week,
+    crf,
+    lunes, martes, miercoles, jueves, viernes, sabado, domingo,
+    id
+  ) %>%
+  select(
+    "Semana del" = week,
+    "CRF" = crf,
+    "ID de hogar" = id,
+    everything()
+  ) %>%
+  set_names(
+    sub("(^[a-z])", "\\U\\1", names(.), perl = TRUE)
+  ) %>%
+  tabla_interactiva()
+```
+
