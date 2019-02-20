@@ -303,19 +303,30 @@ if(interactive()){
 
 
 # Code to start a randomization record the first time this is done
-ie_randomization %>%
-  filter(s6_date < as.Date("2019-02-04")) %>%
-  mutate(
-    intensive = NA,
-    expected_p1_date = edd - 280 + 25*7
-  ) %>%
-  ungroup() %>%
-  select(
-    group, arm, id, intensive,
-    baseline_date = bl_date, expected_p1_date,
-    actual_p1_date = p1_date
-  ) %>%
-  write_csv(path = "output/intensive_exposure_randomized.csv", na = "")
+# ie_randomization %>%
+#   filter(s6_date < as.Date("2019-02-04")) %>%
+#   mutate(
+#     intensive = NA,
+#     expected_p1_date = edd - 280 + 25*7
+#   ) %>%
+#   ungroup() %>%
+#   select(
+#     group, arm, id, intensive,
+#     baseline_date = bl_date, expected_p1_date,
+#     actual_p1_date = p1_date
+#   ) %>%
+#   write_csv(path = "output/intensive_exposure_randomized.csv", na = "")
  
+
+
+# Use existing randomization record to evaluate each sampling
+rand_record <- read_csv(
+  "output/intensive_exposure_randomized.csv",
+  col_types = cols(
+    col_character(), col_character(), col_character(),
+    col_logical(), col_date(), col_date(), col_date()
+  )
+)
+
 
 # End of script
