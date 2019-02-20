@@ -292,4 +292,30 @@ if(interactive()){
 
 
 
+#------------------------------------------------------------------------------*
+# Randomize households ----
+#------------------------------------------------------------------------------*
+# The selected strategy is to randomize every two weeks, by stratum, trying
+# to bring the cummulative total of selected household close to the target
+# proportion, using as the sampling frames all households randomized the
+# preceding two weeks.
+#------------------------------------------------------------------------------*
+
+
+# Code to start a randomization record the first time this is done
+ie_randomization %>%
+  filter(s6_date < as.Date("2019-02-04")) %>%
+  mutate(
+    intensive = NA,
+    expected_p1_date = edd - 280 + 25*7
+  ) %>%
+  ungroup() %>%
+  select(
+    group, arm, id, intensive,
+    baseline_date = bl_date, expected_p1_date,
+    actual_p1_date = p1_date
+  ) %>%
+  write_csv(path = "output/intensive_exposure_randomized.csv", na = "")
+ 
+
 # End of script
