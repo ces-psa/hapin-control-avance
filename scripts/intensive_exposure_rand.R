@@ -331,4 +331,113 @@ rand_record <- read_csv(
 )
 
 
+# define set to check ongoing randomization (all strata)
+blocked_check <- rand_record %>%
+  group_by(group, arm) %>%
+  summarize(
+    total_rand = sum(!is.na(intensive)),
+    total_int = sum(intensive, na.rm = TRUE)
+  ) %>%
+  ungroup()
+
+
+# split the data in randomization periods
+rand_periods <- ie_randomization %>%
+  ungroup() %>%
+  anti_join(rand_record) %>%
+  arrange(s6_date) %>%
+  mutate(
+    week = lubridate::floor_date(s6_date, unit = "week", week_start = 1)
+  ) %>%
+  left_join(
+    all_week_pairs
+  ) %>%
+  arrange(group, arm, s6_date, id) %>%
+  split(.$rand_period)
+
+
+# setup object to add during randomizations
+biweekly_blocked <- NULL
+
+
+set.seed(0) # ensure reproducible sampling
+
+
+# randomize every two weeks
+rand_periods %>%
+  for(houses in .){
+    cat(
+      "\n\nRandomization period starting on",
+      first(houses$rand_period) %>% as.character(),
+      "\n\n"
+    )
+    
+    
+    # randomly arrange available households
+    shuffled <- houses %>%
+      group_by(group, arm) %>%
+      sample_n(n())
+    
+    
+    # calculate how many to sample per strata given previous randomizations
+    group_n <- houses %>%
+      count(group, arm) %>%
+      full_join(blocked_check, by = c("group", "arm")) %>%
+      mutate_if(
+        is.integer,
+        list(~if_else(condition = is.na(.), 0L, .))
+      ) %>%
+      mutate(
+        all = n + total_rand,
+        target = round(all * target_p),
+        needed = target - total_int,
+        take = pmin(n, needed),
+        new_int = total_int + take
+      )
+    
+    
+    # keep selected households
+    selected <- shuffled %>%
+      left_join(select(group_n, group, arm, take), by = c("group", "arm")) %>%
+      mutate(
+        n = seq(1, n()),
+        intensive = n <= first(take)
+      ) %>%
+      select(-take, -n) %>%
+      ungroup()
+    
+    
+    # update randomization records
+    blocked_check <<- group_n %>%     
+      select(group, arm, total_rand = all, total_int = new_int) %>%
+      mutate(
+        cummul_p_intensive = total_int / total_rand
+      )
+    
+    
+    # accumulate all randomizations
+    biweekly_blocked <<- c(list(selected), biweekly_blocked)
+  }
+
+
+# organize ranzomization records
+if(!is.null(biweekly_blocked)){
+  biweekly_blocked <- biweekly_blocked %>%
+    bind_rows() %>%
+    mutate(
+      expected_p1_date = edd - 280 + 25*7
+    ) %>%
+    select(
+      group, arm, id, intensive, baseline_date = bl_date, expected_p1_date,
+      actual_p1_date = p1_date
+    ) %>%
+    print()
+  
+  # save record
+  rand_record %>%
+    bind_rows(biweekly_blocked) %>%
+    write_csv(path = "output/intensive_exposure_randomized.csv", na = "")
+}
+
+
 # End of script
