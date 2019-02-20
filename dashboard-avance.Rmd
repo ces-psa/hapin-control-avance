@@ -596,8 +596,8 @@ gt_emory_repeat_data %>%
     day = lubridate::wday(date, label = TRUE, abbr = FALSE, week_start = 1),
     day = factor(
       iconv(day, to = "ASCII//TRANSLIT"),
-      levels = iconv(levels(day), to = "ASCII//TRANSLIT"),
-      labels = iconv(levels(day), to = "ASCII//TRANSLIT")
+      levels = iconv(levels(day), from = "UTF-8", to = "ASCII//TRANSLIT"),
+      labels = iconv(levels(day), from = "UTF-8", to = "ASCII//TRANSLIT")
     )
   ) %>%
   gather(crf, value, matches("by"), na.rm = TRUE) %>%
