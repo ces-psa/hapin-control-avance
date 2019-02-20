@@ -318,6 +318,8 @@ if(interactive()){
 #   write_csv(path = "output/intensive_exposure_randomized.csv", na = "")
  
 
+target_p <- 0.2
+
 
 # Use existing randomization record to evaluate each sampling
 rand_record <- read_csv(
