@@ -34,6 +34,14 @@ ie_randomization <- gt_emory_data %>%
       filter(visit == "p1", !is.na(m11_date)) %>%
       select(id, p1_date = m11_date)
   ) %>%
+  # add study exit data
+  left_join(
+    gt_emory_data %>%
+      filter(
+        !is.na(e3_date) | !is.na(e3_date_o) | !is.na(e3_date_c)
+      ) %>%
+      select(id, matches("e3_date(_[co])?$"))
+  ) %>%
   # arrange by randomization date and then id to keep consistent order
   arrange(
     s6_date, id
@@ -50,7 +58,10 @@ ie_randomization <- gt_emory_data %>%
       "1" = "intervention"
     )
   ) %>%
-  select(id, group, arm, s4_date, edd, bl_date, s6_date, s6_arm, p1_date) %>%
+  select(
+    id, group, arm, s4_date, edd, bl_date, s6_date, s6_arm, p1_date,
+    matches("e3_date")
+  ) %>%
   group_by(group, arm) %>%
   mutate(
     correlative = 1:n()
