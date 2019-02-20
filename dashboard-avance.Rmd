@@ -547,13 +547,6 @@ Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Gu
 ```{r}
 gt_emory_repeat_data %>%
   select(id, date = h51_date, h51_by) %>%
-  filter(
-    date >= lubridate::floor_date(
-      Sys.Date()-7,
-      unit = "week",
-      week_start = 1
-    )
-  ) %>%
   mutate(
     h51_by = if_else(
       condition = is.na(h51_by),
