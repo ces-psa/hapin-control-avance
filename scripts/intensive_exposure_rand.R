@@ -107,6 +107,7 @@ all_week_pairs <- ie_randomization %>%
 #------------------------------------------------------------------------------*
 
 
+target_p <- 0.15
 # Code to start a randomization record the first time this is done
 # ie_randomization %>%
 #   filter(s6_date < as.Date("2019-02-04")) %>%
@@ -123,7 +124,6 @@ all_week_pairs <- ie_randomization %>%
 #   write_csv(path = "output/intensive_exposure_randomized.csv", na = "")
  
 
-target_p <- 0.2
 
 
 # Use existing randomization record to evaluate each sampling
