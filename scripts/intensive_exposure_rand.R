@@ -70,11 +70,28 @@ ie_randomization <- gt_emory_data %>%
   print()
 
 
+# get date for most recent Monday
+if(
+  iconv(
+    lubridate::wday(Sys.Date(), label = TRUE),
+    from = "UTF-8",
+    to = "ASCII//TRANSLIT"
+  ) %in% c(
+    "sab", "dom", "lun", "sat", "sun", "mon"
+  )
+){
+  this_monday <- Sys.Date() %>%
+    lubridate::floor_date(unit = "week", week_start = 1)
+} else {
+  this_monday <- Sys.Date() %>%
+    lubridate::ceiling_date(unit = "week", week_start = 1)
+}
+
+
 # get date for Monday two weeks ago
-monday_fortnight_ago <- Sys.Date() %>%
-  lubridate::floor_date(unit = "week", week_start = 1) %>%
+monday_month_ago <- this_monday %>%
   magrittr::subtract(
-    lubridate::weeks(2)
+    lubridate::weeks(4)
   ) %>%
   print()
 
@@ -102,147 +119,201 @@ all_week_pairs <- ie_randomization %>%
 #------------------------------------------------------------------------------*
 # The selected strategy is to randomize every two weeks, by stratum, trying
 # to bring the cummulative total of selected household close to the target
-# proportion, using as the sampling frames all households randomized the
-# preceding two weeks.
+# proportion.
+# The sampling frame will include all households randomized during the
+# preceding four weeks,
+# considering only those with an opportunity of participating timely
+# in the first intensive visit.
 #------------------------------------------------------------------------------*
 
 
 target_p <- 0.15
+
+
 # Code to start a randomization record the first time this is done
 # ie_randomization %>%
-#   filter(s6_date < as.Date("2019-02-04")) %>%
+#   filter(s6_date < as.Date("2019-01-21")) %>%
 #   mutate(
-#     intensive = NA,
+#     rand_date = "2019-09-20",
+#     frame_group = "not-considered",
+#     in_frame = FALSE,
+#     selected = FALSE,
+#     invited = FALSE,
+#     interested = FALSE,
+#     enrolled = FALSE,
 #     expected_p1_date = edd - 280 + 25*7
 #   ) %>%
 #   ungroup() %>%
 #   select(
-#     group, arm, id, intensive,
-#     baseline_date = bl_date, expected_p1_date,
-#     actual_p1_date = p1_date
+#     rand_date, group, arm, id,
+#     enrollment_date = s4_date, baseline_date = bl_date, expected_p1_date,
+#     actual_p1_date = p1_date,
+#     frame_group, in_frame, selected, invited, interested, enrolled
 #   ) %>%
-#   write_csv(path = "output/intensive_exposure_randomized.csv", na = "")
- 
-
+#   write_csv(
+#     path =
+#       "output/intensive-exposure/2019-02-20_intensive_exposure_randomized.csv",
+#     na = ""
+#   )
 
 
 # Use existing randomization record to evaluate each sampling
-rand_record <- read_csv(
-  "output/intensive_exposure_randomized.csv",
-  col_types = cols(
-    col_character(), col_character(), col_character(),
-    col_logical(), col_date(), col_date(), col_date()
+rand_record <- list.files(
+  "output/intensive-exposure", pattern = "randomized", full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    rand_date = file %>% sub(".+/([-0-9]+)_[^0-9/]+", "\\1", .) %>% as.Date()
+  ) %>%
+  slice(which.max(rand_date)) %>%
+  pull(file) %>%
+  read_csv(
+    col_types = cols(
+      randomization_date = col_date(),
+      group = col_character(),
+      arm = col_character(),
+      id = col_character(),
+      enrollment_date = col_date(),
+      baseline_date = col_date(),
+      expected_p1_date = col_date(),
+      actual_p1_date = col_date(),
+      frame_group = col_character(),
+      in_frame = col_logical(),
+      selected = col_logical(),
+      invited = col_logical(),
+      interested = col_logical(),
+      enrolled = col_logical()
+    )
   )
-)
 
 
 # define set to check ongoing randomization (all strata)
 blocked_check <- rand_record %>%
   group_by(group, arm) %>%
   summarize(
-    total_rand = sum(!is.na(intensive)),
-    total_int = sum(intensive, na.rm = TRUE)
+    total_randomized = sum(frame_group != "not-in-frame"),
+    total_enrolled = sum(enrolled, na.rm = TRUE)
   ) %>%
   ungroup()
 
 
-# split the data in randomization periods
-rand_periods <- ie_randomization %>%
-  ungroup() %>%
-  anti_join(rand_record) %>%
-  arrange(s6_date) %>%
+# define the sampling frame
+sampling_frame <- ie_randomization %>%
+  # leave out randomizations that are too recent
+  filter(s6_date < this_monday) %>%
+  # Remove those that have already been considered
+  anti_join(
+    rand_record %>%
+      filter(
+        frame_group == "not-in-frame" |
+          (selected & (!interested | enrolled))
+      )
+  ) %>%
   mutate(
-    week = lubridate::floor_date(s6_date, unit = "week", week_start = 1)
+    conception_date = edd - lubridate::days(280),
+    bl_p1_midpoint = conception_date + lubridate::weeks(22),
+    # define frame group
+    frame_group = case_when(
+      s6_date < monday_month_ago ~ "not-in-frame",
+      this_monday > bl_p1_midpoint ~ "not-eligible",
+      this_monday <= bl_p1_midpoint ~ "in-sampling-frame"
+    ),
+    # define if a household is in sampling frame
+    in_frame = frame_group == "in-sampling-frame"
+  )
+
+
+# ensure reproducible sampling
+set.seed(0)
+
+
+# randomly arrange available households
+shuffled <- sampling_frame %>%
+  filter(frame_group == "in-sampling-frame") %>%
+  group_by(group, arm) %>%
+  sample_n(n())
+
+
+# calculate how many to sample per strata given previous randomizations
+group_n <- sampling_frame %>%
+  filter(frame_group == "in-sampling-frame") %>%
+  count(group, arm) %>%
+  full_join(blocked_check, by = c("group", "arm")) %>%
+  mutate_if(
+    is.integer,
+    list(~if_else(condition = is.na(.), 0L, .))
   ) %>%
-  left_join(
-    all_week_pairs
+  mutate(
+    all_randomized = n + total_randomized,
+    target = round(all_randomized * target_p),
+    needed = target - total_enrolled,
+    take = pmin(n, needed),
+    total_selected = total_enrolled + take
+  )
+
+
+# keep selected households
+randomized <- shuffled %>%
+  left_join(select(group_n, group, arm, take), by = c("group", "arm")) %>%
+  mutate(
+    n = seq(1, n()),
+    selected = n <= first(take)
   ) %>%
-  arrange(group, arm, s6_date, id) %>%
-  split(.$rand_period)
-
-
-# setup object to add during randomizations
-biweekly_blocked <- NULL
-
-
-set.seed(0) # ensure reproducible sampling
-
-
-# randomize every two weeks
-rand_periods %>%
-  for(houses in .){
-    cat(
-      "\n\nRandomization period starting on",
-      first(houses$rand_period) %>% as.character(),
-      "\n\n"
-    )
-    
-    
-    # randomly arrange available households
-    shuffled <- houses %>%
-      group_by(group, arm) %>%
-      sample_n(n())
-    
-    
-    # calculate how many to sample per strata given previous randomizations
-    group_n <- houses %>%
-      count(group, arm) %>%
-      full_join(blocked_check, by = c("group", "arm")) %>%
-      mutate_if(
-        is.integer,
-        list(~if_else(condition = is.na(.), 0L, .))
-      ) %>%
-      mutate(
-        all = n + total_rand,
-        target = round(all * target_p),
-        needed = target - total_int,
-        take = pmin(n, needed),
-        new_int = total_int + take
-      )
-    
-    
-    # keep selected households
-    selected <- shuffled %>%
-      left_join(select(group_n, group, arm, take), by = c("group", "arm")) %>%
-      mutate(
-        n = seq(1, n()),
-        intensive = n <= first(take)
-      ) %>%
-      select(-take, -n) %>%
-      ungroup()
-    
-    
-    # update randomization records
-    blocked_check <<- group_n %>%     
-      select(group, arm, total_rand = all, total_int = new_int) %>%
-      mutate(
-        cummul_p_intensive = total_int / total_rand
-      )
-    
-    
-    # accumulate all randomizations
-    biweekly_blocked <<- c(list(selected), biweekly_blocked)
-  }
+  select(id, group, arm, selected) %>%
+  ungroup()
 
 
 # organize ranzomization records
-if(!is.null(biweekly_blocked)){
-  biweekly_blocked <- biweekly_blocked %>%
-    bind_rows() %>%
-    mutate(
-      expected_p1_date = edd - 280 + 25*7
-    ) %>%
-    select(
-      group, arm, id, intensive, baseline_date = bl_date, expected_p1_date,
-      actual_p1_date = p1_date
-    ) %>%
-    print()
-  
-  # save record
-  rand_record %>%
-    bind_rows(biweekly_blocked) %>%
-    write_csv(path = "output/intensive_exposure_randomized.csv", na = "")
-}
+biweekly_randomization <- sampling_frame %>%
+  left_join(randomized) %>%
+  mutate(
+    randomization_date = Sys.Date(),
+    expected_p1_date = edd - 280 + 25*7,
+    first_intensive_visit = if_else(
+      condition = selected,
+      true = as.character(bl_p1_midpoint),
+      false = NA_character_
+    )
+  ) %>%
+  select(
+    randomization_date, group, arm, id,
+    enrollment_date = s4_date, baseline_date = bl_date, expected_p1_date,
+    actual_p1_date = p1_date,
+    frame_group, in_frame, selected,
+    
+    first_intensive_visit
+  ) %>%
+  print()
+
+
+# save record
+biweekly_randomization %>%
+  write_csv(
+    path = paste0(
+      "output/intensive-exposure/",
+      Sys.Date(),
+      "_intensive_exposure_randomized.csv"
+    ),
+    na = ""
+  )
+
+
+# summarize selection
+biweekly_randomization %>%
+  filter(selected) %>%
+  group_by(group, arm) %>%
+  summarize(
+    n = n(),
+    ids = id %>% paste(collapse = ", ")
+  ) %>%
+  ungroup()
+
+
+group_n %>%
+  select(group, arm, total_randomized = all_randomized, total_selected) %>%
+  mutate(
+    p_intensive = total_selected / total_randomized
+  )
 
 
 # End of script
