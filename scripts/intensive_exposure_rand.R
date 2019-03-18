@@ -130,33 +130,6 @@ all_week_pairs <- ie_randomization %>%
 target_p <- 0.15
 
 
-# Code to start a randomization record the first time this is done
-# ie_randomization %>%
-#   filter(s6_date < as.Date("2019-01-21")) %>%
-#   mutate(
-#     rand_date = "2019-09-20",
-#     frame_group = "not-considered",
-#     in_frame = FALSE,
-#     selected = FALSE,
-#     invited = FALSE,
-#     interested = FALSE,
-#     enrolled = FALSE,
-#     expected_p1_date = edd - 280 + 25*7
-#   ) %>%
-#   ungroup() %>%
-#   select(
-#     rand_date, group, arm, id,
-#     enrollment_date = s4_date, baseline_date = bl_date, expected_p1_date,
-#     actual_p1_date = p1_date,
-#     frame_group, in_frame, selected, invited, interested, enrolled
-#   ) %>%
-#   write_csv(
-#     path =
-#       "output/intensive-exposure/2019-02-20_intensive_exposure_randomized.csv",
-#     na = ""
-#   )
-
-
 # Use existing randomization record to evaluate each sampling
 rand_record <- list.files(
   "output/intensive-exposure", pattern = "randomized", full.names = TRUE
