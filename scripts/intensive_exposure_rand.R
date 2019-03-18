@@ -16,6 +16,8 @@ library(package = "tidyverse")
 
 # Get Emory RedCap export data
 source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+source(file = "scripts/0_get_intensive_data.R", encoding = "UTF-8")
+
 
 
 # get minimal dataset needed for intensive exposure participant selection
