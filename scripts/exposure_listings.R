@@ -2,6 +2,9 @@
 # Process exposure data ----
 #------------------------------------------------------------------------------*
 
+library(package = "tidyverse")
+
+
 
 source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
 
