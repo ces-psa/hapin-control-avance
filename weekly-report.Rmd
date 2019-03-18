@@ -456,7 +456,7 @@ ga_fcf <- gt_emory_data %>%
     conception = m17_ga - lubridate::days(280),
     ga = as.numeric(m17_date - conception, unit = "weeks"),
     # Categories
-    in_limits = between(fcf, 120, 160) & between(ga, 9, 20),
+    in_limits = between(fcf, 120, 180) & between(ga, 9, 20),
     study_group = case_when(
       s4_consent == 1 ~ "Inscritas",
       TRUE ~ "No inscritas"
@@ -468,8 +468,8 @@ ga_fcf <- gt_emory_data %>%
     ),
     fcf_group = case_when(
       fcf < 120 ~ "FCF baja",
-      between(fcf, 120, 160) ~ "FCF normal",
-      fcf > 160 ~ "FCF alta",
+      between(fcf, 120, 180) ~ "FCF normal",
+      fcf > 180 ~ "FCF alta",
       is.na(fcf) ~ "No datos de FCF"
     ),
     fcf_group = factor(
@@ -512,7 +512,7 @@ all_fhr <- ga_fcf %>%
     filter(ga > 0, ga < 40, id != "G0660") %>%
     ggplot() +
   geom_rect(
-    aes(xmin = 9, xmax = 20, ymin = 120, ymax = 160),
+    aes(xmin = 9, xmax = 20, ymin = 120, ymax = 180),
     color = "green", linetype = "dashed", fill = NA
   ) +
   geom_text(
@@ -553,7 +553,7 @@ all_fhr <- ga_fcf %>%
   ) +
   scale_color_manual(values = c("#377EB8", "grey80")) +
   scale_alpha_manual(values = c(1, 0.5)) +
-  expand_limits(x = c(6, 40), y = c(120, 180)) +
+  expand_limits(x = c(6, 40), y = c(120, 200)) +
     theme_bw() +
   theme(
     title = element_text(face = "bold"),
@@ -574,7 +574,7 @@ ga_fcf %>%
   filter(study_group == "Inscritas", !is.na(fcf)) %>%
   ggplot() +
   geom_rect(
-    aes(xmin = 9, xmax = 20, ymin = 120, ymax = 160),
+    aes(xmin = 9, xmax = 20, ymin = 120, ymax = 180),
     color = "green", linetype = "dashed", fill = NA
   ) +
   geom_text(
