@@ -10,7 +10,7 @@ exposure_data <- gt_emory_data %>%
   ) %>%
   mutate_at(
     vars(matches("date|time|end|_st")),
-    funs(as.character)
+    list(as.character)
   )
 
 
