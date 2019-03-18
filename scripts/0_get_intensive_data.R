@@ -17,6 +17,17 @@ ue_intensive_file <- list.files(
   ) %>%
   slice(which.max(export_time))
 
+
+if(as.Date(gt_emory_file$export_time) > as.Date(ue_intensive_file$export_time)){
+  stop(
+    paste(
+      "El archivo exportado del estudio intensivo de exposición debe ser tan",
+      "reciente como el archivo del estudio principal."
+    )
+  )
+}
+
+
 gt_emory_data <- ue_intensive_file %>%
   pull(file) %>%
   read_csv(col_types = cols(.default = col_character())) %>%
