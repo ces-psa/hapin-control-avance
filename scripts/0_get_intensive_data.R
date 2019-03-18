@@ -76,3 +76,27 @@ ue_intensive_data <- ue_intensive_file %>%
     list(~ as.Date)
   )
 
+
+# Get enrollment data from UVG RedCap server
+
+data_base <- DBI::dbConnect(odbc::odbc(), "hapin-gt", dbname = "hapindb")
+
+
+gt_intensive_enrollment <- DBI::dbGetQuery(
+  conn = data_base,
+  statement = paste(
+    "select *",
+    "from redcap_data",
+    "where project_id in (select project_id from redcap_projects where project_name = 'hapin_guatemala_exposure')"
+  )
+) %>%
+  filter(event_id == 250) %>%
+  select(id = record, field_name, value) %>%
+  spread(field_name, value) %>%
+  print()
+
+
+DBI::dbDisconnect(data_base)
+rm(data_base)
+
+
