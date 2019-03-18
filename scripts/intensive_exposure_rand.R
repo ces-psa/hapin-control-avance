@@ -167,7 +167,8 @@ blocked_check <- rand_record %>%
     total_randomized = sum(frame_group != "not-in-frame"),
     total_enrolled = sum(enrolled, na.rm = TRUE)
   ) %>%
-  ungroup()
+  ungroup() %>%
+  print()
 
 
 # define the sampling frame
