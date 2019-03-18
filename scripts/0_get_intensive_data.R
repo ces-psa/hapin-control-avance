@@ -31,7 +31,7 @@ if(
 }
 
 
-gt_emory_data <- ue_intensive_file %>%
+ue_intensive_data <- ue_intensive_file %>%
   pull(file) %>%
   read_csv(col_types = cols(.default = col_character())) %>%
   mutate(
