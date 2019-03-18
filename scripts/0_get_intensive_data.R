@@ -73,6 +73,6 @@ gt_emory_data <- ue_intensive_file %>%
   # fix types
   mutate_at(
     vars(matches("date")),
-    funs(as.Date)
+    list(~ as.Date)
   )
 

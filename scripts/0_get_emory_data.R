@@ -65,10 +65,10 @@ gt_emory_data <- gt_emory_file %>%
   # fix types
   mutate_at(
     vars(matches("date"), m17_ga),
-    funs(as.Date)
+    list(~ as.Date)
   ) %>%
   mutate_at(
     vars(m17_hr_bpm),
-    funs(as.numeric)
+    list(~ as.numeric)
   )
   

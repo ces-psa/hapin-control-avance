@@ -23,7 +23,7 @@ gt_emory_repeat_data <- gt_emory_repeat_file %>%
   read_csv() %>%
   mutate_at(
     vars(matches("hhid")),
-    funs(as.character)
+    list(~ as.character)
   ) %>%
   mutate(
     # Default change for all "monthly" visits

@@ -52,7 +52,7 @@ gt_exposure_start <- DBI::dbGetQuery(
   as_tibble() %>%
   mutate_at(
     vars(matches("long|lat|elev")),
-    funs(as.double)
+    list(~ as.double)
   ) %>%
   mutate(
     gth4x_long = case_when(gth4x_long > 0 ~ gth4x_long * -1, TRUE ~ gth4x_long),

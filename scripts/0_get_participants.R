@@ -57,7 +57,7 @@ DBI::dbDisconnect(conn = data_base)
 
 gt_z10 %>%
   mutate_all(
-    funs(iconv(., from = "Latin1", to = "UTF-8"))
+    list(~ iconv(., from = "Latin1", to = "UTF-8"))
   ) %>%
   mutate_at(
     vars(
@@ -65,8 +65,8 @@ gt_z10 %>%
       z10_aow_name, z10_aow_lastname,
       z10_hh_name, z10_hh_lastname_2
     ),
-    funs(
-      if_else(
+    list(
+      ~ if_else(
         condition = is.na(.),
         true = "",
         false = .
@@ -114,8 +114,8 @@ gt_participants <- gt_z10 %>%
   # GPS data as numbers
   mutate_at(
     vars(matches("alti|lati|long")),
-    funs(
-      gsub("[^-0-9.]", "", .) %>%
+    list(
+      ~ gsub("[^-0-9.]", "", .) %>%
         as.numeric()
     )
   ) %>%
