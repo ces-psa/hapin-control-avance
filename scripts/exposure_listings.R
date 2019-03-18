@@ -174,7 +174,12 @@ main_study <- exposure_data %>%
 all_instruments <- main_study %>%
   bind_rows(duplicates) %>%
   arrange(id, visit, date_start) %>%
-  filter(!grepl("^*8{3,}", instrument_id))
+  filter(!grepl("^*8{3,}", instrument_id)) %>%
+  mutate(
+    instrument_id = instrument_id %>%
+      sub("^0*", "", .) %>%
+      as.integer()
+  )
 
 
 # export for input into file loader
