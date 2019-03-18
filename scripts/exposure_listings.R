@@ -3,6 +3,9 @@
 #------------------------------------------------------------------------------*
 
 
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+
+
 exposure_data <- gt_emory_data %>%
   select(
     visit, redcap_event_name, id, matches("^h41b?_"),
