@@ -240,7 +240,20 @@ randomized <- shuffled %>%
 # organize ranzomization records
 biweekly_randomization <- sampling_frame %>%
   left_join(randomized) %>%
+  # add context variables
+  left_join(
+    gt_emory_data %>%
+      select(id, hapin_rand_date = s6_date) %>%
+      filter(!is.na(hapin_rand_date))
+  ) %>%
+  left_join(
+    gt_emory_data %>%
+      select(id = s4_main_id, edd = m17_ga) %>%
+      filter(!is.na(edd))
+  ) %>%
   mutate(
+    ga_today = round((Sys.Date() - (as.Date(edd) - 280)) / 7, 1),
+    ga_at_rand = round((hapin_rand_date - (as.Date(edd) - 280)) / 7, 1),
     randomization_date = Sys.Date(),
     expected_p1_date = edd - 280 + 25*7,
     first_intensive_visit = if_else(
@@ -253,6 +266,7 @@ biweekly_randomization <- sampling_frame %>%
     randomization_date, group, arm, id,
     enrollment_date = s4_date, baseline_date = bl_date, expected_p1_date,
     actual_p1_date = p1_date,
+    ga_today, hapin_rand_date, ga_at_rand,
     frame_group, in_frame, selected,
     
     first_intensive_visit
