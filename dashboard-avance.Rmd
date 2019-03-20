@@ -109,8 +109,8 @@ all_events %>%
   ) %>%
   mutate_at(
     vars(matches("salida_")),
-    funs(
-      if_else(
+    list(
+      ~ if_else(
         condition = .,
         true = "sí",
         false = ""
@@ -577,15 +577,15 @@ gt_emory_repeat_data %>%
   group_by(id, date) %>%
   summarize_at(
     vars(h51_by, h54_by),
-    funs(
-      na.omit(.) %>% unique() %>% paste(collapse = ";")
+    list(
+      ~ na.omit(.) %>% unique() %>% paste(collapse = ";")
     )
   ) %>%
   ungroup() %>%
   mutate_at(
     vars(h51_by, h54_by),
-    funs(
-      if_else(
+    list(
+      ~ if_else(
         condition = . == "",
         true = NA_character_,
         false = .

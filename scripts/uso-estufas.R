@@ -1,6 +1,7 @@
 
 source(file = "scripts/0_get_gt_repeated.R", encoding = "UTF-8")
 source(file = "scripts/0_get_emory_repeated.R", encoding = "UTF-8")
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
 
 
 
@@ -16,46 +17,52 @@ days_diff <- function(date1, date2){
 
 # dots download ----
 h54 <- gt_repeated %>%
-  filter(crf == "h54") %>%
-  select(id = record_id, record, matches("h54_")) %>%
-  rename(record_id = record) %>%
+  select(record, id = record_id, crf, matches("h54_")) %>%
+  filter_at(
+    vars(h54_by, h54_stove_use),
+    any_vars(!is.na(.))
+  ) %>%
+  filter(
+    (!is.na(id) & grepl("^3[35][0-9]{3}$", id)) |
+      grepl("^3[35][0-9]{3}", record)
+  ) %>%
+  mutate(
+    id = if_else(
+      condition = is.na(id) | !grepl("^3[35][0-9]{3}$", id),
+      true = sub("^(3[35][0-9]{3}).*", "\\1", record),
+      false = id
+    )
+  ) %>%
+  select(-record) %>%
   bind_rows(
     gt_emory_data %>%
       select(id, matches("h54_")) %>%
       mutate_all(as.character) %>%
-      filter(!is.na(h54_date))
+      filter(!is.na(h54_date)) %>%
+      rownames_to_column() %>%
+      gather(column, value, -id, -rowname, na.rm = TRUE) %>%
+      mutate(
+        column = if_else(
+          condition = !grepl("_v[0-9]+$", column),
+          true = paste0(column, "_v1"),
+          false = column
+        ),
+        crf = "h54_emory"
+      ) %>%
+      extract(
+        column, into = c("variable", "rep"),
+        regex = "(^[^_]+_.+)_v([0-9]+)", convert = TRUE
+      ) %>%
+      spread(variable, value) %>%
+      select(-rowname, -rep)
   ) %>%
-  # fix errors in record ids
-  mutate(
-    id = case_when(
-      # keep if correct
-      grepl("^3[35][0-9]{3}$", id) ~ id,
-      # if missing use manual entry if, correct format
-      is.na(id) & !is.na(record_id) & grepl("3[35][0-9]{3}", record_id) ~
-        sub(" *(3[35][0-9]{3}).*", "\\1", record_id),
-      !grepl("^3[35][0-9]{3}$", id) & !is.na(record_id) &
-        grepl("3[35][0-9]{3}", record_id) ~
-        sub(" *(3[35][0-9]{3}).*", "\\1", record_id),
-      TRUE ~ "error"
-    )
+  mutate(h54_date = as.Date(h54_date)) %>%
+  set_names(
+    names(.) %>% sub("^h54_", "", .)
   ) %>%
-  filter(!is.na(id)) %>%
-  rownames_to_column() %>%
-  gather(column, value, -id, -record_id, -rowname, na.rm = TRUE) %>%
-  mutate(
-    column = if_else(
-      condition = !grepl("_v[0-9]+$", column),
-      true = paste0(column, "_v1"),
-      false = column
-    )
-  ) %>%
-  extract(
-    column, into = c("crf", "variable", "rep"),
-    regex = "(^[^_]+)_(.+)_v([0-9]+)", convert = TRUE
-  ) %>%
-  spread(variable, value) %>%
-  mutate(date = as.Date(date)) %>%
+  filter(stove_use %in% c("0", "1")) %>%
   print()
+
 
 
 # gas delivery ----
@@ -247,7 +254,7 @@ all_dates <- seq.Date(from = date_range[1], to = date_range[2], by = "1 day")
 # h54 - reported traditional stove use ----
 h54_day <- h54 %>%
   filter(!is.na(date)) %>%
-  group_by(id = record_id, date) %>%
+  group_by(id, date) %>%
   summarize(
     registros_h54 = n(),
     usos_estufa = sum(stove_use == 1, na.rm = TRUE)
@@ -287,7 +294,7 @@ emory_crfs <- gt_emory_data %>%
 
 repeat_crfs <- list(
   h51_emory,
-  rename(h54, id = record_id)
+  h54
 ) %>%
   bind_rows() %>%
   select(id, visit, matches("^[^_]+_(date|by)$")) %>%
@@ -307,7 +314,7 @@ all_crfs <- list(
   emory_crfs,
   repeat_crfs,
   h54 %>%
-    select(id = record_id, crf, by, date)
+    select(id, crf, by, date)
 ) %>%
   bind_rows()
 

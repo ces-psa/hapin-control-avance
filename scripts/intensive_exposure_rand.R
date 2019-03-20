@@ -16,6 +16,8 @@ library(package = "tidyverse")
 
 # Get Emory RedCap export data
 source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+source(file = "scripts/0_get_intensive_data.R", encoding = "UTF-8")
+
 
 
 # get minimal dataset needed for intensive exposure participant selection
@@ -130,33 +132,6 @@ all_week_pairs <- ie_randomization %>%
 target_p <- 0.15
 
 
-# Code to start a randomization record the first time this is done
-# ie_randomization %>%
-#   filter(s6_date < as.Date("2019-01-21")) %>%
-#   mutate(
-#     rand_date = "2019-09-20",
-#     frame_group = "not-considered",
-#     in_frame = FALSE,
-#     selected = FALSE,
-#     invited = FALSE,
-#     interested = FALSE,
-#     enrolled = FALSE,
-#     expected_p1_date = edd - 280 + 25*7
-#   ) %>%
-#   ungroup() %>%
-#   select(
-#     rand_date, group, arm, id,
-#     enrollment_date = s4_date, baseline_date = bl_date, expected_p1_date,
-#     actual_p1_date = p1_date,
-#     frame_group, in_frame, selected, invited, interested, enrolled
-#   ) %>%
-#   write_csv(
-#     path =
-#       "output/intensive-exposure/2019-02-20_intensive_exposure_randomized.csv",
-#     na = ""
-#   )
-
-
 # Use existing randomization record to evaluate each sampling
 rand_record <- list.files(
   "output/intensive-exposure", pattern = "randomized", full.names = TRUE
@@ -194,7 +169,8 @@ blocked_check <- rand_record %>%
     total_randomized = sum(frame_group != "not-in-frame"),
     total_enrolled = sum(enrolled, na.rm = TRUE)
   ) %>%
-  ungroup()
+  ungroup() %>%
+  print()
 
 
 # define the sampling frame
@@ -266,7 +242,20 @@ randomized <- shuffled %>%
 # organize ranzomization records
 biweekly_randomization <- sampling_frame %>%
   left_join(randomized) %>%
+  # add context variables
+  left_join(
+    gt_emory_data %>%
+      select(id, hapin_rand_date = s6_date) %>%
+      filter(!is.na(hapin_rand_date))
+  ) %>%
+  left_join(
+    gt_emory_data %>%
+      select(id = s4_main_id, edd = m17_ga) %>%
+      filter(!is.na(edd))
+  ) %>%
   mutate(
+    ga_today = round((Sys.Date() - (as.Date(edd) - 280)) / 7, 1),
+    ga_at_rand = round((hapin_rand_date - (as.Date(edd) - 280)) / 7, 1),
     randomization_date = Sys.Date(),
     expected_p1_date = edd - 280 + 25*7,
     first_intensive_visit = if_else(
@@ -279,6 +268,7 @@ biweekly_randomization <- sampling_frame %>%
     randomization_date, group, arm, id,
     enrollment_date = s4_date, baseline_date = bl_date, expected_p1_date,
     actual_p1_date = p1_date,
+    ga_today, hapin_rand_date, ga_at_rand,
     frame_group, in_frame, selected,
     
     first_intensive_visit

@@ -12,7 +12,7 @@ datos_tabla <- function(.data, ...){
   mutate_at(
     .data,
     vars(matches("date|m17_ga")),
-    funs(as.character)
+    list(~ as.character)
   ) %>%
     gather(
       variable, value, -id, -visit, -redcap_event_name, -fpp,

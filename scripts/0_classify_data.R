@@ -57,7 +57,7 @@ inscritas <- gt_emory_data %>%
   # Gather variable-value pairs
   mutate_at(
     vars(matches("_date")),
-    funs(as.character)
+    list(~ as.character)
   ) %>%
   # Add dates for started H41s
   left_join(

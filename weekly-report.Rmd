@@ -24,8 +24,8 @@ source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
 # Utility functions
 bold_all <- . %>%
   mutate_all(
-    funs(
-      if_else(
+    list(
+      ~ if_else(
         condition = . == "",
         true = "",
         false = paste0("**", ., "**")
@@ -74,7 +74,7 @@ all_data <- s0 %>%
   ) %>%
   mutate_at(
     vars(matches("_date")),
-    funs(as.character)
+    list(~ as.character)
   ) %>%
   mutate(
     arm = redcap_event_name %>%
@@ -148,7 +148,7 @@ variables <- all_data %>%
   filter(keep) %>%
   count(arm, visit, crf, variable, var_name) %>%
   mutate_all(
-    funs(as.character)
+    list( ~ as.character)
   )
 ```
 
@@ -208,8 +208,8 @@ main_data <- all_data %>%
   group_by(id) %>%
   mutate_at(
     vars(left_p = e3_date_exit, left_oaw = e3_date_exit_o, left_c = e3_date_c),
-    funs(
-      any(!is.na(.))
+    list(
+      ~ any(!is.na(.))
     )
   ) %>%
   ungroup() %>%
@@ -258,8 +258,8 @@ classified <- screening_data %>%
       pre_screened, pre_eligible,
       screened, eligible, enrolled
     ),
-    funs(
-      if_else(condition = ., "yes", "no") %>% factor(levels = c("yes", "no"))
+    list(
+      ~ if_else(condition = ., "yes", "no") %>% factor(levels = c("yes", "no"))
     )
   ) %>%
   left_join(
@@ -267,8 +267,9 @@ classified <- screening_data %>%
       ungroup() %>%
       mutate_at(
         vars(matches("^left(_|$)")),
-        funs(
-          if_else(condition = ., "yes", "no") %>% factor(levels = c("yes", "no"))
+        list(
+          ~ if_else(condition = ., "yes", "no") %>%
+            factor(levels = c("yes", "no"))
         )) %>%
       gather(
         key = variable, value = value,
@@ -405,8 +406,8 @@ date_events %>%
   spread(type, n, fill = 0) %>%
   mutate_at(
     vars(pre_screened, pre_eligible),
-    funs(
-      if_else(
+    list(
+      ~ if_else(
         condition = year == 2018 & grepl("Semanas 1", week),
         true = "--",
         false = as.character(.)
@@ -456,7 +457,7 @@ ga_fcf <- gt_emory_data %>%
     conception = m17_ga - lubridate::days(280),
     ga = as.numeric(m17_date - conception, unit = "weeks"),
     # Categories
-    in_limits = between(fcf, 120, 160) & between(ga, 9, 20),
+    in_limits = between(fcf, 120, 180) & between(ga, 9, 20),
     study_group = case_when(
       s4_consent == 1 ~ "Inscritas",
       TRUE ~ "No inscritas"
@@ -468,8 +469,8 @@ ga_fcf <- gt_emory_data %>%
     ),
     fcf_group = case_when(
       fcf < 120 ~ "FCF baja",
-      between(fcf, 120, 160) ~ "FCF normal",
-      fcf > 160 ~ "FCF alta",
+      between(fcf, 120, 180) ~ "FCF normal",
+      fcf > 180 ~ "FCF alta",
       is.na(fcf) ~ "No datos de FCF"
     ),
     fcf_group = factor(
@@ -512,7 +513,7 @@ all_fhr <- ga_fcf %>%
     filter(ga > 0, ga < 40, id != "G0660") %>%
     ggplot() +
   geom_rect(
-    aes(xmin = 9, xmax = 20, ymin = 120, ymax = 160),
+    aes(xmin = 9, xmax = 20, ymin = 120, ymax = 180),
     color = "green", linetype = "dashed", fill = NA
   ) +
   geom_text(
@@ -553,7 +554,7 @@ all_fhr <- ga_fcf %>%
   ) +
   scale_color_manual(values = c("#377EB8", "grey80")) +
   scale_alpha_manual(values = c(1, 0.5)) +
-  expand_limits(x = c(6, 40), y = c(120, 180)) +
+  expand_limits(x = c(6, 40), y = c(120, 200)) +
     theme_bw() +
   theme(
     title = element_text(face = "bold"),
@@ -574,7 +575,7 @@ ga_fcf %>%
   filter(study_group == "Inscritas", !is.na(fcf)) %>%
   ggplot() +
   geom_rect(
-    aes(xmin = 9, xmax = 20, ymin = 120, ymax = 160),
+    aes(xmin = 9, xmax = 20, ymin = 120, ymax = 180),
     color = "green", linetype = "dashed", fill = NA
   ) +
   geom_text(
@@ -1128,7 +1129,7 @@ subset(
     summarize_at(
       .,
       vars(one_of(c("m", "o", "c"))),
-      funs(sum)
+      list(~ sum)
     ) %>%
       mutate(year = "", week = "Total") %>%
       bold_all()
@@ -1175,8 +1176,8 @@ all_instruments %>%
   ) %>%
   mutate_at(
     vars(ecm, pump, lascar),
-    funs(
-      if_else(
+    list(
+      ~ if_else(
         condition = . == ".",
         true = ".",
         false = paste0(., " (", round(as.numeric(.) / n * 100), "%)")

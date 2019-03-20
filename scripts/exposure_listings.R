@@ -2,6 +2,12 @@
 # Process exposure data ----
 #------------------------------------------------------------------------------*
 
+library(package = "tidyverse")
+
+
+
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+
 
 exposure_data <- gt_emory_data %>%
   select(
@@ -10,7 +16,7 @@ exposure_data <- gt_emory_data %>%
   ) %>%
   mutate_at(
     vars(matches("date|time|end|_st")),
-    funs(as.character)
+    list(as.character)
   )
 
 
@@ -174,7 +180,12 @@ main_study <- exposure_data %>%
 all_instruments <- main_study %>%
   bind_rows(duplicates) %>%
   arrange(id, visit, date_start) %>%
-  filter(!grepl("^*8{3,}", instrument_id))
+  filter(!grepl("^*8{3,}", instrument_id)) %>%
+  mutate(
+    instrument_id = instrument_id %>%
+      sub("^0*", "", .) %>%
+      as.integer()
+  )
 
 
 # export for input into file loader

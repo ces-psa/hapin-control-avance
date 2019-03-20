@@ -6,8 +6,8 @@
 library(package = "tidyverse")
 
 # Get screening data from Emory export
-gt_emory_file <- list.files(
-  path = "data/exports", pattern = "MainSt.+csv", full.names = TRUE
+ue_intensive_file <- list.files(
+  path = "data/exports", pattern = "HAPINGuatemalaExpos.+csv", full.names = TRUE
 ) %>%
   tibble(
     file = .,
@@ -17,16 +17,24 @@ gt_emory_file <- list.files(
   ) %>%
   slice(which.max(export_time))
 
-gt_emory_data <- gt_emory_file %>%
+
+if(
+  lubridate::date(gt_emory_file$export_time) >
+  lubridate::date(ue_intensive_file$export_time)
+){
+  stop(
+    paste(
+      "El archivo exportado del estudio intensivo de exposición debe ser tan",
+      "reciente como el archivo del estudio principal."
+    )
+  )
+}
+
+
+ue_intensive_data <- ue_intensive_file %>%
   pull(file) %>%
   read_csv(col_types = cols(.default = col_character())) %>%
   mutate(
-    # Default change for all "monthly" visits
-    visit = gsub(
-      pattern = "m([0-9]+).+.",
-      replacement = "mensual\\1",
-      redcap_event_name
-    ),
     # Assign routine names to the event-visit combinations
     visit = recode_factor(
       redcap_event_name,
@@ -57,18 +65,38 @@ gt_emory_data <- gt_emory_file %>%
       segun_sea_necesari_arm_2 = "libres1",
       segun_sea_necesari_arm_2b = "libres2",
       segun_sea_necesari_arm_2c = "libres3",
-      .default = visit,
+      .default = redcap_event_name,
       .ordered = TRUE
     )
   ) %>%
-  select(redcap_event_name, visit, id, everything()) %>%
+  select(redcap_event_name, visit, id = record_id, everything()) %>%
   # fix types
   mutate_at(
-    vars(matches("date"), m17_ga),
+    vars(matches("date")),
     list(~ as.Date)
-  ) %>%
-  mutate_at(
-    vars(m17_hr_bpm),
-    list(~ as.numeric)
   )
-  
+
+
+# Get enrollment data from UVG RedCap server
+
+data_base <- DBI::dbConnect(odbc::odbc(), "hapin-gt", dbname = "hapindb")
+
+
+gt_intensive_enrollment <- DBI::dbGetQuery(
+  conn = data_base,
+  statement = paste(
+    "select *",
+    "from redcap_data",
+    "where project_id in (select project_id from redcap_projects where project_name = 'hapin_guatemala_exposure')"
+  )
+) %>%
+  filter(event_id == 250) %>%
+  select(id = record, field_name, value) %>%
+  spread(field_name, value) %>%
+  print()
+
+
+DBI::dbDisconnect(data_base)
+rm(data_base)
+
+
