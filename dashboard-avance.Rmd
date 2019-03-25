@@ -571,7 +571,6 @@ gt_emory_repeat_data %>%
       ) %>%
       filter(
         lubridate::floor_date(date, unit = "week", week_start = 1) ==
-          lubridate::floor_date(Sys.Date(), unit = "week", week_start = 1)
       )
   ) %>%
   group_by(id, date) %>%
