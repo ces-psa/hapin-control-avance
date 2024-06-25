@@ -1,0 +1,59 @@
+---
+title: "linea tiempo"
+author: "AIR"
+date: "6/9/2023"
+output: html_document
+---
+```{r}
+library(tidyverse)
+
+#leer datos de h41 y h41b
+#leer archivos h41
+#buscar el mas reciente
+file_h41_h41b<-list.files(
+  path = "C:/Users/aramirez/ownCloud/Exposure_group/Export_Redcap/h41_h41b_h42_h43/", pattern = "HAPINIIGuatemala-H41H42H43H41b_DATA_.+csv", full.names = TRUE
+) %>%  
+  tibble(
+    file = .,
+    export_time = file %>%
+      gsub(".+?_([-0-9_]+).csv", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(export_time))
+
+#cargar los datos
+dt_h41_h41b<-read_csv(file_h41_h41b$file, cols(.default = "c"),show_col_types = FALSE)
+#renombrer columnas
+names(dt_h41_h41b) <- dt_h41_h41b[1,]
+dt_h41_h41b<-dt_h41_h41b[-1,]
+dt_h41_h41b<-dt_h41_h41b %>% filter(record_id!="99999")
+
+dt_b5<-dt_h41_h41b %>%filter(redcap_event_name=="24_month_arm_1") %>% select(
+  record_id, fecha=h41_date, kap1=h41_envir___1, kap2=h41_envir___2, sap=h41_envir___3, rap1=h41_envir___4,
+  rap2=h41_envir___5, hop=h41_envir___6, aap=h41_envir___7,
+  pem=h41_person___1, peo=h41_person___2, pec=h41_person___3,
+  kap1_beacon=h41_kap1_log_id, kap1_lascar=h41_kap1_lascar_id, kap1_ecm=h41_kap1_ecm_id,
+  kap2_beacon=h41_kap2_log_id, kap2_lascar=h41_kap2_lascar_id, kap2_ecm=h41_kap2_ecm_id,
+  sap_beacon=h41_sap_log_id, sap_lascar=h41_sap_lascar_id, sap_ecm=h41_sap_ecm_id, 
+  rap1_beacon=h41_rap1_log_id, rap1_lascar=h41_rap1_lascar_id, rap1_ecm=h41_rap1_ecm_id,
+  rap2_beacon=h41_rap2_log_id, rap2_lascar=h41_rap2_lascar_id, rap2_ecm=h41_rap2_ecm_id,
+  hop_beacon= h41_hop_log_id, hop_lascar=h41_hop_lascar_id, hop_ecm=h41_hop_ecm_id, 
+  aap_beacon=h41_aap_log_id, aap_lascar=h41_aap_lascar_id, aap_ecm=h41_aap_ecm_id,
+  pem_beacon1=h41_m_beacon_id1, pem_beacon2=h41_m_beacon_id2, pem_beacon3=h41_m_logger_id, pem_lascar=h41_m_lascar_id, pem_ecm=h41_m_ecm_id,
+  peo_beacon1=h41_o_beacon_id1, peo_beacon2=h41_o_beacon_id2, peo_beacon3=h41_o_logger_id, peo_lascar=h41_o_lascar_id, peo_ecm=h41_o_ecm_id,
+   pec_beacon1=h41_c_beacon_id1, pec_beacon2=h41_c_beacon_id2, pec_lascar=h41_c_lascar_id, pec_ecm=h41_c_ecm_id,
+  blanco_ecm=h41_b_ecm_id, filtro_blanco=h41_b_ecm_fid
+  
+) %>% filter(!is.na(fecha)) 
+
+dt_b5b<- dt_h41_h41b %>%filter(redcap_event_name=="24_month_arm_1") %>% select(
+  record_id, fecha=h41b_date,
+  h41b_envir1, h41b_envir2, h41b_envir3
+) %>% filter(!is.na(fecha)) %>% group_by(h41b_envir1, h41b_envir2, h41b_envir3) %>% count()
+
+
+
+
+dt_b5b
+```
+

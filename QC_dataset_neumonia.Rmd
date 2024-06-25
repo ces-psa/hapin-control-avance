@@ -1,0 +1,1198 @@
+---
+title: "Reviewing Pneumonia Data"
+author: "AIR"
+date: "14/3/2022"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+# FIRST LOAD DATA
+
+library(package = "tidyverse")
+library(package= "kableExtra") 
+
+# find the las export files
+#amr1 file
+arm1_file <- list.files(
+  path = "data/exports",
+  pattern = "HAPINGuatemalaMainSt-Arm1_DATA",
+  full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    date = file %>%
+      sub(".+HAPINGuatemalaMainSt-Arm1_DATA_([0-9_-]{15}).+", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(date)) %>%
+  print()
+
+#arm2 file
+main_file <- list.files(
+  path = "data/exports",
+  pattern = "HAPINGuatemalaMainSt-Arm2_DATA",
+  full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    date = file %>%
+      sub(".+HAPINGuatemalaMainSt-Arm2_DATA_([0-9_-]{15}).+", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(date)) %>%
+  print()
+
+# find most recent files
+arm3_file <- list.files(
+  path = "data/exports",
+  pattern = "HAPINGuatemalaMainSt-Arm3_DATA",
+  full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    date = file %>%
+      sub(".+HAPINGuatemalaMainSt-Arm3_DATA_([0-9_-]{15}).+", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(date)) %>%
+  print()
+
+#repeat_file
+repeats_file <- list.files(
+  path = "data/exports",
+  pattern = "HAPINGuatemalaRepeat_DATA",
+  full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    date = file %>%
+      sub(".+HAPINGuatemalaRepeat_DATA_([0-9_-]{15}).+", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(date)) %>%
+  print()
+
+#piloto_file
+piloto_file <- list.files(
+  path = "data/exports",
+  pattern = "PilotoVigilanciaNeum_DATA",
+  full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    date = file %>%
+      sub(".+PilotoVigilanciaNeum_DATA_([0-9_-]{15}).+", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(date)) %>%
+  print()
+
+
+# Manually select data export
+arm1 <- read_csv(
+  file = arm1_file$file,
+  col_types = cols(.default = col_character())
+) %>%
+  # fix date types
+  mutate_at(
+    vars(matches("^[^_]+_date$"), m17_ga, c30_dob),
+    list(as.Date)
+  ) %>%
+  filter(id != "99999") %>%
+  mutate(
+    visit = redcap_event_name %>%
+      sub("_arm.*", "", .) %>%
+      recode(
+        .,
+        linea_de_base = "baseline",
+        .default = .
+      ) %>%
+      factor(
+        levels = c("baseline", "p1", "p2",  "b1", "b2", "b3", "b4")
+      ),
+    # manual fix for overwriten s4
+    s4_main_id = if_else(
+      condition = id == "G1488",
+      true = "33488",
+      false = s4_main_id
+    )
+  ) %>%
+  print()
+
+arm2 <- read_csv(
+  file = main_file$file,
+  col_types = cols(.default = col_character())
+) %>%
+  filter(id != "99999") %>%
+  # fix date types
+  mutate_at(
+    vars(matches("^[^_]+_date$"), c30_dob),
+    list(as.Date)
+  ) %>%
+  mutate(
+    visit = redcap_event_name %>%
+      sub("_arm.*", "", .) %>%
+      recode(
+        .,
+        linea_de_base = "baseline",
+        .default = .
+      ) %>%
+      factor(
+        levels = c("baseline", "p1", "p2","m1", "m2",  "b1", "m4", "m5", "b2", "m7", "m8", "b3", "m10","m11", "b4")
+      )
+  ) %>%
+  print()
+
+
+# repeated crfs ----
+
+
+repeats <- read_csv(
+  file = repeats_file$file,
+  col_types = cols(.default = col_character())
+) %>%
+  print()
+
+
+# arm3 monthly visits ----
+
+
+
+# Manually select data export
+arm3 <- read_csv(
+  file = arm3_file$file,
+  col_types = cols(.default = col_character())
+) %>%
+  filter(id != "99999") %>%
+  print()
+
+#datos del piloto
+piloto <- read_csv(
+  file = piloto_file$file,
+  col_types = cols(.default = col_character())
+) %>%
+  print()
+
+
+
+
+#create header dataset to each CRF (c36, c36a, c37, c40 and c41) from each source (main study and repeated) to do QC data
+
+
+#c36a_repeated source
+c36a_repeated<-repeats %>% filter(!is.na(c36a_hhid)) %>% transmute(id=c36a_hhid, fecha_crf=as.Date(c36a_date),
+                                                                c36a_by, c36a_time, redcap_event_name,
+                                                                fecha_servicio=as.Date(c36a_hospitalized),
+                                                 hora_servicio=c36a_h_time, id_visita=c36a_visit, c36a_location) %>% 
+                                              select(
+                                                   id, fecha_crf, iniciales=c36a_by, fecha_servicio, 
+                                                   id_visita, evento=redcap_event_name, c36a_location
+                                                 ) %>% print()
+#c36a main study source
+c36a_arm2<-arm2 %>% filter(!is.na(c36a_date)) %>% select(id, fecha_crf=c36a_date, c36a_by, 
+                                                         fecha_servicio=c36a_hospitalized, redcap_event_name,  c36a_location) %>%
+                                                        mutate(
+                                                           evento=case_when(
+                                                             redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+                                                             redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+                                                             redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+                                                             redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+                                                             redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                           ),
+                                                           id_visita=NA_character_
+                                                         ) %>% select(id, fecha_crf, iniciales=c36a_by, fecha_servicio, 
+                                                                      id_visita,evento, c36_location=c36a_location) %>% print()
+
+#c36 main study source
+c36_main_study<-arm2 %>% filter(!is.na(c36_date)) %>% select(id, fecha_crf=c36_date, c36_by, 
+                                                             fecha_servicio=c36_hospitalized, 
+                                                             redcap_event_name, c36_location) %>%  mutate(
+                                                               evento=case_when(
+                                                                 redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+                                                                 redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+                                                                 redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+                                                                 redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+                                                                 redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                               ),
+                                                               id_visita=NA_character_
+                                                             ) %>% select(
+                                                               id, fecha_crf, iniciales=c36_by, fecha_servicio, evento, id_visita, c36_location
+                                                             ) %>% print()
+
+#c37 main study source
+c37_arm2<-arm2 %>% filter(!is.na(c37_date)) %>% select(id, fecha_crf=c37_date, 
+                                                       iniciales=c37_by, fecha_servicio=c37_date_cxr, 
+                                                       redcap_event_name) %>%  mutate(
+                                                         evento=case_when(
+                                                           redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+                                                           redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+                                                           redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+                                                           redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+                                                           redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                         ),
+                                                         id_visita=NA_character_
+                                                       ) %>% select(id, fecha_crf, iniciales, fecha_servicio,
+                                                                    evento, id_visita) %>%  print()
+
+#c37 repeated source
+c37_repeated<-repeats %>% filter(!is.na(c37_date)) %>% transmute(id=c37a_hhid, fecha_crf=c37_date, c37_visit,
+                                                              iniciales=c37_by, 
+                                                              fecha_servicio=c37_date_cxr,
+                                                              redcap_event_name) %>% transmute(
+                                                                id, fecha_crf, iniciales, fecha_servicio,
+                                                                evento=redcap_event_name, id_visita=c37_visit
+                                                                
+                                                              ) %>%  print()
+
+#c40 arm2 source
+c40_arm2<-arm2 %>% filter(!is.na(c40_date)) %>% transmute(id, fecha_crf=c40_date, iniciales=c40_by, 
+                                                       fecha_servicio=c40_date_arrive, 
+                                                       redcap_event_name
+                                                      ) %>% mutate(
+                                                         evento=case_when(
+                                                           redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+                                                           redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+                                                           redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+                                                           redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+                                                           redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                         ),
+                                                         id_visita=NA_character_
+                                                       ) %>% print()
+
+#c40 Repeated source
+c40_repeated<-repeats %>% filter(!is.na(c40_date)) %>% select(id=c40_hhid, fecha_crf=c40_date, 
+                                                                iniciales=c40_by, fecha_servicio=c40_date_arrive,
+                                                              evento=redcap_event_name, id_visita=c40_visit) %>% 
+                                                                  print()
+
+#C41 main study source
+c41_arm2<-arm2 %>% filter(!is.na(c41_date)) %>% select(id, fecha_crf=c41_date, iniciales=c41_by, 
+                                                       fecha_servicio=c41_date_admit, redcap_event_name) %>% 
+                                                                      mutate(
+                                                                        evento=case_when(
+                                                                          redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+                                                                          redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+                                                                          redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+                                                                          redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+                                                                          redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                                        ),
+                                                                        id_visita=NA_character_
+                                                                      ) %>% print()
+
+#c41 Repeated source
+c41_repeated<-repeats %>% filter(!is.na(c41_date)) %>% select(id=c41_hhid, fecha_crf=c41_date, 
+                                                              iniciales=c41_by, fecha_servicio=c41_date_admit,
+                                                              evento=redcap_event_name, id_visita=c41_visit) %>% 
+                                                                print()
+
+#c34 main study source
+c34_arm2<-arm2 %>% filter(!is.na(c34_date)) %>% select(id, fecha_crf=c34_date, iniciales=c34_by, 
+                                                       fecha_servicio=c34_date, redcap_event_name
+                                                       ) %>% 
+                                                        mutate(
+                                                          evento=case_when(
+                                                            redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+                                                            redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+                                                            redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+                                                            redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+                                                            redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                          ),
+                                                          id_visita=NA_character_
+                                                        ) %>% print()
+
+#c34 Repeated source
+c34_repeated<-repeats %>% filter(!is.na(c34a_date)) %>% select(id=c34a_hhid, fecha_crf=c34a_date, 
+                                                               iniciales=c34a_by, fecha_servicio=c34a_exam_date,
+                                                               evento=redcap_event_name, id_visita=c34a_visit) 
+
+#c34 piloto survillance sourcethis, these data set is only to Guatemala IRC
+c34_piloto<-piloto %>% filter(!is.na(c34_date)) %>% select(id=record_id, fecha_crf=c34_date, iniciales=c34_by,
+                                                           fecha_servicio=c34_date, evento=redcap_event_name,
+                                                           id_visita=c34_id_visita) 
+
+c40_repeated %>% filter(id == "33565" |
+                      id == "33630" |
+                      id == "33527" |
+                      id == "33659" |
+                      id == "33409" |
+                      id == "33253") %>% bind_rows (
+                        c41_repeated %>% filter(id == "33565" |
+                      id == "33630" |
+                      id == "33527" |
+                      id == "33659" |
+                      id == "33409" |
+                      id == "33253")
+                        
+                      ) %>% write_csv("output/revision_c40.csv")
+
+
+
+
+```
+
+## C36 MAIN STUDY
+
+### C36 repeated on same day or same event
+### C36 Hospitalized without medical record (c40)
+### C36 with C40 in different event, match by id and hospitalized date
+
+```{r duplicated, echo=FALSE}
+#BindRows all source in one dataset dt_integrated
+dt_integrated<-c36a_arm2 %>% transmute(id, crf="c36a_main_study", fecha_crf=as.Date(fecha_crf), iniciales, fecha_servicio=as.Date(fecha_servicio), evento, id_visita) %>% bind_rows(
+  list(
+  c36a_repeated %>% transmute(id, crf="c36a_repeated", fecha_crf=as.Date(fecha_crf), iniciales, fecha_servicio=as.Date(fecha_servicio), evento, id_visita),
+  c36_main_study %>% transmute(id, crf="c36_main_study",fecha_crf=as.Date(fecha_crf), iniciales, fecha_servicio=as.Date(fecha_servicio), evento, id_visita),
+  c34_repeated %>% transmute(id, crf="c34a_repeated", fecha_crf=as.Date(fecha_crf), iniciales, fecha_servicio=as.Date(fecha_servicio), evento, id_visita ),
+  c34_piloto %>% transmute(id, crf="c34_piloto", fecha_crf=as.Date(fecha_crf), iniciales, fecha_servicio=as.Date(fecha_servicio), evento, id_visita),
+  c37_arm2 %>% transmute(id, crf="c37_main_study", fecha_crf=as.Date(fecha_crf), iniciales, fecha_servicio=as.Date(fecha_servicio), evento, id_visita),
+  c37_repeated %>% transmute(id, crf="c37_repeated", fecha_crf=as.Date(fecha_crf), iniciales, fecha_servicio=as.Date(fecha_servicio), evento, id_visita),
+  c40_repeated %>% transmute(id, crf="c40_repeated", fecha_crf=as.Date(fecha_crf), iniciales, fecha_servicio=as.Date(fecha_servicio), evento, id_visita),
+  c40_arm2 %>% transmute(id, crf="c40_main_study", fecha_crf=as.Date(fecha_crf), iniciales, fecha_servicio=as.Date(fecha_servicio), evento, id_visita),
+  c41_repeated %>% transmute(id, crf="c41_repeated", fecha_crf=as.Date(fecha_crf), iniciales, fecha_servicio=as.Date(fecha_servicio), evento, id_visita),
+  c41_arm2 %>% transmute(id, crf="c41_main_study", fecha_crf=as.Date(fecha_crf), iniciales, fecha_servicio=as.Date(fecha_servicio), evento, id_visita)
+  )
+)
+
+#c36 same visit duplicated into the same event (c36 and c36a) Main Study Arm 2
+c36_duplicated_same_event<-dt_integrated%>%
+  mutate(crf_name=substr(crf,1,3)) %>% select(id, crf_name,fecha_crf,evento) %>% filter(crf_name=="c36") %>% group_by(id, crf_name, fecha_crf, evento) %>% count() %>% filter(evento!="surveillance_arm_4" & n>1) %>% transmute(id, crf_name, evento, Issue="c36 visit repeated in the same event") %>% ungroup() %>% select(-fecha_crf) 
+
+#c36 same crf into the same event (c36 and c36a) Main Study Arm 2
+c36_duplicated_event<-dt_integrated%>%
+  mutate(crf_name=substr(crf,1,3)) %>% select(id, crf_name,evento) %>% filter(crf_name=="c36") %>% group_by(id, crf_name,  evento) %>% count() %>% filter(evento!="surveillance_arm_4" & n>1) %>% transmute(id, crf_name, evento, Issue="c36 crf repeated same event") %>% anti_join(
+    c36_duplicated_same_event %>% select(id, crf_name, evento)
+  ) %>% bind_rows(
+    c36_duplicated_same_event
+  )
+
+#Number of c36 on Main Study
+crf_c36_main_study<-c36_main_study %>% bind_rows(
+  c36a_arm2
+) %>% count()
+
+#C36 duplicated, same id, same crf date but in diferent event
+crf_c36_duplicated_other_event<-dt_integrated %>% mutate(crf_name=substr(crf,1,3)) %>% select(id, crf_name, fecha_crf, evento) %>% 
+  filter(crf_name=="c36") %>% filter(evento!="surveillance_arm_4") %>% 
+  group_by(
+  id, crf_name, fecha_crf
+) %>% count() %>% filter(n>1) %>% anti_join(
+  c36_duplicated_event %>% select(id, crf_name, )
+) %>% mutate(
+  Issue_de="c36 crf repeated in different event"
+)
+
+#C36 same hospitalized date and same ID and same location
+# c36_main_study %>%  bind_rows(
+#   c36a_arm2 
+# ) %>% mutate(crf_name="c36") %>% filter(!is.na(fecha_servicio)) %>%  group_by(
+#   id, fecha_servicio, c36_location
+# ) %>% count() %>% filter(n>1)
+
+
+
+#Integrate all duplicated crf cases c36
+dt_total_c36_duplicated<-dt_integrated %>% mutate(crf_name=substr(crf,1,3)) %>% left_join(
+  c36_duplicated_event
+) %>% left_join(
+  crf_c36_duplicated_other_event %>% select(-n)
+) %>% mutate(
+  Issue=if_else(!is.na(Issue), Issue, Issue_de)
+) %>% select(-crf_name, -Issue_de) %>% filter(!is.na(Issue)) %>% arrange(id) 
+  
+dt_total_c36_duplicated %>% kable(caption = paste(dt_total_c36_duplicated %>% count(),
+                          " CRF C36 REPEATED IN MAIN STUDY OF ", crf_c36_main_study$n, " TOTAL C36")
+                          ) %>% kable_classic()
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel <- dt_total_c36_duplicated %>% transmute(
+  CRF=crf, HHID=id, timepoint= evento, Field="id, crf_date, location, event", QueryType="Crf Duplicated", 
+  QueryDescription=Issue, QueryGenerateBy="auto" , ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+)
+
+#C36 without c40
+dt_c36_not_c40<-dt_integrated %>% filter(!is.na(fecha_servicio)) %>% filter(substr(crf,1,3)=="c36") %>% filter(
+  evento!="surveillance_arm_4"
+) %>%  left_join(
+  dt_integrated %>% filter(!is.na(fecha_servicio)) %>% filter(substr(crf,1,3)=="c40") %>% filter(
+  evento!="surveillance_arm_4"
+)%>%  mutate(
+     with_c40="Yes"
+  ) %>% select(-crf, -iniciales, -fecha_crf, -id_visita)
+) %>% filter(is.na(with_c40)) %>% mutate(Issue="c36 Hospitalized without medical record(c40) in the same event, match by id, event and hospitalized date") %>% select(-with_c40) %>% arrange(id) 
+
+dt_c36_not_c40 %>%  kable(caption = paste0(dt_c36_not_c40 %>% count()," C36 HOSPITALIZED WITHOUT C40 NOT MATCH BY ID, EVENT AND HOSPITALIZED DATE ", crf_c36_main_study$n, " TOTAL C36" )) %>% kable_classic()
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+  dt_c36_not_c40 %>% transmute(
+    CRF=crf, HHID=id, timepoint=evento, 
+    Field="id, evento,c36_hospitalized,c36a_hospitalized,c40_date_arrive",
+    QueryType="Hospitalized without clincial chart", QueryDescription=Issue, QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+#c36 whit c40 in other event, match by id and hospitalized date
+dt_c36_with_c40_other_event<-dt_integrated %>% filter(substr(crf,1,3)=="c36") %>% filter(evento!="surveillance_arm_4") %>% left_join(
+  dt_integrated %>% filter(substr(crf,1,3)=="c40") %>% filter(evento!="surveillance_arm_4") %>% transmute(
+    id, fecha_servicio, evento_c40=evento, c40="Yes"
+  )
+) %>% mutate(
+  Issue=if_else(evento!=evento_c40, "C36 with c40 in other event, match by id and hospitalized date", NA_character_)
+) %>% filter(!is.na(Issue))
+
+dt_c36_with_c40_other_event %>% kable(caption = paste0(dt_c36_with_c40_other_event %>% count()," C36 WITH C40 IN OTHER EVENT, MATCH BY ID AND HOSPITALIZED DATE ", crf_c36_main_study$n, " TOTAL C36")) %>% kable_classic()
+#c36 without hospitalized date but have c40
+dt_c36_with_c40_without_hospi_date<-dt_integrated %>% filter(substr(crf,1,3)=="c36") %>% filter(evento!="surveillance_arm_4") %>% left_join(
+   dt_integrated %>% filter(substr(crf,1,3)=="c40") %>% filter(evento!="surveillance_arm_4") %>% transmute(
+    id, fecha_servicio_c40=fecha_servicio, fecha_crf_c40=fecha_crf, evento, c40="Yes"
+  )
+) %>% filter(is.na(fecha_servicio)) %>% filter(c40=="Yes")
+
+dt_c36_with_c40_without_hospi_date %>% kable(caption = paste0(dt_c36_with_c40_without_hospi_date %>% count()," C36 WITHOUT HOSPITALIZED DATE BUT HAVE C40 IN THE SAME EVENT ", crf_c36_main_study$n, " TOTAL C36" )
+                                                              ) %>% kable_classic()
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+  dt_c36_with_c40_without_hospi_date %>% transmute(
+    CRF=crf, HHID=id, timepoint=evento, 
+    Field="id, evento,c36_hospitalized,c36a_hospitalized, c40_date_arrive, c40_date",
+    QueryType="C36 without hospitalization have C40 in the same", QueryDescription="C36 without hospitalized date, is necessary to move c36 or c40 and other crfs relationship with hospitalization to another event",
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+#c36, c40, c41, c37, c34 hospitalized with same id, same type_Crf(c36) and same date hospitalized
+#----------------
+# 
+# dt_crf_duplicated<-dt_integrated %>% filter(crf!="c34_piloto") %>%  filter(!is.na(fecha_servicio)) %>% group_by(
+#   crf_name=substr(crf,1,3),id,fecha_servicio
+# ) %>% count() %>% filter(n>1) %>% ungroup() %>% mutate(
+#   Issue=(paste0(crf_name," duplicated, same type of crf, same id particpant and same hospitalized date"))
+# )
+# 
+# dt_crf_duplicated<-dt_crf_duplicated %>%  anti_join(
+#   dt_integrated %>% mutate(crf_name=substr(crf,1,3)) %>% left_join(
+#   c36_duplicated_event
+# ) %>% filter(!is.na(Issue)) %>% select(crf_name, id, fecha_servicio)
+# ) 
+# 
+# dt_integrated %>% mutate(crf_name=substr(crf,1,3)) %>% left_join(
+#   c36_duplicated_event,
+# 
+# ) %>% left_join(
+#   dt_crf_duplicated %>% select(id, crf_name, fecha_servicio, error=Issue )
+# ) %>% mutate(
+#   Issue=if_else(!is.na(Issue), Issue, error)
+# ) %>% filter(!is.na(Issue)) %>% select(-crf_name, -error) %>% arrange(id) %>%  kable(caption = paste("CRF DUPLICATED")) %>% kable_classic()
+```
+
+## C40 MAIN STUDY
+### C40 that not match with c36 by hospitalized date in the same event
+### C40 duplicated
+### C40 with C41 in differente event match by id, hospitalized date
+
+
+
+```{r hospitalized, echo=FALSE}
+#c40 duplicated crf same id, same hospitalized date but in diferent event
+dt_c40_duplicated<-dt_integrated %>% filter(crf=="c40_main_study") %>% group_by(
+  id, fecha_servicio
+) %>% count() %>% filter(n>1) %>% ungroup() %>% select(-n)
+
+#C40 without match by  hospitalized date with c36 on the same event
+#number c40
+number_c40_main_study<-dt_integrated %>% filter(evento!="surveillance_arm_4") %>% mutate(
+  crf_name=substr(crf,1, 3)
+) %>% filter(crf_name=="c40") %>% count()
+
+dt_c40_not_c36<-dt_integrated %>% filter(evento!="surveillance_arm_4") %>% mutate(
+  crf_name=substr(crf,1, 3)
+) %>% filter(crf_name=="c40") %>% left_join(
+  dt_integrated %>% filter(evento!="surveillance_arm_4") %>% 
+    mutate(
+  crf_name=substr(crf,1, 3)
+      ) %>% 
+    filter(crf_name=="c36") %>% filter(!is.na(fecha_servicio)) %>% select(
+        id, fecha_c36=fecha_crf, fecha_servicio, evento, iniciales_c36=iniciales
+      )
+) %>% left_join(
+  arm2 %>% filter(!is.na(e2_date)) %>% transmute(id, e2_type, fecha_servicio=as.Date(e2_start_date), e2_type="hospitalizacion prolongada", e2_end_date,redcap_event_name) %>% 
+    filter(e2_type=="4") %>% mutate(
+      evento_e2=case_when(
+        redcap_event_name=="segun_sea_necesari_arm_2"  ~ "ss1",
+        redcap_event_name=="segun_sea_necesari_arm_2b"  ~ "ss2",
+        redcap_event_name=="segun_sea_necesari_arm_2c"  ~ "ss3",
+        redcap_event_name=="segun_sea_necesari_arm_2d"  ~ "ss4",
+        redcap_event_name=="segun_sea_necesari_arm_2e"  ~ "ss5"
+      )
+    )
+) %>%   filter(is.na(fecha_c36)) %>% anti_join(
+  dt_c40_duplicated %>% select(id)
+) %>% select(-redcap_event_name, -e2_type, -iniciales_c36) %>% mutate(
+  Issue=(paste0(crf_name," C40 without c36, match by hospitalized date, add e2 data"))
+)
+
+#table c40 without c36
+dt_c40_not_c36 %>% kable(caption = paste(dt_c40_not_c36 %>% count(),
+                          " CRF C40 NOT MATCH BY HOSPITALIZAED DATE WITHOUT C36 OF ", number_c40_main_study$n, " TOTAL C40")
+                          ) %>% kable_classic()
+
+#verify c31 and c40 to match by id and c31_date, c40_date
+dt_c40_not_c36<-dt_c40_not_c36 %>% left_join(
+  arm2 %>% filter(!is.na(c31_date)) %>% select(id, fecha_crf=c31_date, c31_by, visit) 
+)
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+  dt_c40_not_c36 %>% transmute(
+    CRF=crf, HHID=id, timepoint=evento, 
+    Field="id, c40_date_arrive, c40_date",
+    QueryType="C40 with the same id and hospitalized date", QueryDescription=Issue,
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_,
+c31_by, visit_c31=visit
+  )
+)
+
+#c40 duplicated, the same hospitalized date, same location and same id
+dt_c40_duplicated_integrated<-dt_integrated %>% left_join(
+dt_c40_duplicated %>% mutate(
+  
+  Issue="c40 duplicated in the same or different event, match by id and hospitalized date",
+  crf="c40_main_study"
+  )  
+) %>% filter(!is.na(Issue))
+
+dt_c40_duplicated_integrated %>% kable(caption=paste0(
+  dt_c40_duplicated_integrated %>% count(), " CRF C40 REPEATED IN THE SAME OR DIFERENT EVENT, GROUP BY ID AND HOSPITALIZED DATE OF ", number_c40_main_study$n, " TOTAL C40"
+)) %>% kable_classic()
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+  dt_c40_duplicated_integrated %>% transmute(
+    CRF=crf, HHID=id, timepoint=evento, 
+    Field="id, c40_date_arrive, c40_date",
+    QueryType="C40 with the same id and hospitalized date", QueryDescription=Issue,
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+
+
+#C40 without c41 in the same event
+dt_c40_c41_different_event<-dt_integrated %>% filter(substr(crf,1,3)=="c40") %>% filter(evento!="surveillance_arm_4") %>% left_join(
+  dt_integrated %>% filter(substr(crf,1,3)=="c41") %>% filter(evento!="surveillance_arm_4") %>% transmute(id, evento_c41=evento,fecha_servicio, c41="Yes")
+) %>% filter(!is.na(c41)) %>% mutate(
+  Issue=if_else(evento!=evento_c41, "C40 with C41 in differente event, match by id, and hospitalized date", NA_character_)
+) %>% select(-c41) %>% filter(!is.na(Issue))
+
+dt_c40_c41_different_event %>% kable(caption = paste0(
+  dt_c40_c41_different_event %>% count(), " CRF C40 with C41 IN DIFERENT EVENT, MATCH BY ID AND HOSPITALIZED DATE OF ", 
+  number_c40_main_study$n , " TOTAL C40"
+)) %>% kable_classic()
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+  dt_c40_c41_different_event %>% transmute(
+    CRF=crf, HHID=id, timepoint=evento, 
+    Field="id, c40_date_arrive, c40_date, c41_date_admit",
+    QueryType="C40 with the same id and hospitalized date", QueryDescription=Issue,
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+
+```
+
+## C41 MAIN STUDY
+### C41 that not match with c36 or c40 by hospitalized date in the same event
+### C41 repeated in different event match by id and hospitalized date
+
+
+
+```{r c41, echo=FALSE}
+
+#number c41
+number_c41_main_study<-dt_integrated %>% filter(evento!="surveillance_arm_4") %>% mutate(
+  crf_name=substr(crf,1, 3)
+) %>% filter(crf_name=="c41") %>% count()
+
+#C41 WITHOUT C36 BY ID AND HOSPITALIZED DATE
+dt_c41_no_c36<-dt_integrated %>% filter(substr(crf, 1, 3)=="c41") %>% filter(evento!="surveillance_arm_4") %>% left_join(
+  dt_integrated %>% filter(substr(crf,1,3)=="c36") %>% filter(evento!="surveillance_arm_4") %>%  select(id, fecha_servicio, evento_c36=evento)
+) %>% filter(is.na(evento_c36))
+
+# dt_integrated %>% left_join(
+#   dt_c41_no_c36  %>% mutate(
+#   Issue=paste0("c41 without c36 match by id and hospitalized date")
+# ) %>% select(-evento_c36)
+# ) %>% filter(!is.na(Issue)) %>% kable(
+#   caption = paste0(dt_c41_no_c36 %>% count(), " C41 WITHOUT C36, MATCH BY ID AND HOSPITALIZED DATE OF ", number_c41_main_study$n, " TOTAL C41" )
+# ) %>% kable_classic()
+
+#C41 WITHOUT C40 or C36 BY ID AND HOSPITALIZED DATE
+dt_c41_no_c40_C36<-dt_integrated %>% filter(substr(crf, 1, 3)=="c41") %>% filter(evento!="surveillance_arm_4") %>% left_join(
+  dt_integrated %>% filter(substr(crf,1,3)=="c40") %>% filter(evento!="surveillance_arm_4") %>%  select(id, fecha_servicio, evento_c40=evento)
+) %>% left_join(
+   dt_integrated %>% filter(substr(crf,1,3)=="c36") %>% filter(evento!="surveillance_arm_4") %>%  select(id, fecha_servicio, fecha_crf, evento_c36=evento) %>% mutate(
+     fecha_servicio=if_else(
+       is.na(fecha_servicio),fecha_crf, fecha_servicio
+     )
+   )
+) %>% filter(is.na(evento_c40) & is.na(evento_c36))
+
+dt_integrated %>% left_join(
+  dt_c41_no_c40_C36  %>% mutate(
+  Issue=paste0("c41 without c40 or c36 match by id and hospitalized date ")
+) %>% select(-evento_c40)
+) %>% filter(!is.na(Issue)) %>% kable(
+  caption = paste0(dt_c41_no_c40_C36 %>% count(), " C41 WITHOUT C36 OR C40, MATCH BY ID AND HOSPITALIZED DATE OF ", number_c41_main_study$n, " TOTAL C41" )
+) %>% kable_classic()
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+  dt_integrated %>% left_join(
+  dt_c41_no_c40_C36  %>% mutate(
+  Issue=paste0("c41 without c40 or c36 match by id and hospitalized date ")
+) %>% select(-evento_c40)
+) %>% filter(!is.na(Issue)) %>% transmute(
+    CRF=crf, HHID=id, timepoint=evento, 
+    Field="id, c36_hospitalized, c36a_hospitalized, c40_date_arrive, c40_date, c41_date_admit",
+    QueryType="C41 without c36 or whitout c40 match by id and hospitalized date", QueryDescription=Issue,
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+#C41 DUPLICATED
+dt_c41_duplicated<-dt_integrated %>% filter(substr(crf, 1, 3)=="c41") %>% filter(evento!="surveillance_arm_4") %>% group_by(
+  id, fecha_servicio
+) %>% count() %>% filter(n>1) %>% ungroup()%>% mutate(crf="c41_main_study")
+
+dt_integrated %>% left_join(
+  dt_c41_duplicated %>% mutate(Issue="c41 repeated in diferente event, match by id and hospitalized date")
+) %>% filter(!is.na(Issue)) %>% select(-n) %>%  kable(
+  caption = paste0(dt_c41_duplicated %>% count(), " C41 REPEATED, MATCH BY ID AND HOSPITALIZED DATE OF ", number_c41_main_study$n , " TOTAL C41")
+) %>% kable_classic()
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+ dt_integrated %>% left_join(
+  dt_c41_duplicated %>% mutate(Issue="c41 repeated in diferente event, match by id and hospitalized date")
+) %>% filter(!is.na(Issue)) %>% select(-n) %>% transmute(
+    CRF=crf, HHID=id, timepoint=evento, 
+    Field="id, c41_date, c41_date_admit",
+    QueryType="C41 repeated or duplicate  match by id and hospitalized date", QueryDescription=Issue,
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+
+```
+
+
+## C37 MAIN STUDY
+### C37 duplicated
+### C37 with date crx out range, match to c36 or c40 by id and event
+
+
+
+```{r c37, echo=FALSE}
+#number c37
+number_c37_main_study<-dt_integrated %>% filter(evento!="surveillance_arm_4") %>% mutate(
+  crf_name=substr(crf,1, 3)
+) %>% filter(crf_name=="c37") %>% count()
+
+#c37 duplicated
+dt_c37_duplicated<-dt_integrated %>% filter(evento!="surveillance_arm_4") %>% mutate(
+  crf_name=substr(crf,1,3)
+) %>% filter(crf_name=="c37") %>% group_by(
+  id, fecha_servicio
+) %>% count() %>% filter(n>1) %>% ungroup() %>% 
+  mutate(Issue="C37 duplicated, match by id and serice date") %>% select(-n)
+
+dt_integrated %>%  filter(evento!="surveillance_arm_4") %>% mutate(
+  crf_name=substr(crf,1,3)
+) %>% filter(crf_name=="c37") %>% 
+  left_join(
+  dt_c37_duplicated
+) %>% filter(!is.na(Issue)) %>%  kable(
+  caption = paste0(dt_c41_duplicated %>% count(), " C37 REPEATED, MATCH BY ID AND HOSPITALIZED DATE OF ", number_c37_main_study$n , " TOTAL C37")
+) %>% kable_classic()
+
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+ dt_integrated %>%  filter(evento!="surveillance_arm_4") %>% mutate(
+  crf_name=substr(crf,1,3)
+) %>% filter(crf_name=="c37") %>% 
+  left_join(
+  dt_c37_duplicated
+) %>% filter(!is.na(Issue)) %>% transmute(
+    CRF=crf, HHID=id, timepoint=evento, 
+    Field="id, c37_date, c37_date_cxr",
+    QueryType="C37 repeated or duplicate  match by id and CRX date", QueryDescription=Issue,
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+#c37 without c36 or c40
+dt_c37_outrange_minor<-dt_integrated  %>% filter(evento!="surveillance_arm_4") %>% mutate(
+  crf_name=substr(crf,1,3)
+) %>% filter(crf_name=="c37") %>% left_join(
+  dt_integrated %>% filter(evento!="surveillance_arm_4") %>% mutate(
+  crf_name=substr(crf,1,3)
+) %>% filter(crf_name=="c36") %>% mutate(
+  fecha_servicio=if_else(
+    is.na(fecha_servicio), fecha_crf, fecha_servicio
+  )
+  ) %>% select(id, fecha_servicio_c36=fecha_servicio, evento)
+
+) %>% left_join(
+   dt_integrated %>% filter(evento!="surveillance_arm_4") %>% mutate(
+  crf_name=substr(crf,1,3)
+) %>% filter(crf_name=="c40") %>% 
+  select(id, fecha_servicio_c40=fecha_servicio, evento)
+) %>% mutate(
+  flag_issue=if_else(
+    fecha_servicio<fecha_servicio_c36 | fecha_servicio < fecha_servicio_c40 , 
+    "c37 fuera de rango", NA_character_
+  )
+) %>% filter(!is.na(flag_issue)) %>% select(-flag_issue, -id_visita) %>% mutate(
+  Issue="C37 with crx date out range: crx date minor to medical record (c40) or minor to c36 date, match by id and event"
+)
+
+dt_c37_outrange_minor %>% kable(caption = paste0(dt_c37_outrange_minor %>% count()," C37 OUT RANGE COMPARED WITH C36 AND C40, MATCH BY ID AND EVENT OF ",
+                                                 number_c37_main_study$n, " TOTAL C37")) %>% kable_classic()
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+ dt_c37_outrange_minor %>% transmute(
+    CRF=crf, HHID=id, timepoint=evento, 
+    Field="id, c37_date, c37_date_cxr, c36_hospitalized, c36a_hospitalized, c40_date_admit",
+    QueryType="C37 with CRX date out range match by id, event and hospitalized date", QueryDescription=Issue,
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+# dt_total_c36_duplicated_excel %>% writexl::write_xlsx(paste0(
+#   "output/QC_neumonia_readme_mainStudy", Sys.Date(),".xlsx"
+# ))
+
+```
+
+# PROJECT REPEATED
+
+> * Identified repeated by visit_id
+  * Identified missing visit_id code
+  * Identified inconsistence by visit_id and hospitalized date
+  
+## C36 in Repeated
+  
+### Missing visit_id c36
+### Duplicated by visit_id
+### c36 with more that one c40 match by visit_id
+
+```{r c36_repated, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+#TOTAL C36 IN REPEATED
+number_c36_reapeated<-dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c36"
+) %>% count()
+
+#missing visit_id on c36 repeated
+dt_c36_missing_visit_id<-dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c36"
+) %>% filter(is.na(id_visita))
+
+dt_c36_missing_visit_id %>% kable(
+  caption = paste0(dt_c36_missing_visit_id %>% count()," C36 MISSING VISIT_ID OF ",
+                                                 number_c36_reapeated$n, " TOTAL C36") 
+  ) %>% kable_classic()
+
+
+
+
+#DUPLICATED VISIT ID
+dt_c36_duplicated_by_hospitalized_date<-dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c36"
+) %>% group_by(id_visita) %>% count() %>% filter(n>1)
+
+
+dt_c36_missing_visit_id %>% kable(
+  caption = paste0(dt_c36_missing_visit_id %>% count()," C36 DUPLICATED VISIT_ID OF ",
+                                                 number_c36_reapeated$n, " TOTAL C36") 
+  ) %>% kable_classic()
+
+#c36 without c40 match by hospitalized date
+dt_c36_without_c40<-dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c36"
+) %>% filter(!is.na(fecha_servicio)) %>% left_join(
+  dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c40"
+) %>% select(id_c40=id, iniciales_c40=iniciales, id_visita, fecha_c40=fecha_crf, fecha_servicio_c40=fecha_servicio )
+) %>% filter(is.na(fecha_c40))
+
+dt_c36_without_c40  %>% kable(
+  caption = paste0(dt_c36_without_c40 %>% count()," C36 WITHOUT C40 MATCH BY VISIT ID OF ",
+                                                 number_c36_reapeated$n, " TOTAL C36") 
+  ) %>% kable_classic()
+
+#c36 with more that one c40 by visit_id
+dt_c36_morethatone_c40<-dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c36"
+) %>% filter(!is.na(fecha_servicio)) %>% left_join(
+  dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c40"
+) %>% select(id_c40=id, iniciales_c40=iniciales, id_visita, fecha_c40=fecha_crf, fecha_servicio_c40=fecha_servicio )
+) %>% group_by(id_c40) %>% count() %>% filter(n>1) %>% ungroup()
+
+dt_c36_more_one_c40<-dt_c36_morethatone_c40 %>% select(id=id_c40) %>% left_join(
+  dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c36"
+) %>% filter(!is.na(fecha_servicio)) %>% left_join(
+  dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c40"
+) %>% select(id_c40=id, iniciales_c40=iniciales, id_visita, fecha_c40=fecha_crf, fecha_servicio_c40=fecha_servicio )
+)
+)
+
+dt_c36_more_one_c40 %>% kable(
+  caption = paste0(dt_c36_more_one_c40  %>% group_by(id) %>% 
+                     slice(1) %>% count() %>% ungroup() %>% select(n)," C36 HAVE MORE THAT ONE C40 MATCH BY VISIT ID OF ",
+                                                 number_c36_reapeated$n, " TOTAL C36") 
+  ) %>% kable_classic()
+
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+ dt_c36_more_one_c40 %>% transmute(
+    CRF=paste0(crf," ", fecha_crf, " ", iniciales), HHID=id, timepoint=evento, 
+    Field="id, c36_date, c36_hospitalized, c36a_hospitalized, c40_date_admit, visit_id",
+    QueryType="C36 with more than one c40, match by id, visit_id, hospitalized date", QueryDescription="C36 HAVE MORE THAT ONE C40 MATCH BY VISIT ID",
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+```
+
+## C40 in Repeated
+  
+### c40 Missing visit_id 
+### c40 Repeated by visit_id
+### c40 without c36
+### c40 with more that one c41
+
+```{r c40_repated, echo=FALSE}
+#number c40 repeated
+number_c40_repeated<-dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c40"
+) %>% count()
+
+#c40 missing id_visita
+dt_c40_without_id_visita<-dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c40"
+) %>% filter(is.na(id_visita))
+
+dt_c40_without_id_visita %>%  kable(
+  caption = paste0(dt_c40_without_id_visita  %>% count()," C40 MISSING VISIT ID OF ",
+                                                 number_c40_repeated$n, " TOTAL C40") 
+  ) %>% kable_classic()
+
+#Duplicated visit_id in the same id participant
+dt_c40_dup_visit_id<-dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c40"
+) %>% group_by(id_visita, id) %>% count() %>% filter(n>1)
+
+dt_c40_duplicated_visit_id<-dt_c40_dup_visit_id %>% left_join(
+  dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c40"
+) 
+)
+
+dt_c40_duplicated_visit_id %>% mutate(
+  Issue="c40 with duplicated visit_id"
+) %>% kable(
+  caption = paste0(dt_c40_duplicated_visit_id %>% group_by(id) %>%  count() %>% ungroup() %>% 
+                     select(n) %>% slice(1)," C40 WHIT VISIT ID DUPLICATED OF ",
+                                                 number_c40_repeated$n, " TOTAL C40") 
+  ) %>% kable_classic()
+
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+ dt_c40_duplicated_visit_id %>% transmute(
+    CRF=paste0(crf," ", fecha_crf, " ", iniciales), HHID=id, timepoint=evento, 
+    Field="id, c40_date, c40_date_admit, visit_id",
+    QueryType="C40 with the same visit_id, group by id, visit_id, hospitalized date", QueryDescription="C40 WHIT VISIT ID DUPLICATED",
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+#c40 with more that one c36 match by visit id
+dt_c40_no_c36_repeated<-dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c40"
+) %>% left_join(
+ dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c36"
+) %>% select(id_c36=id, id_visita, fecha_c36=fecha_crf)
+) %>% filter(is.na(fecha_c36))
+
+dt_c40_no_c36_repeated %>% mutate(
+  
+Issue="c40 without c36 match by visit_id") %>%  kable(
+  caption = paste0(dt_c40_no_c36_repeated %>%  count()," C40 WITHOUT C36 MATCH BY VISIT ID OF  ",
+                                                 number_c40_repeated$n, " TOTAL C40") 
+  ) %>% kable_classic()
+
+
+dt_c40_no_c36_repeated<-dt_c40_no_c36_repeated %>% left_join(
+  arm2 %>% filter(!is.na(c31_date)) %>% transmute(id, fecha_crf=c31_date, c31_by, visit=if_else(grepl("^b",redcap_event_name) , substr(redcap_event_name,1,2),
+                                                                                                substr(redcap_event_name,1,6)
+  )
+  )
+)
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+ dt_c40_no_c36_repeated %>% transmute(
+    CRF=paste0(crf," ", fecha_crf, " ", iniciales), HHID=id, timepoint=evento, 
+    Field="id, c40_date, c40_date_admit, visit_id",
+    QueryType="C40 without C36, group by id, visit_id, hospitalized date", QueryDescription="c40 without c36 match by visit_id",
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_,
+c31_by, visit_c31=visit
+  )
+)
+
+
+arm2 %>% filter(!is.na(c31_date)) %>% filter(redcap_event_name=="mes1_arm_2") %>% select(id, c31_date, redcap_event_name) %>%  arrange(c31_date)%>% print(n=Inf)
+  group_by(year=lubridate::year(c31_date),
+                                               mont=lubridate::month(c31_date), redcap_event_name) %>% count() %>% print(n=Inf)
+
+```
+
+## C41 in Repeated
+  
+### c41 Missing visit_id 
+### c41 Duplicated by visit_id
+### c41 without c36 or c40
+### c41 with more that one c41
+
+```{r c41_repeated, echo=FALSE}
+#Number c41
+dt_number_c41<- dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c41"
+) %>% count()
+
+#c41 missing id visit
+dt_c41_missing_vist_id<-dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c41"
+) %>% filter(is.na(id_visita))
+
+dt_c41_missing_vist_id %>%  kable(
+  caption = paste0(dt_c41_missing_vist_id %>%  count()," C41 MISSING VISIT ID OF  ",
+                                                 dt_number_c41$n, " TOTAL C41") 
+  ) %>% kable_classic()
+
+#DUPLICATED BY VISIT ID
+dt_c41_duplicated_visit_id<-dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c41"
+) %>% group_by(id_visita, id) %>% count() %>% filter(n>1) %>% ungroup() %>% left_join(
+  dt_integrated %>% filter(evento=="surveillance_arm_4") %>% filter(
+  substr(crf,1,3)=="c41"
+)
+)
+
+dt_c41_duplicated_visit_id %>% mutate(
+  Issue="c41 repeated  visit_id"
+) %>% kable(
+  caption = paste0(dt_c41_duplicated_visit_id %>%  count()," C41 REPEATED VISIT ID OF  ",
+                                                 dt_number_c41$n, " TOTAL C41") 
+  ) %>% kable_classic()
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+ dt_c41_duplicated_visit_id %>% transmute(
+    CRF=paste0(crf," ", fecha_crf, " ", iniciales), HHID=id, timepoint=evento, 
+    Field="id, c41_date, c41_date_admit, visit_id",
+    QueryType="C41 with repeated visit_id, group by id, visit_id", QueryDescription="c41 repeated  visit_id",
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+
+```
+
+### QC DOB
+
+#### Identified issues on date of birth c36 vrs c30
+#### Identified issues on date of birth C40 vrs c30
+```{r revision_dob, echo=FALSE}
+#c36 DOB QC
+dt_c36_ms_dob<-arm2  %>% filter(!is.na(c30_dob)) %>% select(id, dob=c30_dob) %>% left_join(
+  arm2 %>% filter(!is.na(c36_dob)) %>% select(id, c36_dob_ms=c36_dob, redcap_event_name) %>% mutate( evento=case_when(
+      redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+      redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+      redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+      redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+      redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                           )
+)
+) %>% mutate(
+  Issue=if_else(
+    !is.na(c36_dob_ms) & c36_dob_ms!=dob, "DOB in c36 is different, we need to correct dob in c36", NA_character_
+  )
+) %>% filter(!is.na(Issue)) %>% select(-redcap_event_name) 
+
+dt_c36a_ms_dob <- arm2  %>% filter(!is.na(c30_dob)) %>% select(id, dob=c30_dob) %>% left_join(
+  arm2 %>% filter(!is.na(c36a_dob)) %>% select(id, c36a_dob_ms=c36a_dob, redcap_event_name) %>% mutate( evento=case_when(
+      redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+      redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+      redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+      redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+      redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                           )
+)
+) %>% mutate(
+  Issue=if_else(
+    !is.na(c36a_dob_ms) & c36a_dob_ms!=dob, "DOB in c36 is different, we need to correct dob in c36", NA_character_
+  )
+) %>% filter(!is.na(Issue)) %>% select(-redcap_event_name) 
+
+dt_c36a_repeated_dob<-arm2 %>% filter(!is.na(c30_dob)) %>% select(id, dob=c30_dob) %>% left_join(
+  repeats %>% filter(!is.na(c36a_dob)) %>% transmute(id=c36a_hhid , c36a_dob_ms=c36a_dob, redcap_event_name, fecha_crf=c36a_date, iniciales=c36a_by) %>% mutate( evento="repeated"
+)
+) %>% mutate(
+  Issue=if_else(
+    !is.na(c36a_dob_ms) & c36a_dob_ms!=dob, "DOB in c36 is different, we need to correct dob in c36", NA_character_
+  )
+) %>% filter(!is.na(Issue)) %>% select(-redcap_event_name) 
+
+dt_c36_ms_dob %>% kable(
+  caption = paste0(dt_c36_ms_dob %>%  count()," C36 WITH ERROR ON DATE OF BIRTH OF ",
+                                               crf_c36_main_study$n, " TOTAL C36") 
+  ) %>% kable_classic()
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+ dt_c36_ms_dob %>% transmute(crf="C36_MainStudy",
+    CRF=paste0(crf), HHID=id, timepoint=evento, 
+    Field="id, c36_dob, c36a_dob, c30_dob",
+    QueryType="C36 with wrong on DOB", QueryDescription="DOB in c36 is different, we need to correct dob in c36",
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+
+#C40 DOB QC
+dt_c40_ms_dob<-arm2  %>% filter(!is.na(c30_dob)) %>% select(id, dob=c30_dob) %>%  left_join(
+arm2 %>% filter(!is.na(c40_date)) %>% select(id, c40_dob_ms=c40_dob, redcap_event_name) %>% mutate( evento=case_when(
+      redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+      redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+      redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+      redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+      redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                           )
+) 
+) %>% mutate(
+  Issue=if_else(
+    !is.na(c40_dob_ms) & c40_dob_ms!=dob, "DOB in c40 is different, we need to correct dob in c40", NA_character_
+  )
+) %>% filter(!is.na(Issue)) %>% select(-redcap_event_name) 
+
+dt_c40_ms_dob %>% kable(
+  caption = paste0(dt_c40_ms_dob %>%  count()," C40 WITH ERROR ON DATE OF BIRTH OF ",
+                                               number_c40_main_study$n, " TOTAL C40") 
+  ) %>% kable_classic()
+
+#Make the matrix to identified changes on QC
+dt_total_c36_duplicated_excel<-dt_total_c36_duplicated_excel %>% bind_rows(
+ dt_c40_ms_dob %>% transmute(crf="C40_MainStudy",
+    CRF=paste0(crf), HHID=id, timepoint=evento, 
+    Field="id, c40_dob, c30_dob",
+    QueryType="C40 with wrong on DOB", QueryDescription="DOB in c40 is different, we need to correct dob in c40",
+    QueryGenerateBy="auto", ResponseDate=NA_character_,
+ResponseFrom=NA_character_,
+ResponseType=NA_character_,
+FinalResolutionDate=NA_character_
+  )
+)
+
+
+#C41 DOB QC
+dt_c41_ms_dob<-arm2  %>% filter(!is.na(c30_dob)) %>% select(id, dob=c30_dob) %>%  left_join(
+arm2 %>% filter(!is.na(c40_date)) %>% select(id, c41_dob_ms=c41_dob, redcap_event_name) %>% mutate( evento=case_when(
+      redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+      redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+      redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+      redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+      redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                           )
+) 
+) %>% mutate(
+  Issue=if_else(
+    !is.na(c41_dob_ms) & c41_dob_ms!=dob, "DOB in c41 is different, we need to correct dob in c41", NA_character_
+  )
+) %>% filter(!is.na(Issue)) %>% select(-redcap_event_name) 
+
+dt_c41_ms_dob %>% kable(
+  caption = paste0(dt_c41_ms_dob %>%  count()," C41 WITH ERROR ON DATE OF BIRTH OF ",
+                                               number_c41_main_study$n, " TOTAL C41") 
+  ) %>% kable_classic()
+
+dt_total_c36_duplicated_excel %>% writexl::write_xlsx(
+  paste0(
+    "output/QC_readme_",Sys.Date(),".xlsx"
+  )
+)
+
+
+```
+
+

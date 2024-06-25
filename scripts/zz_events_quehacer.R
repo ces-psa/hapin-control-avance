@@ -79,9 +79,9 @@ next_monday <- Sys.Date() %>%
 
 
 
-losses <- gt_emory_data %>%
+losses <- gt_emory_data_arm1 %>%
   select(
-    redcap_event_name, s4_id = s4_main_id, study_id = id, matches("^e[12]_")
+    redcap_event_name, s4_id = s4_main_id, study_id = id) %>% full_join(gt_emory_data_arm2  %>% select(study_id=id, matches("^e[12]_"))
   ) %>%
   filter(!is.na(e1_date) | !is.na(e2_date)) %>%
   mutate(
@@ -111,7 +111,7 @@ losses <- gt_emory_data %>%
 
 
 
-births <- gt_emory_data %>%
+births <- gt_emory_data_arm2 %>%
   filter(!is.na(c30_date)) %>%
   select(
     study_id = id, fecha_parto = c30_date
@@ -127,7 +127,7 @@ all_visits <- all_crfs %>%
   ) %>%
   # tag with pregnancy information
   left_join(
-    gt_emory_data %>%
+    gt_emory_data_arm1 %>%
       filter(!is.na(s4_date) | !is.na(m17_date)) %>%
       select(
         study_id = s4_main_id, screening_id = id,
@@ -141,7 +141,7 @@ all_visits <- all_crfs %>%
   left_join(births) %>%
   # tag with hh information
   left_join(
-    gt_emory_data %>%
+    gt_emory_data_arm2 %>%
       filter(!is.na(s6_date) | !is.na(h50_date) | visit == "baseline") %>%
       select(
         study_id = id,

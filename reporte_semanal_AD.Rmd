@@ -1,0 +1,1412 @@
+---
+title: "Reporte Semanal"
+editor_options:
+  chunk_output_type: console
+date: " generado el `r Sys.Date()`"
+output:
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+# load use packages
+library(package = "tidyverse")
+library(package = "crosstalk")
+
+
+###CARGA DE DATOS EMORY Y UVG
+# Pre-screening information (s0)
+source(file = "scripts/0_get_prescreening.R", encoding = "UTF-8")
+
+# Load helper functions
+source(file = "scripts/zz_output.R")
+
+# Emory RedCap dictionary
+source(file = "scripts/0_get_emory_dictionary.R", encoding = "UTF-8")
+
+# Emory RedCap export data
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+
+# Stops knitting if lpg delivery data is not up to date
+#source(file = "scripts/uso-estufas.R", encoding = "UTF-8")
+
+#fecha de la semana
+fecha1<-'2020-05-25'
+fecha2<-'2020-05-31'
+
+```
+
+## Actividad: "TAMIZAJE"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+```{r tamizaje, echo=FALSE}
+#CONTEO DE TAMIZAJE
+#conteo de s0 por semana y total
+s0_acumulado<-s0 %>% select(record,s0_date) %>% filter(!is.na(s0_date)) %>% count() 
+  s0_semana<- s0 %>% select(record,s0_date)%>%arrange(s0_date) %>% filter(s0_date >=fecha1 & s0_date<=fecha2) %>% count() 
+
+#   
+# s2_fetus=1si 0No
+# 
+# s2_gest 1si 0 no
+  
+# s2_onefetus 1si 0no
+# 
+# s2_participate NA no es elegible, 1 si 0 no (rechazó)
+  
+#conteos de s1 por semana y totales
+s1<-gt_emory_data_arm1 %>% select(id,s1_date) %>% filter(!is.na(s1_date)) 
+s1_acumulado<-s1 %>% count() 
+s1_semana<-s1 %>% select(id,s1_date) %>% filter(s1_date >=fecha1 & s1_date<=fecha2) %>% count()
+
+#conteos de s2 por semana y totales
+s2<-gt_emory_data_arm1 %>% select(id,s2_date) %>% filter(!is.na(s2_date))
+s2_acumulado<-s2 %>% count()
+s2_semana<-s2 %>% select(id,s2_date) %>% filter(s2_date >=fecha1 & s2_date<=fecha2) %>% count()
+
+s2_rechazo_acumulado<-gt_emory_data_arm1 %>% select(id,s2_date,s2_participate) %>% filter(!is.na(s2_date)) %>% filter(s2_participate=="0") %>% count()
+s2_aceptacion_acumulada<-gt_emory_data_arm1 %>% select(id,s2_date,s2_participate) %>% filter(!is.na(s2_date)) %>% filter(s2_participate=="1") %>% count()
+s2_rechaza_semana<-gt_emory_data_arm1 %>% select(id,s2_date,s2_participate) %>% filter(!is.na(s2_date)) %>% filter(s2_participate=="0") %>% filter(s2_date >=fecha1 & s2_date<=fecha2) %>% count()
+s2_aceptacion_semana<-gt_emory_data_arm1 %>% select(id,s2_date,s2_participate) %>% filter(!is.na(s2_date)) %>% filter(s2_participate=="1") %>% filter(s2_date >=fecha1 & s2_date<=fecha2) %>% count()
+
+
+
+#conteos de s3 por semana y totales
+s3<-gt_emory_data_arm1 %>% select(id,s3_date) %>% filter(!is.na(s3_date)) 
+s3_acumulado<-s3 %>% count() 
+s3_semana<-s3 %>% select(id,s3_date) %>% filter(s3_date >=fecha1 & s3_date<=fecha2) %>% count()
+#elegible y dispuesta en s3
+s3_elegible<-gt_emory_data_arm1 %>% select(id, s3_date, s3_participate) %>% filter(s3_participate=="1")
+s3_elegible_acumulado<-s3_elegible %>% count()
+s3_elegible_semana<-s3_elegible %>% filter(s3_date >=fecha1 & s3_date<=fecha2) %>% count()
+#conteos de s4 por semana y totales
+s4<-gt_emory_data_arm1 %>% select(id,s4_date, s4_main_id) %>% filter(!is.na(s4_date))
+s4_acumulado<-s4 %>% count()
+s4_semana<-s4 %>% select(id,s4_date, s4_main_id) %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+s4_main <- gt_emory_data_arm1 %>% select(id,s4_date, s4_main_id) %>% filter(!is.na(s4_date)) %>% filter(!is.na(s4_main_id))
+
+
+#conteos de s6 por semana y totales
+s6<-gt_emory_data_arm2 %>% select(id,s6_date) %>% filter(!is.na(s6_date))
+s6_acumulado<-s6 %>% count()
+s6_semana<-s6 %>% select(id,s6_date) %>% filter(s6_date >=fecha1 & s6_date<=fecha2) %>% count()
+
+#make table tamizaje
+crf<-c("s0", "s1","s2",  "s2 elegible y dispuesta", "s3", "s3 elegible y dispuesta", "s4", "s6")
+reporte_tamizaje<-data.frame(crf)
+reporte_tamizaje %>% mutate(conteo_semana=case_when(
+  crf=="s0" ~ s0_semana$n,
+    crf=="s1" ~ s1_semana$n,
+    crf=="s2" ~ s2_semana$n,
+    crf=="s2 elegible y dispuesta" ~ s2_aceptacion_semana$n,
+    crf=="s3" ~ s3_semana$n,
+  crf=="s3 elegible y dispuesta" ~ s3_elegible_semana$n,
+    crf=="s4" ~ s4_semana$n,
+    crf=="s6" ~ s6_semana$n,
+    TRUE ~ NA_integer_ )) %>% mutate(
+          acumulado=case_when(
+          crf=="s0" ~  s0_acumulado$n,
+          crf=="s1" ~ s1_acumulado$n,
+          crf=="s2" ~ s2_acumulado$n,
+          crf=="s2 elegible y dispuesta" ~ s2_aceptacion_acumulada$n,
+          crf=="s3" ~ s3_acumulado$n,
+          crf=="s3 elegible y dispuesta" ~ s3_elegible_acumulado$n,
+          crf=="s4" ~ s4_acumulado$n,
+          crf=="s6" ~ s6_acumulado$n,
+          TRUE ~ NA_integer_ 
+            )) %>% select("Actividad"=crf,"Semana   "=conteo_semana, "Acumulado   "=acumulado) %>% 
+                  knitr::kable(caption = paste("Tamizajes, semana del ", fecha1, " al ", fecha2))
+
+
+```
+
+## Actividad: "INSCRITAS Y ACTIVAS"
+
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+```{r participantes_activas, echo=FALSE}
+#acumulado inscritas
+inscritas<-gt_emory_data_arm1 %>% select("id_tamizaje"=id, id=s4_main_id,s4_date) %>% filter(!is.na(id)) %>%
+  left_join(gt_emory_data_arm1 %>% select(id_tamizaje=id,m17_date, m17_ga) %>% filter(!is.na(m17_date)))
+
+#inscritas acumulado y semana
+inscritas_acumulado<-inscritas %>% count()
+inscritas_semana <- inscritas %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+
+#embarazadas
+inscritas_embarazadas_acumulado<-inscritas %>% mutate(
+      type = if_else(
+        condition = grepl("^35[0-9]{3}", id),
+        true = "oaw",
+        false = "pw"
+      )
+      ) %>% filter(type=="pw") %>% count()
+
+inscritas_embarazadas_semana<-inscritas %>% mutate(
+      type = if_else(
+        condition = grepl("^35[0-9]{3}", id),
+        true = "oaw",
+        false = "pw"
+      )
+      ) %>% filter(type=="pw") %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+#adultas
+inscritas_adultas_acumulado<-inscritas %>% mutate(
+      type = if_else(
+        condition = grepl("^35[0-9]{3}", id),
+        true = "oaw",
+        false = "pw"
+      )
+      ) %>% filter(type=="oaw") %>% count()
+inscritas_adultas_semana<-inscritas %>% mutate(
+      type = if_else(
+        condition = grepl("^35[0-9]{3}", id),
+        true = "oaw",
+        false = "pw"
+      )
+      ) %>% filter(type=="oaw") %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+
+#rechazos en S4
+s4_rechazo_acumulado<- gt_emory_data_arm1 %>% filter(!is.na(s4_date)) %>% filter(s4_consent=="0") %>% count()
+s4_rechazo_semana<- gt_emory_data_arm1 %>% filter(!is.na(s4_date)) %>% filter(s4_consent=="0") %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+
+#Conteo de salidas del estudio
+salidas<-gt_emory_data_arm2 %>% select(id,e3_date) %>% filter(!is.na(e3_date)) %>%
+  left_join(
+   gt_emory_data_arm2 %>% select(id,e3_date_o) %>% filter(!is.na(e3_date_o))
+  ) %>%left_join(
+    gt_emory_data_arm2 %>% select(id,e3_date_c) %>% filter(!is.na(e3_date_c))
+  ) %>% left_join(
+    gt_emory_data_arm2 %>% select(id, c30_date) %>% filter(!is.na(c30_date))
+  ) %>%mutate(
+    type = if_else(
+      condition = grepl("^35[0-9]{3}", id),
+      true = "oaw",
+      false = "pw"
+    )
+  ) %>% mutate(
+    sale = case_when(
+          type=="oaw" & !is.na(e3_date)&!is.na(e3_date_o)&is.na(c30_date) ~ "1",
+          type=="pw" & !is.na(e3_date)&is.na(c30_date) ~ "1",
+          type=="oaw" & !is.na(e3_date) & !is.na(e3_date_o) & !is.na(c30_date) & !is.na(e3_date_c) ~ "1",
+          type=="pw" & !is.na(e3_date) &  !is.na(c30_date) & !is.na(e3_date_c) ~ "1",
+          TRUE ~ NA_character_
+            )
+    ) %>%filter(sale=="1")
+
+salida_after_s6 <- s6 %>% left_join(salidas) %>%
+  mutate(
+    dias_s6_e3=e3_date-s6_date
+    ) %>% filter(sale==1) %>% count()
+#salidas acumulado y semana
+salidas_acumulado<-salidas %>% count()
+salidas_semana<-salidas %>% filter(e3_date >=fecha1 & e3_date<=fecha2) %>% count()
+
+#activas embarazadas y Adultas
+activas<-inscritas %>% anti_join(
+  salidas %>% select(id)
+) 
+
+activas_acumulado<-activas %>% count()
+activas_semana<-activas %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+
+activas_embarazadas_acumulado<-activas %>% mutate(
+    type = if_else(
+      condition = grepl("^35[0-9]{3}", id),
+      true = "oaw",
+      false = "pw"
+    )
+  ) %>% filter(type=="pw") %>% count()
+  
+activas_embarazadas_semana<-activas %>% mutate(
+    type = if_else(
+      condition = grepl("^35[0-9]{3}", id),
+      true = "oaw",
+      false = "pw"
+    )
+  ) %>% filter(type=="pw") %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+  
+activas_adultas_acumulado<-activas %>% mutate(
+    type = if_else(
+      condition = grepl("^35[0-9]{3}", id),
+      true = "oaw",
+      false = "pw"
+    )
+  ) %>% filter(type=="oaw") %>% count()
+  
+activas_adultas_semana<-activas %>% mutate(
+    type = if_else(
+      condition = grepl("^35[0-9]{3}", id),
+      true = "oaw",
+      false = "pw"
+    )
+  ) %>% filter(type=="oaw") %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+
+#make table inscritas
+actividad_inscritas<-c("Inscritas en este periodo", "Inscritas Embarazadas", "Inscritas Adultas", "Rechazos en este periodo", "Hogares que se retiraron del Estudio (E3) *","Activas a la fecha",
+                       "Activas Embarazadas", "Activas Adultas")
+reporte_inscritas<-data.frame(actividad_inscritas)
+reporte_inscritas %>% mutate(
+  semana = case_when(
+    actividad_inscritas=="Inscritas en este periodo" ~ inscritas_semana$n,
+    actividad_inscritas=="Inscritas Embarazadas" ~ inscritas_embarazadas_semana$n,
+    actividad_inscritas=="Inscritas Adultas" ~ inscritas_adultas_semana$n,
+    actividad_inscritas=="Rechazos en este periodo" ~ s4_rechazo_semana$n,
+    actividad_inscritas=="Hogares que se retiraron del Estudio (E3) *" ~ salidas_semana$n,
+     actividad_inscritas=="Activas a la fecha" ~ activas_semana$n,
+     actividad_inscritas=="Activas Embarazadas" ~ activas_embarazadas_semana$n,
+     actividad_inscritas=="Activas Adultas" ~ activas_adultas_semana$n,
+    TRUE ~ NA_integer_
+  )
+) %>%mutate(
+  acumulado = case_when(
+    actividad_inscritas=="Inscritas en este periodo" ~ inscritas_acumulado$n,
+    actividad_inscritas=="Inscritas Embarazadas" ~ inscritas_embarazadas_acumulado$n,
+    actividad_inscritas=="Inscritas Adultas" ~ inscritas_adultas_acumulado$n,
+    actividad_inscritas=="Rechazos en este periodo" ~ s4_rechazo_acumulado$n,
+    actividad_inscritas=="Hogares que se retiraron del Estudio (E3) *" ~ salidas_acumulado$n,
+    actividad_inscritas=="Activas a la fecha" ~ activas_acumulado$n,
+     actividad_inscritas=="Activas Embarazadas" ~ activas_embarazadas_acumulado$n,
+     actividad_inscritas=="Activas Adultas" ~ activas_adultas_acumulado$n,
+    TRUE ~ NA_integer_
+  )
+) %>% select(" "=actividad_inscritas, "Semana     " = semana, "Acumulado     "=acumulado) %>% 
+   knitr::kable(caption = paste("Conteo de participantes Inscritas, Rechazos, Retiros del estudio y Activas, semana del ", fecha1, " al ", fecha2))
+```
+
+ * de las salidas **`r salidas_acumulado - salida_after_s6`** fueron **antes** de S6
+
+
+## Actividad "LINEA BASAL"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+```{r linea basal, echo=FALSE}
+##CONTEOS LINEA BASAL
+#Clinica
+m13_acumulado<-gt_emory_data_arm2 %>% select(id,m13_date, redcap_event_name) %>% 
+      filter(!is.na(m13_date) & redcap_event_name=="linea_de_base_arm_2") %>%count()
+m13_semana<-gt_emory_data_arm2 %>% select(id,m13_date, redcap_event_name) %>% 
+      filter(!is.na(m13_date) & redcap_event_name=="linea_de_base_arm_2") %>% filter(m13_date >=fecha1 & m13_date<=fecha2) %>% count()
+
+#Exposicion
+h42_acumulado<-gt_emory_data_arm2 %>% select(id,h42_date, redcap_event_name) %>% 
+    filter(!is.na(h42_date) & redcap_event_name=="linea_de_base_arm_2") %>%count()
+h42_semana<-gt_emory_data_arm2 %>% select(id,h42_date, redcap_event_name) %>% 
+    filter(!is.na(h42_date) & redcap_event_name=="linea_de_base_arm_2") %>% 
+        filter(h42_date >=fecha1 & h42_date<=fecha2) %>% count()
+
+#Obtuvo mx orina
+orina_acumulado<-gt_emory_data_arm2 %>% select(id, b10_date, redcap_event_name, b10_m_urine) %>% 
+  filter(!is.na(b10_date) & b10_m_urine=="1" & redcap_event_name=="linea_de_base_arm_2") %>% count()
+orina_semana<-gt_emory_data_arm2 %>% select(id, b10_date, redcap_event_name, b10_m_urine) %>% 
+  filter(!is.na(b10_date) & b10_m_urine=="1" & redcap_event_name=="linea_de_base_arm_2") %>% 
+    filter(b10_date >=fecha1 & b10_date<=fecha2) %>% count()
+
+#Domiciliar
+m11_acumulado<-gt_emory_data_arm2 %>% select(id,m11_date, redcap_event_name) %>% 
+    filter(!is.na(m11_date) & redcap_event_name=="linea_de_base_arm_2") %>%count()
+m11_semana<-gt_emory_data_arm2 %>% select(id,m11_date, redcap_event_name) %>% 
+    filter(!is.na(m11_date) & redcap_event_name=="linea_de_base_arm_2") %>% 
+        filter(m11_date >=fecha1 & m11_date<=fecha2) %>% count()
+
+#make table linea basal
+actividad<-c("Inscritas en este periodo", "Clinica (M13)","Exposicon (H42)", "Obtuvo mx Orina (B10)","Domiciliar (M11)")
+reporte_lb<-data.frame(actividad)
+reporte_lb %>% mutate(
+    semana= case_when(
+      actividad=="Inscritas en este periodo" ~ inscritas_semana$n,
+      actividad=="Clinica (M13)" ~ m13_semana$n,
+      actividad=="Exposicon (H42)" ~ h42_semana$n,
+      actividad=="Obtuvo mx Orina (B10)" ~ orina_semana$n,
+      actividad=="Domiciliar (M11)" ~ m11_semana$n,
+      TRUE  ~ NA_integer_
+    )
+) %>% mutate(
+    acumulado= case_when(
+      actividad=="Inscritas en este periodo" ~ inscritas_acumulado$n,
+      actividad=="Clinica (M13)" ~ m13_acumulado$n,
+      actividad=="Exposicon (H42)" ~ h42_acumulado$n,
+      actividad=="Obtuvo mx Orina (B10)" ~ orina_acumulado$n,
+      actividad=="Domiciliar (M11)" ~ m11_acumulado$n,
+      TRUE  ~ NA_integer_
+    )
+) %>% select(" "=actividad, "Semana n(%)" = semana, "Acumulado n(%)"=acumulado) %>% 
+  knitr::kable(caption = paste("Conteo actividades LINEA BASAL, semana del ", fecha1, " al ", fecha2))
+```
+\newpage
+\pagebreak 
+
+## Actividad: "LABORATORIO LINEA BASAL"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+```{r laboratorio lb, echo=FALSE}
+##LABORATORIO
+#variables to use in dataset lab
+b10_lab<-
+  gt_emory_data_arm2 %>% select(
+                          id, 
+                          b10_date, 
+                          redcap_event_name, 
+                          b10_m_urine, 
+                          b10_other_w,
+                          b10_child,
+                          b10_m_urine,
+                          b10_tm_spots,
+                          b10_to_urine,
+                          b10_to_spots,
+                          b10_venous,
+                          b10_tc_urine,
+                          b10_tc_spots
+                          ) %>% filter(!is.na(b10_date) & redcap_event_name=="linea_de_base_arm_2")
+
+#b10_semana<-b10_lab %>% filter(b10_date >=fecha1 & b10_date<=fecha2) %>% print()
+#muestra de sangre madre
+b10_s_acumulado_m <-
+  b10_lab %>% filter(b10_tm_spots=="1") %>% count()
+b10_s_semana_m<-
+  b10_lab %>% filter(b10_tm_spots=="1")  %>% filter(b10_date >=fecha1 & b10_date<=fecha2) %>% count()
+#muestra de orina madre
+b10_o_acumulado_m <-
+  b10_lab %>% filter(b10_m_urine=="1") %>% count()
+b10_o_semana_m<-
+  b10_lab %>% filter(b10_m_urine=="1")  %>% filter(b10_date >=fecha1 & b10_date<=fecha2) %>% count()
+#---------------
+#muestra sangre owa
+#--------------
+b10_s_acumulado_o <- b10_lab %>% filter(b10_to_spots=="1") %>% count()
+b10_s_semana_o <- b10_lab %>% filter(b10_to_spots=="1") %>% filter(b10_date >=fecha1 & b10_date<=fecha2) %>% count()
+
+#muestra orina owa
+b10_o_acumulado_o <- b10_lab %>% filter(b10_to_urine=="1") %>% count()
+b10_o_semana_o <- b10_lab %>% filter(b10_to_urine=="1") %>% filter(b10_date >=fecha1 & b10_date<=fecha2) %>% count()
+
+#muestra sangre child
+b10_s_acumulado_c <- b10_lab %>% filter(b10_tc_spots=="1") %>% count()
+b10_s_semana_c <- b10_lab %>% filter(b10_tc_spots=="1") %>% filter(b10_date >=fecha1 & b10_date<=fecha2) %>% count()
+
+#muestra orina child
+b10_o_acumulado_c <- b10_lab %>% filter(b10_tc_urine=="1") %>% count()
+b10_o_semana_c <- b10_lab %>% filter(b10_tc_urine=="1") %>% filter(b10_date >=fecha1 & b10_date<=fecha2) %>% count()
+
+#----------------------
+#make table linea basal
+#----------------------
+actividad<-c("B10 Sangre, Pregnant", "B10 Orina, Pregnant","B10 Sangre, OWA", "B10 Orina, OWA","B10 Sangre, Child","B10 Orina, Child")
+reporte_lab_lb<-data.frame(actividad)
+reporte_lab_lb %>% mutate(
+  semana=case_when(
+    actividad=="B10 Sangre, Pregnant" ~ b10_s_semana_m$n,
+    actividad=="B10 Orina, Pregnant" ~ b10_o_semana_m$n,
+    actividad=="B10 Sangre, OWA" ~ b10_s_semana_o$n,
+    actividad=="B10 Orina, OWA" ~ b10_o_semana_o$n,
+    actividad=="B10 Sangre, Child" ~ b10_s_semana_c$n,
+    actividad=="B10 Orina, Child" ~ b10_o_semana_c$n,
+    TRUE ~ NA_integer_
+  )
+) %>% mutate(
+  acumulado=case_when(
+    actividad=="B10 Sangre, Pregnant" ~ b10_s_acumulado_m$n,
+    actividad=="B10 Orina, Pregnant" ~ b10_o_acumulado_m$n,
+    actividad=="B10 Sangre, OWA" ~ b10_s_acumulado_o$n,
+    actividad=="B10 Orina, OWA" ~ b10_o_acumulado_o$n,
+    actividad=="B10 Sangre, Child" ~ b10_s_acumulado_c$n,
+    actividad=="B10 Orina, Child" ~ b10_o_acumulado_c$n,
+  )
+) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>% 
+  knitr::kable(caption = paste("Conteo de Laboratorio en Linea Basal, semana del ", fecha1," al ", fecha2)) 
+```
+
+## Actividad: "Estufas Instaladas, Reparadas y H53"
+
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+
+```{r estufas, echo=FALSE}
+ ###ESTUFAS
+#Estufas instaladas acumulado
+h50_acumulado<-gt_emory_data_arm2 %>% select(id,h50_date,h50_traditional, redcap_event_name) %>% 
+  filter(!is.na(h50_date)) %>% count()
+#estufas instaladas semanal
+h50_semana<-gt_emory_data_arm2 %>% select(id,h50_date,h50_traditional, redcap_event_name) %>% 
+  filter(!is.na(h50_date)) %>% 
+    filter(h50_date >=fecha1 & h50_date<=fecha2) %>% count()
+
+#reparaciones con H52
+h52_acumulado<- gt_emory_data_arm3 %>% select(id,h52_date,h52_repair_date, redcap_event_name) %>% 
+    filter(!is.na(h52_date)) %>% count()
+
+h52_semana<- gt_emory_data_arm3 %>% select(id,h52_date,h52_repair_date, redcap_event_name) %>% 
+    filter(!is.na(h52_date)) %>% 
+      filter(h52_date>=fecha1 & h52_date<=fecha2) %>% count()
+
+##Refuerzo H53
+h53_acumulado<- gt_emory_data_arm3 %>% select(id,h53_date, h53_start_time, redcap_event_name) %>% 
+    filter(!is.na(h53_date)) %>% count()
+
+h53_semana<- gt_emory_data_arm3 %>% select(id,h53_date, h53_start_time, redcap_event_name) %>% 
+    filter(!is.na(h53_date)) %>% 
+      filter(h53_date>=fecha1 & h53_date<=fecha2) %>% count()
+
+#----------------------
+#make table linea estufas
+#----------------------
+actividad<-c("Estufas instaladas (H50)", "Reparaciones (H52)", "Refuerzo (H53)")
+reporte_estufas<-data.frame(actividad)
+reporte_estufas %>% mutate(
+  semana=case_when(
+    actividad=="Estufas instaladas (H50)" ~ h50_semana$n,
+    actividad=="Reparaciones (H52)" ~ h52_semana$n,
+    actividad=="Refuerzo (H53)" ~ h53_semana$n,
+    TRUE ~ NA_integer_
+    )
+) %>% mutate(
+  acumulado=case_when(
+    actividad=="Estufas instaladas (H50)" ~ h50_acumulado$n,
+    actividad=="Reparaciones (H52)" ~ h52_acumulado$n,
+    actividad=="Refuerzo (H53)" ~ h53_acumulado$n,
+    TRUE ~ NA_integer_
+  )
+) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>% 
+  knitr::kable(caption = paste("Conteo de estufas instaladas, reparadas y refuerzo (H53), semana del ", fecha1," al ", fecha2)) 
+```
+
+
+## Actividad: "P1"
+
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+```{r P1, echo=FALSE}
+## M11 de P1
+m11_acumulado<-gt_emory_data_arm2 %>% select(id,m11_date,redcap_event_name) %>% 
+  filter(!is.na(m11_date) & redcap_event_name=="p1_arm_2") %>% count()
+
+m11_semana<- gt_emory_data_arm2 %>% select(id,m11_date,redcap_event_name) %>% 
+  filter(!is.na(m11_date) & redcap_event_name=="p1_arm_2")%>%
+      filter(m11_date>=fecha1 & m11_date<=fecha2) %>% count()
+
+## h42 de P1
+h42_acumulado<- gt_emory_data_arm2 %>% select(id, h42_date,redcap_event_name) %>% 
+  filter(!is.na(h42_date) & redcap_event_name=="p1_arm_2") %>% count()
+h42_semana<- gt_emory_data_arm2 %>% select(id, h42_date,redcap_event_name) %>% 
+  filter(!is.na(h42_date) & redcap_event_name=="p1_arm_2")%>% 
+      filter(h42_date>=fecha1 & h42_date<=fecha2) %>% count()
+## b10 de P1 sangre y orina
+b10_p1_sangre_acumulado<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,redcap_event_name) %>% 
+  filter(!is.na(b10_date) & redcap_event_name=="p1_arm_2" & b10_tm_spots=="1") %>% count()
+b10_p1_sangre_semana<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,redcap_event_name) %>% 
+  filter(!is.na(b10_date) & redcap_event_name=="p1_arm_2" & b10_tm_spots=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+b10_p1_orina_acumulado<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,redcap_event_name) %>% 
+  filter(!is.na(b10_date) & redcap_event_name=="p1_arm_2" & b10_m_urine=="1") %>% count()
+b10_p1_orina_semana<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,redcap_event_name) %>% 
+  filter(!is.na(b10_date) & redcap_event_name=="p1_arm_2" & b10_m_urine=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+##M18 P1
+m18_p1_acumulado<-gt_emory_data_arm2 %>% select(id, m18_date, redcap_event_name) %>% 
+  filter(!is.na(m18_date) & redcap_event_name=="p1_arm_2") %>% count()
+m18_p1_semana<- gt_emory_data_arm2 %>% select(id, m18_date, redcap_event_name) %>% 
+  filter(!is.na(m18_date) & redcap_event_name=="p1_arm_2") %>% 
+      filter(m18_date>=fecha1 & m18_date<=fecha2) %>% count()
+
+## H55 de P1
+h55_p1_acumulado<-gt_emory_data_arm2 %>% select(id,h55_date,redcap_event_name) %>% 
+  filter(!is.na(h55_date) & redcap_event_name=="p1_arm_2") %>% count()
+
+h55_p1_semana<- gt_emory_data_arm2 %>% select(id,h55_date,redcap_event_name) %>% 
+  filter(!is.na(h55_date) & redcap_event_name=="p1_arm_2")%>%
+      filter(h55_date>=fecha1 & h55_date<=fecha2) %>% count()
+
+#----------------------
+#make table linea estufas
+#----------------------
+actividad<-c("Clinica (M11)", "Exposicion (H42)", "Muestras de Sangre (B10)","Muestras de Orina (B10)", "M18", "H55" )
+  reporte_p1<-data.frame(actividad)
+reporte_p1 %>% mutate(
+  semana=case_when(
+    actividad=="Clinica (M11)" ~ m11_semana$n,
+    actividad=="Exposicion (H42)" ~ h42_semana$n,
+    actividad=="Muestras de Sangre (B10)" ~ b10_p1_sangre_semana$n,
+    actividad=="Muestras de Orina (B10)" ~ b10_p1_orina_semana$n,
+    actividad=="M18" ~ m18_p1_semana$n,
+    actividad=="H55" ~ h55_p1_semana$n,
+    TRUE ~ NA_integer_
+  )
+) %>% mutate(
+  acumulado=case_when(
+    actividad=="Clinica (M11)" ~ m11_acumulado$n,
+    actividad=="Exposicion (H42)" ~ h42_acumulado$n,
+    actividad=="Muestras de Sangre (B10)" ~ b10_p1_sangre_acumulado$n,
+    actividad=="Muestras de Orina (B10)" ~ b10_p1_orina_acumulado$n,
+    actividad=="M18" ~ m18_p1_acumulado$n,
+    actividad=="H55" ~ h55_p1_acumulado$n,
+    TRUE ~ NA_integer_
+  )
+) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>%  
+  knitr::kable(caption=paste("P1 Seguimiento 22 a 26 Semanas, semana del ", fecha1, " al ", fecha2))
+```
+
+\newpage
+\pagebreak 
+
+## Actividad: "P2"
+
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+```{r P2, echo=FALSE}
+## M11 de P2
+m11_p2_acumulado<-gt_emory_data_arm2 %>% select(id,m11_date,redcap_event_name) %>% 
+  filter(!is.na(m11_date) & redcap_event_name=="p2_arm_2") %>% count()
+
+m11_p2_semana<- gt_emory_data_arm2 %>% select(id,m11_date,redcap_event_name) %>% 
+  filter(!is.na(m11_date) & redcap_event_name=="p2_arm_2")%>%
+      filter(m11_date>=fecha1 & m11_date<=fecha2) %>% count()
+
+## h42 de P1
+h42_p2_acumulado<- gt_emory_data_arm2 %>% select(id, h42_date,redcap_event_name) %>% 
+  filter(!is.na(h42_date) & redcap_event_name=="p2_arm_2") %>% count()
+h42_p2_semana<- gt_emory_data_arm2 %>% select(id, h42_date,redcap_event_name) %>% 
+  filter(!is.na(h42_date) & redcap_event_name=="p2_arm_2")%>% 
+      filter(h42_date>=fecha1 & h42_date<=fecha2) %>% count()
+## b10 de P1 sangre y orina
+b10_p2_sangre_acumulado<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,redcap_event_name) %>% 
+  filter(!is.na(b10_date) & redcap_event_name=="p2_arm_2" & b10_tm_spots=="1") %>% count()
+b10_p2_sangre_semana<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,redcap_event_name) %>% 
+  filter(!is.na(b10_date) & redcap_event_name=="p2_arm_2" & b10_tm_spots=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+b10_p2_orina_acumulado<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,redcap_event_name) %>% 
+  filter(!is.na(b10_date) & redcap_event_name=="p2_arm_2" & b10_m_urine=="1") %>% count()
+b10_p2_orina_semana<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,redcap_event_name) %>% 
+  filter(!is.na(b10_date) & redcap_event_name=="p2_arm_2" & b10_m_urine=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+##M18 P1
+m18_p2_acumulado<-gt_emory_data_arm2 %>% select(id, m18_date, redcap_event_name) %>% 
+  filter(!is.na(m18_date) & redcap_event_name=="p2_arm_2") %>% count()
+m18_p2_semana<- gt_emory_data_arm2 %>% select(id, m18_date, redcap_event_name) %>% 
+  filter(!is.na(m18_date) & redcap_event_name=="p2_arm_2") %>% 
+      filter(m18_date>=fecha1 & m18_date<=fecha2) %>% count()
+
+## H55 de P2
+h55_p2_acumulado<-gt_emory_data_arm2 %>% select(id,h55_date,redcap_event_name) %>% 
+  filter(!is.na(h55_date) & redcap_event_name=="p2_arm_2") %>% count()
+
+h55_p2_semana<- gt_emory_data_arm2 %>% select(id,h55_date,redcap_event_name) %>% 
+  filter(!is.na(h55_date) & redcap_event_name=="p2_arm_2")%>%
+      filter(h55_date>=fecha1 & h55_date<=fecha2) %>% count()
+
+#----------------------
+#make table P2
+#----------------------
+actividad<-c("Clinica (M11)", "Exposicion (H42)", "Muestras de Sangre (B10)","Muestras de Orina (B10)", "M18", "H55" )
+  reporte_p2<-data.frame(actividad)
+reporte_p2 %>% mutate(
+  semana=case_when(
+    actividad=="Clinica (M11)" ~ m11_p2_semana$n,
+    actividad=="Exposicion (H42)" ~ h42_p2_semana$n,
+    actividad=="Muestras de Sangre (B10)" ~ b10_p2_sangre_semana$n,
+    actividad=="Muestras de Orina (B10)" ~ b10_p2_orina_semana$n,
+    actividad=="M18" ~ m18_p2_semana$n,
+    actividad=="H55" ~ h55_p2_semana$n,
+    TRUE ~ NA_integer_
+  )
+) %>% mutate(
+  acumulado=case_when(
+    actividad=="Clinica (M11)" ~ m11_p2_acumulado$n,
+    actividad=="Exposicion (H42)" ~ h42_p2_acumulado$n,
+    actividad=="Muestras de Sangre (B10)" ~ b10_p2_sangre_acumulado$n,
+    actividad=="Muestras de Orina (B10)" ~ b10_p2_orina_acumulado$n,
+    actividad=="M18" ~ m18_p2_acumulado$n,
+    actividad=="H55" ~ h55_p2_acumulado$n,
+    TRUE ~ NA_integer_
+  )
+) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>%  
+  knitr::kable(caption=paste("P2 Seguimiento 30 a 34 Semanas, semana del ", fecha1, " al ", fecha2))
+
+```
+
+## Actividad: "Nacimientos"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+
+```{r nacimientos, echo=FALSE}
+#nacimientos en C30
+c30_acumulado<-gt_emory_data_arm2 %>% select(id, c30_date) %>% 
+  filter(!is.na(c30_date)) %>% count()
+c30_semana<-gt_emory_data_arm2 %>% select(id, c30_date) %>% 
+  filter(!is.na(c30_date)) %>% 
+      filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+##e2 mortinatos
+e2_acumulado<-gt_emory_data_arm2 %>% select(id, e2_date,e2_title, redcap_event_name,
+                             e2_sae_nature) %>% filter(!is.na(e2_date)) %>% 
+                                filter(e2_title=="2") %>%  count()
+e2_semana<- gt_emory_data_arm2 %>% select(id, e2_date,e2_title, redcap_event_name,
+                             e2_sae_nature) %>% filter(!is.na(e2_date)) %>% 
+                                filter(e2_title=="2")%>% 
+                                    filter(e2_date>=fecha1 & e2_date<=fecha2) %>% count()
+#resultado embarazos
+resultado_acumulado<-e2_acumulado$n + c30_acumulado$n
+resultado_semana<-e2_semana$n + c30_semana$n
+
+#lugar de nacimiento, hospital u hogar
+#Hospital
+hospital_acumulado<-gt_emory_data_arm2 %>% select(id, c30_date, c30_where) %>% 
+      filter(!is.na(c30_date)) %>% filter(c30_where=="1") %>% count()
+hospital_semana<- gt_emory_data_arm2 %>% select(id, c30_date, c30_where) %>% 
+  filter(!is.na(c30_date)) %>% filter(c30_where=="1") %>%  filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+#Hogar
+hogar_acumulado<-gt_emory_data_arm2 %>% select(id, c30_date, c30_where) %>% 
+      filter(!is.na(c30_date)) %>% filter(c30_where=="3") %>% count()
+hogar_semana<- gt_emory_data_arm2 %>% select(id, c30_date, c30_where) %>% 
+  filter(!is.na(c30_date)) %>% filter(c30_where=="3") %>%  filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+
+#Vaginal
+vaginal_acumulado<-gt_emory_data_arm2 %>% select(id, c30_date, c30_delivery) %>% 
+      filter(!is.na(c30_date)) %>% filter(c30_delivery=="1") %>% count()
+vaginal_semana<- gt_emory_data_arm2 %>% select(id, c30_date, c30_delivery) %>% 
+  filter(!is.na(c30_date)) %>% filter(c30_delivery=="1") %>%  filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+#Cesarea
+cesarea_acumulado<-gt_emory_data_arm2 %>% select(id, c30_date, c30_delivery) %>% 
+      filter(!is.na(c30_date)) %>% filter(c30_delivery=="2") %>% count()
+cesarea_semana<- gt_emory_data_arm2 %>% select(id, c30_date, c30_delivery) %>% 
+  filter(!is.na(c30_date)) %>% filter(c30_delivery=="2") %>%  filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+
+#b10a y C30a
+b10a_acumulado<-gt_emory_data_arm2 %>% select(id, b10a_date, redcap_event_name) %>% 
+    filter(!is.na(b10a_date)) %>% count()
+b10a_semana<-gt_emory_data_arm2 %>% select(id, b10a_date, redcap_event_name) %>% 
+    filter(!is.na(b10a_date)) %>% 
+      filter(b10a_date>=fecha1 & b10a_date<=fecha2) %>% count()
+
+c30a_acumulado<-gt_emory_data_arm2 %>% select(id, c30a_date, redcap_event_name) %>% 
+    filter(!is.na(c30a_date)) %>% count()
+c30a_semana<-gt_emory_data_arm2 %>% select(id, c30a_date, redcap_event_name) %>% 
+    filter(!is.na(c30a_date)) %>% 
+      filter(c30a_date>=fecha1 & c30a_date<=fecha2) %>% count()
+
+#Visitas de nacimientos <24 horas
+
+v24_acumulada<-gt_emory_data_arm2 %>% 
+  select(id, c30_date, c30_time, c30_dob, c30_birth_time) %>% 
+    filter(!is.na(c30_date) & !is.na(c30_time)) %>% 
+  mutate(
+    time_c30=paste(c30_date,c30_time) %>% lubridate::ymd_hm(),
+    time_nacimiento = paste(c30_dob, c30_birth_time) %>% lubridate::ymd_hm()
+  ) %>% mutate(
+  diferencia= as.numeric( time_c30 - time_nacimiento, unit="hours")
+  )%>%filter(diferencia<=24) %>% count()
+
+v24_semana<-gt_emory_data_arm2 %>% 
+  select(id, c30_date, c30_time, c30_dob, c30_birth_time) %>% 
+    filter(!is.na(c30_date) & !is.na(c30_time)) %>% 
+  mutate(
+    time_c30=paste(c30_date,c30_time) %>% lubridate::ymd_hm(),
+    time_nacimiento = paste(c30_dob, c30_birth_time) %>% lubridate::ymd_hm()
+  ) %>% mutate(
+  diferencia= as.numeric( time_c30 - time_nacimiento, unit="hours")
+  ) %>% filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+
+## H55 de Nacimientos
+h55_acumulado<-gt_emory_data_arm2 %>% select(id,h55_date,redcap_event_name) %>% 
+  filter(!is.na(h55_date) & redcap_event_name=="birth_arm_2") %>% count()
+
+h55_semana<- gt_emory_data_arm2 %>% select(id,h55_date,redcap_event_name) %>% 
+  filter(!is.na(h55_date) & redcap_event_name=="birth_arm_2")%>%
+      filter(h55_date>=fecha1 & h55_date<=fecha2) %>% count()
+
+
+
+#----------------------
+#make table Nacimientos
+#----------------------
+actividad<-c("Total de resultados de embarazo", "Nacimientos (C30)", "Mortinatos (E2)","Nacimientos en Hospital", "Nacimientos en Hogar","Parto Vaginal","Parto Cesárea","B10a","C30a","Visitas de nacimiento <24 horas", "H55")
+reporte_nacimientos<-data.frame(actividad)
+reporte_nacimientos %>% mutate(
+  semana=case_when(
+    actividad=="Total de resultados de embarazo" ~ c30_semana$n + e2_semana$n,
+    actividad=="Nacimientos (C30)" ~ c30_semana$n,
+    actividad == "Mortinatos (E2)" ~ e2_semana$n,
+    actividad == "Nacimientos en Hospital" ~ hospital_semana$n,
+    actividad == "Nacimientos en Hogar" ~ hogar_semana$n,
+    actividad == "Parto Vaginal" ~ vaginal_semana$n,
+    actividad == "Parto Cesárea" ~ cesarea_semana$n,
+    actividad == "B10a" ~ b10a_semana$n,
+    actividad == "C30a" ~ c30a_semana$n,
+    actividad == "Visitas de nacimiento <24 horas" ~ v24_semana$n,
+    actividad == "H55" ~ h55_semana$n,
+    TRUE ~ NA_integer_
+  )
+) %>% mutate(
+  acumulado=case_when(
+    actividad=="Total de resultados de embarazo" ~ c30_acumulado$n + e2_acumulado$n,
+    actividad=="Nacimientos (C30)" ~ c30_acumulado$n,
+    actividad == "Mortinatos (E2)" ~ e2_acumulado$n,
+    actividad == "Nacimientos en Hospital" ~ hospital_acumulado$n,
+    actividad == "Nacimientos en Hogar" ~ hogar_acumulado$n,
+    actividad == "Parto Vaginal" ~ vaginal_acumulado$n,
+    actividad == "Parto Cesárea" ~ cesarea_acumulado$n,
+    actividad == "B10a" ~ b10a_acumulado$n,
+    actividad == "C30a" ~ c30a_acumulado$n,
+    actividad == "Visitas de nacimiento <24 horas" ~ v24_acumulada$n,
+    actividad == "H55" ~ h55_acumulado$n,
+    TRUE ~ NA_integer_
+  )
+) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>%  
+  knitr::kable(caption=paste("Nacimientos, semana del ", fecha1, " al ", fecha2))
+```
+
+## Actividad: "Desenlaces"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+```{r desenlaces, echo=FALSE}
+#<37 semanas
+c30_ga37_acumulado<-gt_emory_data_arm2 %>% select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+c30_wt_record, c30_wt_unit) %>% 
+  filter(!is.na(c30_date)) %>% filter(c30_age<"37") %>% count()
+
+c30_ga37_semana<- gt_emory_data_arm2 %>% select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+c30_wt_record, c30_wt_unit) %>% 
+  filter(!is.na(c30_date)) %>% filter(c30_age<"37")%>% 
+    filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+
+  # peso promedio con desnudo y con ropa 
+  # c30_ave_wt
+  # c30_ave_wt2
+  
+
+  
+  p2500_acumulado<-gt_emory_data_arm2 %>% 
+    select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+            c30_wt_record, c30_wt_unit, c30_ave_wt, c30_ave_wt2) %>% 
+                filter(!is.na(c30_date)) %>% mutate(peso=if_else(is.na(c30_ave_wt2),as.numeric(c30_ave_wt), as.numeric(c30_ave_wt2))) %>% 
+    filter(peso<2500) %>% count()
+  
+  p2500_semana<- gt_emory_data_arm2 %>% 
+    select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+            c30_wt_record, c30_wt_unit, c30_ave_wt, c30_ave_wt2) %>% 
+                filter(!is.na(c30_date)) %>% 
+     mutate(peso=if_else(is.na(c30_ave_wt2),as.numeric(c30_ave_wt), as.numeric(c30_ave_wt2))) %>% 
+              filter(peso<2500) %>%  
+                filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+
+  longitud_acumulado<-gt_emory_data_arm2 %>% 
+    select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+            c30_ave_ht) %>% 
+                filter(!is.na(c30_date)) %>% mutate(
+                  largo=as.numeric(c30_ave_ht)
+                  ) %>% filter(largo<45) %>% count()
+  longitud_semana <- gt_emory_data_arm2 %>% 
+    select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+            c30_ave_ht) %>% 
+                filter(!is.na(c30_date)) %>% mutate(
+                  largo=as.numeric(c30_ave_ht)
+                  ) %>% filter(largo<45) %>% 
+                            filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+  
+# p2500_acumulado<-gt_emory_data %>% 
+#     select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+#             c30_wt_record, c30_wt_unit) %>% 
+#                 filter(!is.na(c30_date)) %>% mutate(
+#                   peso_gramos= case_when(
+#                     c30_wt_unit=="1" & c30_wt_record<"2.5" ~ "1",
+#                     c30_wt_unit=="2" & c30_wt_record<"5.5" ~ "1",
+#                     TRUE  ~ NA_character_
+#                   )
+#                 ) %>% filter(peso_gramos=="1") %>%  count()
+
+# p2500_semana<-gt_emory_data %>% 
+#     select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+#             c30_wt_record, c30_wt_unit) %>% 
+#                 filter(!is.na(c30_date)) %>% mutate(
+#                   peso_gramos= case_when(
+#                     c30_wt_unit=="1" & c30_wt_record<"2.5" ~ "1",
+#                     c30_wt_unit=="2" & c30_wt_record<"5.5" ~ "1",
+#                     TRUE  ~ NA_character_
+#                   )
+#                 ) %>% filter(peso_gramos=="1") %>% filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+
+#----------------------
+#make table Desenlaces
+#----------------------
+actividad<-c("Prematurez(<37 sem por USG)", "Peso al nacer <2500g", "Medida al nacer < 45cm")
+reporte_desenlaces<-data.frame(actividad)
+reporte_desenlaces %>% mutate(
+  semana=case_when(
+    actividad=="Prematurez(<37 sem por USG)" ~ c30_ga37_semana$n,
+    actividad=="Peso al nacer <2500g" ~ p2500_semana$n,
+    actividad=="Medida al nacer < 45cm" ~ longitud_semana$n,
+    TRUE ~ NA_integer_
+  )
+) %>% mutate(
+  acumulado=case_when(
+    actividad=="Prematurez(<37 sem por USG)" ~ c30_ga37_acumulado$n,
+    actividad=="Peso al nacer <2500g" ~ p2500_acumulado$n,
+    actividad=="Medida al nacer < 45cm" ~ longitud_acumulado$n,
+    TRUE ~ NA_integer_
+  )
+) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>% 
+  knitr::kable(caption=paste("Desenlaces, semana del ", fecha1, " al ", fecha2))
+
+```
+
+\newpage
+\pagebreak 
+
+## Actividad: "Visita 1 Mes"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+``` {r visita_mes1, echo=FALSE }
+## C31 y C36
+c31_acumulado <- gt_emory_data_arm2 %>% select(id, c31_date, redcap_event_name, visit) %>% 
+    filter(!is.na(c31_date) & id!="99999" & visit=="m1") %>% count()
+c31_semana <- gt_emory_data_arm2 %>% select(id, c31_date, redcap_event_name,visit) %>% 
+    filter(!is.na(c31_date) & id!="99999" & visit=="m1") %>% 
+      filter(c31_date>=fecha1 & c31_date<=fecha2) %>% count()
+
+c36_acumulado<- gt_emory_data_arm2 %>% select(id, c36_date, redcap_event_name,visit) %>% 
+    filter(!is.na(c36_date) & id!="99999" & visit=="libres1") %>% count()
+c36_semana<-gt_emory_data_arm2 %>% select(id, c36_date, redcap_event_name,visit) %>% 
+  filter(!is.na(c36_date) & id!="99999" & visit=="libres1") %>% 
+      filter(c36_date>=fecha1 & c36_date<=fecha2) %>% count()
+
+#----------------------
+#make table Visita mes 1
+#----------------------
+actividad<-c("C31 (Mes1)", "C36 (Necesario 1)")
+reporte_mes1<-data.frame(actividad)
+reporte_mes1 %>%  mutate(
+      semana=case_when(
+        actividad=="C31 (Mes1)" ~ c31_semana$n,
+        actividad=="C36 (Necesario 1)" ~ c36_semana$n,
+        TRUE ~ NA_integer_
+      )
+  ) %>% mutate(
+    acumulado=case_when(
+      actividad=="C31 (Mes1)" ~ c31_acumulado$n,
+        actividad=="C36 (Necesario 1)" ~ c36_acumulado$n,
+    )
+  ) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>% 
+  knitr::kable(caption = paste("Visitas de Mes 1, semanal del ", fecha1, " al ", fecha2))
+```
+
+\newpage
+\pagebreak 
+
+## Actividad: "Visita 2 Mes"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+``` {r visita_mes2, echo=FALSE }
+## C31 y C36
+c31_acumulado <- gt_emory_data_arm2 %>% select(id, c31_date, redcap_event_name, visit) %>% 
+    filter(!is.na(c31_date) & id!="99999" & visit=="m2") %>% count()
+c31_semana <- gt_emory_data_arm2 %>% select(id, c31_date, redcap_event_name,visit) %>% 
+    filter(!is.na(c31_date) & id!="99999" & visit=="m2") %>% 
+      filter(c31_date>=fecha1 & c31_date<=fecha2) %>% count()
+
+c36_acumulado<- gt_emory_data_arm2 %>% select(id, c36_date, redcap_event_name,visit) %>% 
+    filter(!is.na(c36_date) & id!="99999" & visit=="libres2") %>% count()
+c36_semana<-gt_emory_data_arm2 %>% select(id, c36_date, redcap_event_name,visit) %>% 
+  filter(!is.na(c36_date) & id!="99999" & visit=="libres2") %>% 
+      filter(c36_date>=fecha1 & c36_date<=fecha2) %>% count()
+
+
+#----------------------
+#make table Visita mes 1
+#----------------------
+actividad<-c("C31 (Mes2)", "C36 (Necesario 2)")
+reporte_mes1<-data.frame(actividad)
+reporte_mes1 %>%  mutate(
+      semana=case_when(
+        actividad=="C31 (Mes2)" ~ c31_semana$n,
+        actividad=="C36 (Necesario 2)" ~ c36_semana$n,
+        TRUE ~ NA_integer_
+      )
+  ) %>% mutate(
+    acumulado=case_when(
+      actividad=="C31 (Mes2)" ~ c31_acumulado$n,
+        actividad=="C36 (Necesario 2)" ~ c36_acumulado$n,
+    )
+  ) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>% 
+  knitr::kable(caption = paste("Visitas de Mes 2, semanal del ", fecha1, " al ", fecha2))
+```
+
+\newpage
+\pagebreak 
+
+## Actividad: "Visita B1 Mes"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+``` {r visita_mesb1, echo=FALSE }
+## C31 y C36
+c31_acumulado <- gt_emory_data_arm2 %>% select(id, c31_date, redcap_event_name, visit) %>% 
+    filter(!is.na(c31_date) & id!="99999" & visit=="b1") %>% count()
+c31_semana <- gt_emory_data_arm2 %>% select(id, c31_date, redcap_event_name,visit) %>% 
+    filter(!is.na(c31_date) & id!="99999" & visit=="b1") %>% 
+      filter(c31_date>=fecha1 & c31_date<=fecha2) %>% count()
+
+c36_acumulado<- gt_emory_data_arm2 %>% select(id, c36_date, redcap_event_name,visit) %>% 
+    filter(!is.na(c36_date) & id!="99999" & visit=="libres3") %>% count()
+c36_semana<-gt_emory_data_arm2 %>% select(id, c36_date, redcap_event_name,visit) %>% 
+  filter(!is.na(c36_date) & id!="99999" & visit=="libres3") %>% 
+      filter(c36_date>=fecha1 & c36_date<=fecha2) %>% count()
+## M11 de B1
+m11_b1_acumulado<-gt_emory_data_arm2 %>% select(id,m11_date,visit) %>% 
+  filter(!is.na(m11_date) & id!="99999" & visit=="b1") %>% count()
+
+m11_b1_semana<- gt_emory_data_arm2 %>% select(id,m11_date,visit) %>% 
+  filter(!is.na(m11_date) &  id!="99999" & visit=="b1")%>%
+      filter(m11_date>=fecha1 & m11_date<=fecha2) %>% count()
+
+## h42 de B1
+h42_b1_acumulado<- gt_emory_data_arm2 %>% select(id, h42_date,visit) %>% 
+  filter(!is.na(h42_date) & id!="99999" & visit=="b1") %>% count()
+h42_b1_semana<- gt_emory_data_arm2 %>% select(id, h42_date,visit) %>% 
+  filter(!is.na(h42_date) & id!="99999" & visit=="b1")%>% 
+      filter(h42_date>=fecha1 & h42_date<=fecha2) %>% count()
+
+## b10 de B1 sangre y orina
+#SANGRE MADRE B1
+b10_b1_sangre_acumulado_madre<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,b10_venous,b10_tc_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b1" & b10_tm_spots=="1") %>% count()
+b10_b1_sangre_semana_madre<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b1" & b10_tm_spots=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+#SANGRE HIJO B1
+b10_b1_sangre_acumulado_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,b10_venous,b10_tc_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b1" & b10_tc_spots=="1") %>% count()
+b10_b1_sangre_semana_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,b10_tc_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b1" & b10_tc_spots=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+#ORINA MADRE B1
+b10_b1_orina_acumulado_madre<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b1" & b10_m_urine=="1") %>% count()
+b10_b1_orina_semana_madre <-gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child, visit) %>% 
+  filter(!is.na(b10_date) & visit=="b1" & b10_m_urine=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+#ORINA HIJO B1
+b10_b1_orina_acumulado_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b1" & b10_child=="1") %>% count()
+b10_b1_orina_semana_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child,visit) %>% 
+  filter(!is.na(b10_date) & visit=="b1" & b10_child=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+##M14b B1
+m14b_b1_acumulado<-gt_emory_data_arm2 %>% select(id, m14b_date, visit) %>% 
+  filter(!is.na(m14b_date) & visit=="b1") %>% count()
+m14b_b1_semana<- gt_emory_data_arm2 %>% select(id, m14b_date, visit) %>% 
+  filter(!is.na(m14b_date) & visit=="b1") %>% 
+      filter(m14b_date>=fecha1 & m14b_date<=fecha2) %>% count()
+
+## H55 de B1
+h55_b1_acumulado<-gt_emory_data_arm2 %>% select(id,h55_date,visit) %>% 
+  filter(!is.na(h55_date) & visit=="b1") %>% count()
+
+h55_b1_semana<- gt_emory_data_arm2 %>% select(id,h55_date,visit) %>% 
+  filter(!is.na(h55_date) & visit=="b1")%>%
+      filter(h55_date>=fecha1 & h55_date<=fecha2) %>% count()
+
+
+#----------------------
+#make table Visita mes 1
+#----------------------
+actividad<-c("C31 (Mes B1)", "C36 (Necesario 3)", "Clinica (M11)","Presion Arterial (M14b)","Exposicion (H42)", "Muestras de Sangre (B10, madre)",
+             "Muestras de Orina (B10, madre)", "Muestras de Sangre (B10, hijo)", "Muestras de Orina (B10, hijo)", "H55")
+reporte_mes1<-data.frame(actividad)
+reporte_mes1 %>%  mutate(
+      semana=case_when(
+        actividad=="C31 (Mes B1)" ~ c31_semana$n,
+        actividad=="C36 (Necesario 3)" ~ c36_semana$n,
+        actividad=="Clinica (M11)" ~ m11_b1_semana$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b1_semana$n,
+        actividad=="Exposicion (H42)" ~ h42_b1_semana$n,
+        actividad=="Muestras de Sangre (B10, madre)" ~ b10_b1_sangre_semana_madre$n,
+        actividad=="Muestras de Orina (B10, madre)" ~ b10_b1_orina_semana_madre$n,
+        actividad=="Muestras de Sangre (B10, hijo)" ~ b10_b1_sangre_semana_hijo$n,
+        actividad=="Muestras de Orina (B10, hijo)" ~ b10_b1_orina_semana_hijo$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b1_semana$n,
+        actividad=="H55" ~ h55_b1_semana$n,
+        TRUE ~ NA_integer_
+      )
+  ) %>% mutate(
+    acumulado=case_when(
+      actividad=="C31 (Mes B1)" ~ c31_acumulado$n,
+        actividad=="C36 (Necesario 3)" ~ c36_acumulado$n,
+        actividad=="Clinica (M11)" ~ m11_b1_acumulado$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b1_acumulado$n,
+        actividad=="Exposicion (H42)" ~ h42_b1_acumulado$n,
+        actividad=="Muestras de Sangre (B10, madre)" ~ b10_b1_sangre_acumulado_madre$n,
+        actividad=="Muestras de Orina (B10, madre)" ~ b10_b1_orina_acumulado_madre$n,
+        actividad=="Muestras de Sangre (B10, hijo)" ~ b10_b1_sangre_acumulado_hijo$n,
+        actividad=="Muestras de Orina (B10, hijo)" ~ b10_b1_orina_acumulado_hijo$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b1_acumulado$n,
+        actividad=="H55" ~ h55_b1_acumulado$n,
+       TRUE ~ NA_integer_
+    )
+  ) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>% 
+  knitr::kable(caption = paste("Visitas de Mes B1, semanal del ", fecha1, " al ", fecha2))
+
+
+
+
+
+```
+
+\newpage
+\pagebreak 
+
+## Actividad: "Visita B2 Mes"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+``` {r visita_mesb2, echo=FALSE }
+##B2
+## C31 y C36
+c31_acumulado <- gt_emory_data_arm2 %>% select(id, c31_date, redcap_event_name, visit) %>% 
+    filter(!is.na(c31_date) & id!="99999" & visit=="b2") %>% count()
+c31_semana <- gt_emory_data_arm2 %>% select(id, c31_date, redcap_event_name,visit) %>% 
+    filter(!is.na(c31_date) & id!="99999" & visit=="b2") %>% 
+      filter(c31_date>=fecha1 & c31_date<=fecha2) %>% count()
+
+c36_acumulado<- gt_emory_data_arm2 %>% select(id, c36_date, redcap_event_name,visit) %>% 
+    filter(!is.na(c36_date) & id!="99999" & visit=="libres4") %>% count()
+c36_semana<-gt_emory_data_arm2 %>% select(id, c36_date, redcap_event_name,visit) %>% 
+  filter(!is.na(c36_date) & id!="99999" & visit=="libres4") %>% 
+      filter(c36_date>=fecha1 & c36_date<=fecha2) %>% count()
+
+## M11 de B2
+m11_b2_acumulado<-gt_emory_data_arm2 %>% select(id,m11_date,visit) %>% 
+  filter(!is.na(m11_date) & id!="99999" & visit=="b2") %>% count()
+
+m11_b2_semana<- gt_emory_data_arm2 %>% select(id,m11_date,visit) %>% 
+  filter(!is.na(m11_date) &  id!="99999" & visit=="b2")%>%
+      filter(m11_date>=fecha1 & m11_date<=fecha2) %>% count()
+
+## h42 de B2
+h42_b2_acumulado<- gt_emory_data_arm2 %>% select(id, h42_date,visit) %>% 
+  filter(!is.na(h42_date) & id!="99999" & visit=="b2") %>% count()
+h42_b2_semana<- gt_emory_data_arm2 %>% select(id, h42_date,visit) %>% 
+  filter(!is.na(h42_date) & id!="99999" & visit=="b2")%>% 
+      filter(h42_date>=fecha1 & h42_date<=fecha2) %>% count()
+
+## b10 de B2 sangre y orina
+#SANGRE MADRE B2
+b10_b2_sangre_acumulado_madre<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,b10_venous,b10_tc_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b2" & b10_tm_spots=="1") %>% count()
+b10_b2_sangre_semana_madre<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b2" & b10_tm_spots=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+#SANGRE HIJO B2
+b10_b2_sangre_acumulado_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,b10_venous,b10_tc_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b2" & b10_tc_spots=="1") %>% count()
+b10_b2_sangre_semana_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,b10_tc_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b2" & b10_tc_spots=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+#ORINA MADRE B2
+b10_b2_orina_acumulado_madre<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b2" & b10_m_urine=="1") %>% count()
+b10_b2_orina_semana_madre <-gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child, visit) %>% 
+  filter(!is.na(b10_date) & visit=="b2" & b10_m_urine=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+#ORINA HIJO B2
+b10_b2_orina_acumulado_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b2" & b10_child=="1") %>% count()
+b10_b2_orina_semana_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child,visit) %>% 
+  filter(!is.na(b10_date) & visit=="b2" & b10_child=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+##M14b B2
+m14b_b2_acumulado<-gt_emory_data_arm2 %>% select(id, m14b_date, visit) %>% 
+  filter(!is.na(m14b_date) & visit=="b2") %>% count()
+m14b_b2_semana<- gt_emory_data_arm2 %>% select(id, m14b_date, visit) %>% 
+  filter(!is.na(m14b_date) & visit=="b2") %>% 
+      filter(m14b_date>=fecha1 & m14b_date<=fecha2) %>% count()
+
+## H55 de B2
+h55_b2_acumulado<-gt_emory_data_arm2 %>% select(id,h55_date,visit) %>% 
+  filter(!is.na(h55_date) & visit=="b2") %>% count()
+
+h55_b2_semana<- gt_emory_data_arm2 %>% select(id,h55_date,visit) %>% 
+  filter(!is.na(h55_date) & visit=="b2")%>%
+      filter(h55_date>=fecha1 & h55_date<=fecha2) %>% count()
+
+
+#----------------------
+#make table Visita b2
+#----------------------
+actividad<-c("C31 (Mes B2)", "C36 (Necesario 4)", "Clinica (M11)","Presion Arterial (M14b)","Exposicion (H42)", "Muestras de Sangre (B10, madre)",
+             "Muestras de Orina (B10, madre)", "Muestras de Sangre (B10, hijo)", "Muestras de Orina (B10, hijo)", "H55")
+reporte_mes1<-data.frame(actividad)
+reporte_mes1 %>%  mutate(
+      semana=case_when(
+        actividad=="C31 (Mes B2)" ~ c31_semana$n,
+        actividad=="C36 (Necesario 4)" ~ c36_semana$n,
+        actividad=="Clinica (M11)" ~ m11_b2_semana$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b2_semana$n,
+        actividad=="Exposicion (H42)" ~ h42_b2_semana$n,
+        actividad=="Muestras de Sangre (B10, madre)" ~ b10_b2_sangre_semana_madre$n,
+        actividad=="Muestras de Orina (B10, madre)" ~ b10_b2_orina_semana_madre$n,
+        actividad=="Muestras de Sangre (B10, hijo)" ~ b10_b2_sangre_semana_hijo$n,
+        actividad=="Muestras de Orina (B10, hijo)" ~ b10_b2_orina_semana_hijo$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b2_semana$n,
+        actividad=="H55" ~ h55_b2_semana$n,
+        TRUE ~ NA_integer_
+      )
+  ) %>% mutate(
+    acumulado=case_when(
+      actividad=="C31 (Mes B2)" ~ c31_acumulado$n,
+      actividad=="C36 (Necesario 4)" ~ c36_acumulado$n,
+        actividad=="Clinica (M11)" ~ m11_b2_acumulado$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b2_acumulado$n,
+        actividad=="Exposicion (H42)" ~ h42_b2_acumulado$n,
+        actividad=="Muestras de Sangre (B10, madre)" ~ b10_b2_sangre_acumulado_madre$n,
+        actividad=="Muestras de Orina (B10, madre)" ~ b10_b2_orina_acumulado_madre$n,
+        actividad=="Muestras de Sangre (B10, hijo)" ~ b10_b2_sangre_acumulado_hijo$n,
+        actividad=="Muestras de Orina (B10, hijo)" ~ b10_b2_orina_acumulado_hijo$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b2_acumulado$n,
+        actividad=="H55" ~ h55_b2_acumulado$n,
+    )
+  ) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>% 
+  knitr::kable(caption = paste("Visitas de Mes B2, semanal del ", fecha1, " al ", fecha2))
+
+```
+
+\newpage
+\pagebreak 
+
+## Actividad: "Visita B3 Mes"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+``` {r visita_mesb3, echo=FALSE }
+##B3
+## C31 y C36
+c31_acumulado <- gt_emory_data_arm2 %>% select(id, c31_date, redcap_event_name, visit) %>% 
+    filter(!is.na(c31_date) & id!="99999" & visit=="b3") %>% count()
+c31_semana <- gt_emory_data_arm2 %>% select(id, c31_date, redcap_event_name,visit) %>% 
+    filter(!is.na(c31_date) & id!="99999" & visit=="b3") %>% 
+      filter(c31_date>=fecha1 & c31_date<=fecha2) %>% count()
+
+c36_acumulado<- gt_emory_data_arm2 %>% select(id, c36_date, redcap_event_name,visit) %>% 
+    filter(!is.na(c36_date) & id!="99999" & visit=="libres5") %>% count()
+c36_semana<-gt_emory_data_arm2 %>% select(id, c36_date, redcap_event_name,visit) %>% 
+  filter(!is.na(c36_date) & id!="99999" & visit=="libres4") %>% 
+      filter(c36_date>=fecha1 & c36_date<=fecha2) %>% count()
+
+## M11 de B3
+m11_b3_acumulado<-gt_emory_data_arm2 %>% select(id,m11_date,visit) %>% 
+  filter(!is.na(m11_date) & id!="99999" & visit=="b3") %>% count()
+
+m11_b3_semana<- gt_emory_data_arm2 %>% select(id,m11_date,visit) %>% 
+  filter(!is.na(m11_date) &  id!="99999" & visit=="b3")%>%
+      filter(m11_date>=fecha1 & m11_date<=fecha2) %>% count()
+
+## h42 de B3
+h42_b3_acumulado<- gt_emory_data_arm2 %>% select(id, h42_date,visit) %>% 
+  filter(!is.na(h42_date) & id!="99999" & visit=="b3") %>% count()
+h42_b3_semana<- gt_emory_data_arm2 %>% select(id, h42_date,visit) %>% 
+  filter(!is.na(h42_date) & id!="99999" & visit=="b3")%>% 
+      filter(h42_date>=fecha1 & h42_date<=fecha2) %>% count()
+
+## b10 de B3 sangre y orina
+#SANGRE MADRE B3
+b10_b3_sangre_acumulado_madre<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,b10_venous,b10_tc_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b3" & b10_tm_spots=="1") %>% count()
+b10_b3_sangre_semana_madre<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b3" & b10_tm_spots=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+#SANGRE HIJO B3
+b10_b3_sangre_acumulado_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,b10_venous,b10_tc_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b3" & b10_tc_spots=="1") %>% count()
+b10_b3_sangre_semana_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,b10_tc_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b3" & b10_tc_spots=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+#ORINA MADRE B3
+b10_b3_orina_acumulado_madre<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b3" & b10_m_urine=="1") %>% count()
+b10_b3_orina_semana_madre <-gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child, visit) %>% 
+  filter(!is.na(b10_date) & visit=="b3" & b10_m_urine=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+#ORINA HIJO B3
+b10_b3_orina_acumulado_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b3" & b10_child=="1") %>% count()
+b10_b3_orina_semana_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child,visit) %>% 
+  filter(!is.na(b10_date) & visit=="b3" & b10_child=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+##M14b B3
+m14b_b3_acumulado<-gt_emory_data_arm2 %>% select(id, m14b_date, visit) %>% 
+  filter(!is.na(m14b_date) & visit=="b3") %>% count()
+m14b_b3_semana<- gt_emory_data_arm2 %>% select(id, m14b_date, visit) %>% 
+  filter(!is.na(m14b_date) & visit=="b3") %>% 
+      filter(m14b_date>=fecha1 & m14b_date<=fecha2) %>% count()
+
+## H55 de B3
+h55_b3_acumulado<-gt_emory_data_arm2 %>% select(id,h55_date,visit) %>% 
+  filter(!is.na(h55_date) & visit=="b3") %>% count()
+
+h55_b3_semana<- gt_emory_data_arm2 %>% select(id,h55_date,visit) %>% 
+  filter(!is.na(h55_date) & visit=="b3")%>%
+      filter(h55_date>=fecha1 & h55_date<=fecha2) %>% count()
+
+
+#----------------------
+#make table Visita B3
+#----------------------
+actividad<-c("C31 (Mes B3)", "C36 (Necesario 5)", "Clinica (M11)","Presion Arterial (M14b)","Exposicion (H42)", "Muestras de Sangre (B10, madre)",
+             "Muestras de Orina (B10, madre)", "Muestras de Sangre (B10, hijo)", "Muestras de Orina (B10, hijo)", "H55")
+reporte_mes1<-data.frame(actividad)
+reporte_mes1 %>%  mutate(
+      semana=case_when(
+        actividad=="C31 (Mes B3)" ~ c31_semana$n,
+        actividad=="C36 (Necesario 4)" ~ c36_semana$n,
+        actividad=="Clinica (M11)" ~ m11_b3_semana$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b3_semana$n,
+        actividad=="Exposicion (H42)" ~ h42_b3_semana$n,
+        actividad=="Muestras de Sangre (B10, madre)" ~ b10_b3_sangre_semana_madre$n,
+        actividad=="Muestras de Orina (B10, madre)" ~ b10_b3_orina_semana_madre$n,
+        actividad=="Muestras de Sangre (B10, hijo)" ~ b10_b3_sangre_semana_hijo$n,
+        actividad=="Muestras de Orina (B10, hijo)" ~ b10_b3_orina_semana_hijo$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b3_semana$n,
+        actividad=="H55" ~ h55_b3_semana$n,
+        TRUE ~ NA_integer_
+      )
+  ) %>% mutate(
+    acumulado=case_when(
+      actividad=="C31 (Mes B3)" ~ c31_acumulado$n,
+      actividad=="C36 (Necesario 5)" ~ c36_acumulado$n,
+        actividad=="Clinica (M11)" ~ m11_b3_acumulado$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b3_acumulado$n,
+        actividad=="Exposicion (H42)" ~ h42_b3_acumulado$n,
+        actividad=="Muestras de Sangre (B10, madre)" ~ b10_b3_sangre_acumulado_madre$n,
+        actividad=="Muestras de Orina (B10, madre)" ~ b10_b3_orina_acumulado_madre$n,
+        actividad=="Muestras de Sangre (B10, hijo)" ~ b10_b3_sangre_acumulado_hijo$n,
+        actividad=="Muestras de Orina (B10, hijo)" ~ b10_b3_orina_acumulado_hijo$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b3_acumulado$n,
+        actividad=="H55" ~ h55_b3_acumulado$n,
+    )
+  ) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>% 
+  knitr::kable(caption = paste("Visitas de Mes B3, semanal del ", fecha1, " al ", fecha2))
+
+```
+
+\newpage
+\pagebreak 
+
+## Actividad: "Visita B4 Mes"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+``` {r visita_mesb4, echo=FALSE }
+##B4
+## C31 y C36
+c31_acumulado <- gt_emory_data_arm2 %>% select(id, c31_date, redcap_event_name, visit) %>% 
+    filter(!is.na(c31_date) & id!="99999" & visit=="b4") %>% count()
+c31_semana <- gt_emory_data_arm2 %>% select(id, c31_date, redcap_event_name,visit) %>% 
+    filter(!is.na(c31_date) & id!="99999" & visit=="b4") %>% 
+      filter(c31_date>=fecha1 & c31_date<=fecha2) %>% count()
+
+# c36_acumulado<- gt_emory_data %>% select(id, c36_date, redcap_event_name,visit) %>% 
+#     filter(!is.na(c36_date) & id!="99999" & visit=="libres4") %>% count()
+# c36_semana<-gt_emory_data %>% select(id, c36_date, redcap_event_name,visit) %>% 
+#   filter(!is.na(c36_date) & id!="99999" & visit=="libres4") %>% 
+#       filter(c36_date>=fecha1 & c36_date<=fecha2) %>% count()
+
+## M11 de B4
+m11_b4_acumulado<-gt_emory_data_arm2 %>% select(id,m11_date,visit) %>% 
+  filter(!is.na(m11_date) & id!="99999" & visit=="b4") %>% count()
+
+m11_b4_semana<- gt_emory_data_arm2 %>% select(id,m11_date,visit) %>% 
+  filter(!is.na(m11_date) &  id!="99999" & visit=="b4")%>%
+      filter(m11_date>=fecha1 & m11_date<=fecha2) %>% count()
+
+## h42 de B4
+h42_b4_acumulado<- gt_emory_data_arm2 %>% select(id, h42_date,visit) %>% 
+  filter(!is.na(h42_date) & id!="99999" & visit=="b4") %>% count()
+h42_b4_semana<- gt_emory_data_arm2 %>% select(id, h42_date,visit) %>% 
+  filter(!is.na(h42_date) & id!="99999" & visit=="b4")%>% 
+      filter(h42_date>=fecha1 & h42_date<=fecha2) %>% count()
+
+## b10 de B4 sangre y orina
+#SANGRE MADRE B4
+b10_b4_sangre_acumulado_madre<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,b10_venous,b10_tc_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b4" & b10_tm_spots=="1") %>% count()
+b10_b4_sangre_semana_madre<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b4" & b10_tm_spots=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+#SANGRE HIJO B4
+b10_b4_sangre_acumulado_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,b10_venous,b10_tc_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b4" & b10_tc_spots=="1") %>% count()
+b10_b4_sangre_semana_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_tm_spots,b10_tc_spots,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b4" & b10_tc_spots=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+#ORINA MADRE B4
+b10_b4_orina_acumulado_madre<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b4" & b10_m_urine=="1") %>% count()
+b10_b4_orina_semana_madre <-gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child, visit) %>% 
+  filter(!is.na(b10_date) & visit=="b4" & b10_m_urine=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+#ORINA HIJO B4
+b10_b4_orina_acumulado_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child,visit) %>% 
+  filter(!is.na(b10_date) & id!="99999" & visit=="b4" & b10_child=="1") %>% count()
+b10_b4_orina_semana_hijo<- gt_emory_data_arm2 %>% select(id, b10_date,b10_m_urine,b10_child,visit) %>% 
+  filter(!is.na(b10_date) & visit=="b4" & b10_child=="1")%>% 
+      filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count()
+
+##M14b B4
+m14b_b4_acumulado<-gt_emory_data_arm2 %>% select(id, m14b_date, visit) %>% 
+  filter(!is.na(m14b_date) & visit=="b4") %>% count()
+m14b_b4_semana<- gt_emory_data_arm2 %>% select(id, m14b_date, visit) %>% 
+  filter(!is.na(m14b_date) & visit=="b4") %>% 
+      filter(m14b_date>=fecha1 & m14b_date<=fecha2) %>% count()
+
+## H55 de B4
+h55_b4_acumulado<-gt_emory_data_arm2 %>% select(id,h55_date,visit) %>% 
+  filter(!is.na(h55_date) & visit=="b4") %>% count()
+
+h55_b4_semana<- gt_emory_data_arm2 %>% select(id,h55_date,visit) %>% 
+  filter(!is.na(h55_date) & visit=="b4")%>%
+      filter(h55_date>=fecha1 & h55_date<=fecha2) %>% count()
+
+
+#----------------------
+#make table Visita B4
+#----------------------
+actividad<-c("C31 (Mes B4)",  "Clinica (M11)","Presion Arterial (M14b)","Exposicion (H42)", "Muestras de Sangre (B10, madre)",
+             "Muestras de Orina (B10, madre)", "Muestras de Sangre (B10, hijo)", "Muestras de Orina (B10, hijo)", "H55")
+reporte_mes1<-data.frame(actividad)
+reporte_mes1 %>%  mutate(
+      semana=case_when(
+        actividad=="C31 (Mes B4)" ~ c31_semana$n,
+        actividad=="Clinica (M11)" ~ m11_b4_semana$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b4_semana$n,
+        actividad=="Exposicion (H42)" ~ h42_b4_semana$n,
+        actividad=="Muestras de Sangre (B10, madre)" ~ b10_b4_sangre_semana_madre$n,
+        actividad=="Muestras de Orina (B10, madre)" ~ b10_b4_orina_semana_madre$n,
+        actividad=="Muestras de Sangre (B10, hijo)" ~ b10_b4_sangre_semana_hijo$n,
+        actividad=="Muestras de Orina (B10, hijo)" ~ b10_b4_orina_semana_hijo$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b4_semana$n,
+        actividad=="H55" ~ h55_b4_semana$n,
+        TRUE ~ NA_integer_
+      )
+  ) %>% mutate(
+    acumulado=case_when(
+      actividad=="C31 (Mes B4)" ~ c31_acumulado$n,
+        actividad=="Clinica (M11)" ~ m11_b4_acumulado$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b4_acumulado$n,
+        actividad=="Exposicion (H42)" ~ h42_b4_acumulado$n,
+        actividad=="Muestras de Sangre (B10, madre)" ~ b10_b4_sangre_acumulado_madre$n,
+        actividad=="Muestras de Orina (B10, madre)" ~ b10_b4_orina_acumulado_madre$n,
+        actividad=="Muestras de Sangre (B10, hijo)" ~ b10_b4_sangre_acumulado_hijo$n,
+        actividad=="Muestras de Orina (B10, hijo)" ~ b10_b4_orina_acumulado_hijo$n,
+        actividad=="Presion Arterial (M14b)" ~ m14b_b4_acumulado$n,
+        actividad=="H55" ~ h55_b4_acumulado$n,
+    )
+  ) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>% 
+  knitr::kable(caption = paste("Visitas de Mes B3, semanal del ", fecha1, " al ", fecha2))
+
+```

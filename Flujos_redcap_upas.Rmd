@@ -1,0 +1,104 @@
+---
+title: "flujos_piloto_Eco"
+author: "AIR"
+date: "19/9/2022"
+output: html_document
+---
+
+# Revision de Flujos / flow revisions {.tabset}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+#librerias ----
+library("tidyverse")
+library("kableExtra")
+
+#cargar los datos del estudio principal de ecolectivos (visitas elegibilidad, tamizaje, 4 y 12 meses) ----
+source("script/0_get_data_eco_estudio.R", encoding = "UTF-8")
+#Cargar los datos de exposición ----
+source("script/0_get_data_eco_exposure.R", encoding = "UTF-8")
+#cargar los datos de laboratorio ----
+source("script/0_get_data_eco_lab.R", encoding = "UTF-8")
+#leer los datos de los archivos de los upas piloto 1 y piloto 2 ----
+source("leer_datos_archivos_UPAS_piloto.R", encoding = "UTF-8")
+```
+
+## flujos H2 redcap piloto 1
+
+```{r flujos_h2_p1, echo=FALSE}
+#h2 linea basal
+h2_lb<-gt_eco_estudio_data %>% filter(visit=="linea_basal") %>% select(id_tamizaje, id_estudio=h2_hhid, matches("h2_"))
+
+#h2 mes 4
+h2_m4<-gt_eco_estudio_data %>% filter(visit=="mes4") %>% select(id_tamizaje, id_estudio=h2_hhid, matches("h2_"))
+## agregar el prefijo m4 a las variables para identificar datos del piloto 2
+colnames(h2_m4) <- paste0("m4-", colnames(h2_m4))
+h2_m4<-h2_m4 %>% rename(id_tamizaje=`m4-id_tamizaje`, id_estudio=`m4-id_estudio`)
+
+#flujos h2 piloto 1
+h2_upas_piloto1<-h2_lb %>% select(id_tamizaje, id_estudio, h2_date, upa=h2_upa1_id_f1, flujo=h2_upa1_vol_v2 ) %>% bind_rows(
+  h2_lb %>% select(id_tamizaje, id_estudio, h2_date, upa=h2_upa2_id_f2, flujo=h2_upa2_vol_v3 )
+) %>% 
+  bind_rows(
+  h2_lb %>% select(id_tamizaje, id_estudio, h2_date, upa=h2_upa3_id_f3, flujo=h2_upa3_vol_v4 )
+)
+
+
+
+#filtros usados en piloto 1
+h2_filtros_piloto1<-h2_lb %>% select(h2_date, upa=h2_upa1_id_v1, id_filtro=h2_upa1_fid_v1 ) %>% bind_rows(
+  h2_lb %>% select(h2_date, upa=h2_upa2_id_v1, id_filtro=h2_upa2_fid_v1 )
+) %>% bind_rows(
+  h2_lb %>% select(h2_date, upa=h2_upa_p_id_v1, id_filtro=h2_upa_p_fid_v1 )
+)
+
+
+#upas filtros y volumen piloto1
+h2_flujos_piloto1<-h2_upas_piloto1 %>% left_join(
+  h2_filtros_piloto1
+) 
+
+#tabla piloto 1 flujos del H2
+h2_flujos_piloto1 %>% select(
+  id_tamizaje, id_estudio, fecha_h2=h2_date, upa, id_filtro, flujo
+) %>% arrange(id_estudio) %>% kable(caption = "<center>FLUJOS H2 <br> PILOTO 1</center>", 
+        align = "l") %>% kable_classic(
+          full_width=F, html_font = "Cambria"
+        )
+
+```
+
+
+## flujos H2 redcap piloto 2
+
+```{r flujos_h2_p2, echo=FALSE}
+
+
+#flujos h2 piloto 2
+h2_upas_piloto2<-h2_m4 %>% select(id_tamizaje, id_estudio, fecha=`m4-h2_date`, upa=`m4-h2_upa1_id_f1`, flujo=`m4-h2_upa1_vol_v2` ) %>% bind_rows(
+  h2_m4 %>% select(id_tamizaje, id_estudio, fecha=`m4-h2_date`, upa=`m4-h2_upa2_id_f2`, flujo=`m4-h2_upa2_vol_v3` )
+) %>% 
+  bind_rows(
+  h2_m4 %>% select(id_tamizaje, id_estudio, fecha=`m4-h2_date`, upa=`m4-h2_upa3_id_f3`, flujo=`m4-h2_upa3_vol_v4` )
+)
+
+#filtros usados en piloto 2
+h2_filtros_piloto2<-h2_m4 %>% select(fecha=`m4-h2_date`, upa=`m4-h2_upa_p_id_v1`, id_filtro=`m4-h2_upa_p_fid_v1` ) %>% bind_rows(
+  h2_m4 %>% select(fecha=`m4-h2_date`, upa=`m4-h2_upa2_p_id_v1`, id_filtro=`m4-h2_upa2_p_fid_v1` )
+) 
+
+
+#upas filtros y volumen piloto2
+h2_flujos_piloto2<-h2_upas_piloto2 %>% left_join(
+  h2_filtros_piloto2
+) 
+
+#tabla piloto 2 flujos del H2
+h2_flujos_piloto2 %>% select(
+  id_tamizaje, id_estudio, fecha, upa, id_filtro, flujo
+) %>% arrange(id_estudio) %>% filter(!is.na(upa)) %>%  kable(caption = "<center>FLUJOS H2 <br> PILOTO 2</center>", 
+        align = "l") %>% kable_classic(
+          full_width=F, html_font = "Cambria"
+        )
+
+```

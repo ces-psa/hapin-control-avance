@@ -1,0 +1,816 @@
+---
+title: "Reporte Filtros de Exposición"
+author: "Programa de Salud Ambiental - CES"
+#date: "28/11/2022"
+output: html_document
+---
+#   {.tabset}
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(kableExtra)
+library(readxl)
+library(formattable)
+
+
+#leer csv de filtros
+filtros_intensivo<-read_csv("data/filtros/HAPINGuatemalaExposu_DATA_2023-06-20_1230.csv")
+#buscar el mas reciente
+file_filtros<-list.files(
+  path = "data/filtros", pattern = "HAPINGuatemalaFiltro_DATA_.+csv", full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    export_time = file %>%
+      gsub(".+?_([-0-9_]+).csv", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(export_time))
+
+#cargar los datos
+dt_filtros<-read_csv(file_filtros$file, cols(.default = "c"),show_col_types = FALSE)
+ #renombrer columnas
+names(dt_filtros) <- dt_filtros[1,]
+dt_filtros<-dt_filtros[-1,]
+
+#leer blancos ecolectivos
+#buscar el mas reciente
+file_filtros_blancos<-list.files(
+  path = "data/filtros", pattern = "EcolectivosExposure_DATA_.+csv", full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    export_time = file %>%
+      gsub(".+?_([-0-9_]+).csv", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(export_time))
+
+#cargar los datos de blancos
+dt_filtros_blancos<-read_csv(file_filtros_blancos$file, cols(.default = "c"),show_col_types = FALSE)
+ #renombrer columnas
+names(dt_filtros_blancos) <- dt_filtros_blancos[1,]
+dt_filtros_blancos<-dt_filtros_blancos[-1,]
+
+#sacar lista de filtros blancos
+dt_filtros_blancos<-dt_filtros_blancos %>% filter(h4a_blank1=="1") %>% select(
+  id_upas=h4a_id_upas1, id_filtro=h4a_fid_upas1, fecha=h4a_timestamp1
+)
+
+#leer filtros usados en fuegos abiertos ecolectivos
+cat_fuego_abierto<-read_csv("data/dictionaries/cat_fuego_abierto_Ecolectivos.csv")
+
+#leer blancos piloto 1 y 2
+cat_blancos_piloto<-read_csv("data/dictionaries/cat_blancos_piloto_ecolectivos.csv")
+
+cat_pruebas_ecolectivos<-read_csv("data/dictionaries/cat_pruebas_ecolectivos.csv")
+
+#leer datos de redcap hapin II Emory
+file_hapin2<-list.files(
+  path = "data/exports", pattern = "HAPINIIGuatemala_DATA_.+csv", full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    export_time = file %>%
+      gsub(".+?_([-0-9_]+).csv", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(export_time))
+#cargar datos hapin II
+dt_hapin_II<-file_hapin2 %>% 
+  pull(file) %>%
+  read_csv(col_types = cols(.default = "c"), show_col_types = FALSE )
+  
+#filtros que cambiaron de UVG a código usado en 15mm hapin
+codigos_cambiados<-read_xlsx("data/filtros/cambio_ids_filtros.xlsx")
+
+#cargar datos de filtros usados en ecolectivos
+source(file = "scripts/0_get_ecolectivos_data.R", encoding = "UTF-8")
+#cargar datos de archivos de upas usados en ecolectivos
+#source(file = "scripts/0_get_upas_file_ecolectivos.R", encoding = "UTF-8")
+# Emory RedCap export data b4
+dt_b4<-read_csv("data/filtros/HAPINGuatemalaMainSt-H41H41OAWH41bcomplet_DATA_2023-03-02_1713.csv", show_col_types = FALSE)
+#extraer datos de osm
+source("scripts/0_get_osm_uvg.R")
+# existencias_arm_3
+# pesaje_arm_3
+# eventualidades_arm_3
+
+#Datis que ingresan en lab de pesaje ----
+dt_existencias<-dt_filtros %>% filter(redcap_event_name=="existencias_arm_3") %>%
+  select(record_id, matches("^weighing_"), matches("^weighning"))  
+
+#filtros ingresados en lab pesaje
+t_filtros_lab<-dt_existencias %>% group_by(weighning_size_filter,weighning_project) %>% summarize(weighning_size_filter, total=sum(as.numeric(weighning_amount_filter)) ) %>% distinct() %>% filter(!is.na(total)) %>% mutate(
+  #AQUI DEBE AGREGARSE LOS NUEVOS PROYECTOS
+  proyecto=recode(weighning_project, "1"="HAPIN", "2"="ECOLECTIVOS")
+) %>% select(-weighning_project)
+
+#filtros pesados en lab
+dt_pesaje<-dt_filtros %>%  filter(!is.na(tracked_filter_date_pesaje)) %>% 
+  filter(redcap_event_name=="pesaje_arm_3") %>% select(record_id,tracked_filters_send, matches("^tracked_filter_")) %>% select(record_id,tracked_filters_send, matches("_pesaje"))
+
+#tabla de filtros
+dt_pesaje_filtros<-dt_pesaje %>% gather(
+  key="variable", value = "value",-record_id, - tracked_filter_date_pesaje, - tracked_filter_operation_pesaje
+) %>% filter(grepl("^tracked_filter_id_",variable)) %>% select(
+  fecha=tracked_filter_date_pesaje, operacion=tracked_filter_operation_pesaje, id_filtro=value
+) %>% filter(!is.na(id_filtro)) %>%  mutate(
+  tipo_filtro=substr(toupper(id_filtro),1,3)
+) %>% select(operacion, id_filtro, tipo_filtro) %>% distinct() %>%  mutate(
+  tipo_filtro=case_when(
+    tipo_filtro=="3V5" ~ "15mm",
+    tipo_filtro=="3V3" ~ "37mm_hapin",
+    tipo_filtro=="ECO" ~ "37mm_ecolectivos"
+  )
+) %>% filter(operacion!="discard")
+
+#resumen de pesajes, eliminando duplicados ----
+t_pesajes_lab<-dt_pesaje %>% gather(
+    key="variable", value = "value",-record_id, - tracked_filter_date_pesaje, - tracked_filter_operation_pesaje,
+    - tracked_filter_proj_pesaje , -tracked_filters_send, - tracked_filters_send
+) %>% filter(grepl("^tracked_filter_id_",variable)) %>% select(
+    fecha=tracked_filter_date_pesaje, operacion=tracked_filter_operation_pesaje, proyecto=tracked_filter_proj_pesaje, fecha_envio=tracked_filters_send,id_filtro=value
+) %>% filter(!is.na(id_filtro)) %>%  mutate(
+    tipo_filtro=substr(id_filtro,1,3),
+    estado=if_else(!is.na(fecha_envio),"enviado","en uvg")
+) %>% select(operacion, id_filtro, tipo_filtro, estado) %>% distinct() %>% group_by(tipo_filtro,operacion, estado) %>% count() %>% mutate(
+  tipo_filtro=case_when(
+    tipo_filtro=="3V5" ~ "15mm",
+    tipo_filtro=="3V3" ~ "37mm_hapin",
+    tipo_filtro=="ECO" ~ "37mm_ecolectivos"
+  ),
+  #eliminar esta parte cuando se actualice la variable proyeto
+  project=case_when(
+    tipo_filtro=="15mm" ~ "HAPIN",
+    tipo_filtro=="37mm_hapin" ~ "HAPIN",
+    tipo_filtro=="37mm_ecolectivos" ~ "ECOLECTIVOS"
+  )
+) %>% filter(operacion!="discard")
+
+
+#datos que ingresan en Jalapa ----
+#registro en Inventario Jalapa
+dt_inventario_redcap<-dt_filtros %>% filter(!is.na(new_filter_date)) %>% filter(redcap_event_name=="registro_nuevos_fi_arm_1") %>%  select(record_id, matches("new_filter_"))
+
+dt_inventario_filtros<-dt_inventario_redcap %>% gather(
+  key = "variable", value="value", -record_id, -new_filter_date, -new_filter_source, -new_filter_size
+) %>% filter(grepl("^new_filter_id_",variable)) %>% transmute(
+  record_id, fecha=new_filter_date, origen=new_filter_source, tamano=new_filter_size, id_filtro=toupper(value)) %>% filter(!is.na(id_filtro))
+
+
+#Registro en Almacenamiento Jalapa
+dt_almacenamiento_redcap<-dt_filtros %>% filter(!is.na(tracked_filter_date)) %>%  select(record_id, matches("tracked_filter_"))
+  
+dt_almacenamiento_filtros<-dt_almacenamiento_redcap%>% gather(
+  key = "variable", value="value", -record_id, -tracked_filter_date, -tracked_filter_operation, -tracked_filter_location
+) %>% filter(grepl("^tracked_filter_id",variable)) %>% transmute(
+  record_id, fecha=tracked_filter_date, ubicacion=tracked_filter_location, operacion=tracked_filter_operation, id_filtro=toupper(value)
+) %>% filter(!is.na(id_filtro)) %>% filter(operacion=="store")
+
+
+dt_envios<-dt_almacenamiento_redcap%>% gather(
+  key = "variable", value="value", -record_id, -tracked_filter_date, -tracked_filter_operation, -tracked_filter_location, -tracked_filter_location_new, 
+) %>% filter(grepl("^tracked_filter_id",variable)) %>% transmute(
+  record_id, fecha=tracked_filter_date, ubicacion=tracked_filter_location, destino=tracked_filter_location_new, operacion=tracked_filter_operation, id_filtro=toupper(value)
+) %>% filter(!is.na(id_filtro)) %>% filter(operacion=="ship")
+
+
+
+
+```
+
+## Administración
+#### LABORATORIO DE PESAJE UVG
+
+```{r}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+  #tabla existencias
+#AGREGAR POR PROYECTO
+#t_filtros_lab %>% kable(caption="FILTROS REGISTRADOS EN EXISTENCIAS LAB PESAJE") %>% kable_classic()
+
+#tabla pesajes
+# t_pesajes_lab %>% arrange(desc(operacion), desc(tipo_filtro)) %>% ungroup() %>% select("Tipo de Filtro"=tipo_filtro, "Operación"=operacion, "Cantidad"=n) %>%   kable(caption="FILTROS PREPESADOS Y POSTPESADOS EN LAB PESAJE") %>% kable_classic()
+
+t_conteos_pesajes<-t_pesajes_lab %>% mutate(tipo=case_when(
+  tipo_filtro =="37mm_hapin" ~ "37mm",
+  tipo_filtro =="15mm" ~ "15mm",
+  tipo_filtro =="37mm_ecolectivos" ~ "37mm"
+)) %>% group_by(tipo, operacion, project, estado) %>% summarise(total=sum(n))
+
+#tabla para validar existencias disponibles por tipo de filtro y por proyecto en Lab Pesaje
+tabla_pesaje1<-t_filtros_lab %>% ungroup() %>%  transmute(tipo= weighning_size_filter,  total_existencias=total, proyecto) %>% left_join(
+    t_conteos_pesajes %>% select(tipo, operacion, total_prepesados=total, proyecto=project, estado) %>% 
+      filter(operacion=="preweigh") %>% group_by(tipo, operacion, proyecto) %>% summarise(
+        total_prepesados=sum(as.numeric(total_prepesados))
+      )
+) %>% select(-operacion) %>% mutate_all(., ~replace(.,is.na(.),0)) %>%  mutate(
+  sin_pesar=as.numeric(total_existencias) - as.numeric(total_prepesados)
+) %>% left_join(
+    t_conteos_pesajes %>% select(tipo, operacion, total_prepesados_disponibles=total, proyecto=project, estado) %>% 
+      filter(operacion=="preweigh" & estado=="en uvg") 
+) %>% 
+  select( `Proyecto que pertenece`=proyecto, `Tipo de filtro`=tipo,`Total de Inventario`=total_existencias,  `Disponibles sin pesar`=sin_pesar, `Prepesados disponibles`=total_prepesados_disponibles) %>%  arrange(
+ desc(`Proyecto que pertenece`), `Tipo de filtro`
+) %>% mutate_all(., ~replace(., is.na(.),0))
+
+tabla_pesaje1 %>% kable(caption = "<center>EXISTENCIAS <br>
+                  </center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria")
+
+tabla_lab_uvg<-t_filtros_lab %>% ungroup() %>%  transmute(tipo= weighning_size_filter,  total_existencias=total, proyecto) %>% left_join(
+    t_conteos_pesajes %>% select(tipo, operacion, total_prepesados=total, proyecto=project, estado) %>% 
+      filter(operacion=="preweigh") %>% group_by(tipo, operacion, proyecto) %>% summarise(
+        total_prepesados=sum(as.numeric(total_prepesados))
+      )
+) %>% select(-operacion) %>% mutate_all(., ~replace(.,is.na(.),0)) %>%  mutate(
+  sin_pesar=as.numeric(total_existencias) - as.numeric(total_prepesados)
+) %>% left_join(
+    t_conteos_pesajes %>% select(tipo, operacion, total_prepesados_disponibles=total, proyecto=project, estado) %>% 
+      filter(operacion=="preweigh" & estado=="en uvg") 
+) %>% 
+  select( `Proyecto que pertenece`=proyecto, `Tipo de filtro`=tipo,`Total de Inventario`=total_existencias,  `Disponibles sin pesar`=sin_pesar, `Prepesados disponibles`=total_prepesados_disponibles) %>%  arrange(
+ desc(`Proyecto que pertenece`), `Tipo de filtro`
+) %>% mutate_all(., ~replace(., is.na(.),0))
+
+
+```
+
+
+
+```{r}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+# dt_inventario_filtros %>% writexl::write_xlsx("output/duplicados_inventario.xlss")
+
+dt_pesajes_lab_uvg<-dt_pesaje %>% gather(
+    key="variable", value = "value",-record_id, - tracked_filter_date_pesaje, - tracked_filter_operation_pesaje,
+    - tracked_filter_proj_pesaje , -tracked_filters_send, - tracked_filters_send
+) %>% filter(grepl("^tracked_filter_id_",variable)) %>% select(
+    fecha=tracked_filter_date_pesaje, operacion=tracked_filter_operation_pesaje, proyecto=tracked_filter_proj_pesaje, fecha_envio=tracked_filters_send,id_filtro=value
+) %>% filter(!is.na(id_filtro)) %>%  mutate(
+    tipo_filtro=substr(id_filtro,1,3),
+    estado=if_else(!is.na(fecha_envio),"enviado","en uvg")
+) %>% transmute(operacion, id_filtro=toupper(id_filtro), tipo_filtro, estado, fecha_envio) %>% distinct() %>% mutate(
+  tipo_filtro=case_when(
+    tipo_filtro=="3V5" ~ "15mm",
+    tipo_filtro=="3V3" ~ "37mm_hapin",
+    tipo_filtro=="ECO" ~ "37mm_ecolectivos"
+  ),
+  #eliminar esta parte cuando se actualice la variable proyeto
+  project=case_when(
+    tipo_filtro=="15mm" ~ "HAPIN",
+    tipo_filtro=="37mm_hapin" ~ "HAPIN",
+    tipo_filtro=="37mm_ecolectivos" ~ "ECOLECTIVOS"
+  )
+)
+
+#tabla 2 Filtros en Jalapa proyecto, tipo_filtro, prepesados sin utilizar, prepesados utilizados
+dt_prepesados_enviados_jalapa<-dt_pesajes_lab_uvg %>% filter(estado=="enviado") %>%  group_by(project, tipo_filtro) %>% count() %>% 
+  arrange(desc(project), tipo_filtro) %>% select(Proyecto=project, tipo_filtro, Enviados_Jalapa=n)
+
+#sacar conteo de filtros pesados, recibidos en Jalapa y almacenados
+t_pre_inv_almacenamiento_envio<-dt_pesaje_filtros %>% filter(operacion=="preweigh") %>% mutate(prepesaje=1) %>% transmute(
+  id_filtro, prepesaje, origen="prepesaje"
+) %>% distinct() %>% left_join(
+  dt_inventario_filtros %>% transmute(id_filtro, inventario=1) %>% distinct()
+) %>% left_join(
+  dt_almacenamiento_filtros %>% filter(operacion=="store") %>% transmute(id_filtro, almacenamiento=1) %>% distinct()
+) %>% left_join(
+  dt_envios %>% transmute(id_filtro, envio=1) %>% distinct()
+) %>% 
+  group_by(prepesaje, inventario, almacenamiento, envio) %>% summarise(prepesados=sum(prepesaje), 
+                                                                    inventario_jalapa=sum(inventario),
+                                                                    almacenados_jalapa=sum(almacenamiento),
+                                                                    envio_jalapa=sum(envio)
+)
+#sacar los filtros que ha enviado lab Jalapa
+enviados_lab<-t_pre_inv_almacenamiento_envio %>% ungroup() %>%  transmute(
+  prepesados, inventario_jalapa, almacenados_jalapa, envio_jalapa
+) %>% kable(caption = "REVISION DE TRACKING REDCAP FILTROS") %>% kable_classic()
+
+filtros_intensivo<-filtros_intensivo %>% mutate_all(as.character)
+
+# filtros_intensivo %>% filter(redcap_event_name=="b3b4_arm_1") %>%  transmute(
+#   id=record_id, 
+#   fecha=as.character(h41_date), h41_kap1_ecm_fid,
+# h41_kap2_ecm_fid,
+# h41_sap_ecm_fid,
+# h41_rap1_ecm_fid,
+# h41_rap2_ecm_fid,
+# h41_hop_ecm_fid,
+# h41_aap_ecm_fid,
+# h41_m_ecm_fid,
+# h41_o_ecm_fid,
+# h41_c_ecm_fid,
+# h41_b_bgi_fid,
+# h41_b_skc_fid,
+# h41_b_ecm_fid,
+# h41_b_har_fid,
+# h41_kap1_ecm_fid_2,
+# h41_kap2_ecm_fid_2, 
+# h41_sap_ecm_fid_2,
+# h41_rap1_ecm_fid_2,
+# h41_rap2_ecm_fid_2,
+# h41_hop_ecm_fid_2,
+# h41_aap_ecm_fid_2,
+# h41_m_ecm_fid_2,
+# h41_o_ecm_fid_2,
+# h41_c_ecm_fid_2,
+# h41_b_ecm_fid_2,
+# h41_b_skc_fid_2,
+# h41_b_bgi_fid_2,
+# h41_b_har_fid_2,
+# )
+
+#filtros usados en b4
+filtros_h41_b4<-dt_b4 %>% filter(!is.na(h41_date)) %>% filter(redcap_event_name=="b4_arm_2") %>% transmute(
+ id=as.character(id), fecha=as.character(h41_date), h41_kap1_ecm_fid,
+h41_kap2_ecm_fid,
+h41_sap_ecm_fid,
+h41_rap1_ecm_fid,
+h41_rap2_ecm_fid,
+h41_hop_ecm_fid,
+h41_aap_ecm_fid,
+h41_m_ecm_fid,
+h41_o_ecm_fid,
+h41_c_ecm_fid,
+h41_b_bgi_fid,
+h41_b_skc_fid,
+h41_b_ecm_fid,
+h41_b_har_fid,
+h41_kap1_ecm_fid_2,
+h41_kap2_ecm_fid_2, 
+h41_sap_ecm_fid_2,
+h41_rap1_ecm_fid_2,
+h41_rap2_ecm_fid_2,
+h41_hop_ecm_fid_2,
+h41_aap_ecm_fid_2,
+h41_m_ecm_fid_2,
+h41_o_ecm_fid_2,
+h41_c_ecm_fid_2,
+h41_b_ecm_fid_2,
+h41_b_skc_fid_2,
+h41_b_bgi_fid_2,
+h41_b_har_fid_2,
+
+) %>% gather(
+  key = "varialbe", value = "value", -id, -fecha
+) %>% select(id, fecha, id_filtro=value) %>% mutate(
+  flag=substr(id_filtro,1,3),
+  tipo_filtro=case_when(
+    flag=="3M5" ~ "37mm",
+    flag=="3V5" ~ "15mm",
+    flag=="UVG" ~ "15mm"
+  )
+) %>% select(-flag) %>% filter(!is.na(tipo_filtro)) %>% mutate(origen="b4")
+
+
+
+
+#cargar set de datos de h41
+filtros_h41_24m<-dt_hapin_II %>% filter(!is.na(h41_date)) %>% filter(redcap_event_name=="24_month_arm_1") %>% transmute(
+ id= as.character(record_id), fecha=h41_date, h41_kap1_ecm_fid,
+h41_kap2_ecm_fid,
+h41_sap_ecm_fid,
+h41_rap1_ecm_fid,
+h41_rap2_ecm_fid,
+h41_hop_ecm_fid,
+h41_aap_ecm_fid,
+h41_m_ecm_fid,
+h41_o_ecm_fid,
+h41_c_ecm_fid,
+h41_b_bgi_fid,
+h41_b_skc_fid,
+h41_b_ecm_fid
+) %>% gather(
+  key = "varialbe", value = "value", -id, -fecha
+) %>% select(id, fecha, id_filtro=value) %>% mutate(
+  flag=substr(id_filtro,1,3),
+  tipo_filtro=case_when(
+    flag=="3M5" ~ "15mm",
+    flag=="3V5" ~ "15mm",
+    flag=="UVG" ~ "15mm"
+  )
+) %>% select(-flag) %>% filter(!is.na(tipo_filtro)) %>% mutate(origen="b5")
+
+filtros_h41_24mb<-dt_hapin_II %>% filter(!is.na(h41b_date)) %>% select(id=record_id, fecha=h41b_date,h41b_filter1,
+h41b_filter2,
+h41b_filter3 ) %>% gather(
+  key = "varialbe", value = "value", -id, -fecha
+) %>% select(id, fecha, id_filtro=value) %>% mutate(
+  flag=substr(id_filtro,1,3),
+  tipo_filtro=case_when(
+    flag=="3M5" ~ "15mm",
+    flag=="3V5" ~ "15mm",
+    flag=="UVG" ~ "15mm"
+  )
+)  %>%  select(-flag) %>% filter(!is.na(tipo_filtro)) %>% mutate(origen="b5_duplicado")
+
+filtros_h41_24m<-filtros_h41_24m %>% bind_rows(
+  filtros_h41_24mb
+) 
+
+filtros_h41_36m<-dt_hapin_II %>% filter(!is.na(h41_date_v2)) %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% select(
+  id=record_id, h41_date_v2, h41_c_filter,
+h41_cos_filter,
+h41_cos_filter_2,
+h41_b_fid_v2
+) %>% gather(
+  key = "variable", value = "value", -id, -h41_date_v2
+) %>% select(id, h41_date_v2, id_filtro=value) %>%  mutate(
+  flag=substr(id_filtro,1,3),
+  tipo_filtro=case_when(
+    flag=="3M5" ~ "15mm",
+    flag=="3V5" ~ "15mm",
+    flag=="3V1" ~ "15mm",
+    flag=="UVG" ~ "15mm"
+  )
+) %>% select(-flag) %>% filter(!is.na(tipo_filtro)) %>% mutate(origen="b6") %>% select(
+  id, fecha=h41_date_v2, id_filtro, tipo_filtro, origen
+)
+
+filtros_h41_48m<-dt_hapin_II %>% filter(!is.na(h41_date_v2)) %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>% select(
+  id=record_id, h41_date_v2, h41_c_filter,
+h41_cos_filter,
+h41_cos_filter_2,
+h41_b_fid_v2
+) %>% gather(
+  key = "variable", value = "value", -id, -h41_date_v2
+) %>% select(id, h41_date_v2, id_filtro=value) %>% filter(!is.na(id_filtro)) %>%  mutate(
+  flag=toupper(substr(id_filtro,1,3)),
+  tipo_filtro=case_when(
+    flag=="3M5" ~ "15mm",
+    flag=="3V5" ~ "15mm",
+    flag=="3V1" ~ "15mm",
+    flag=="UVG" ~ "15mm",
+    flag=="3V3" ~ "37mm"
+  )
+) %>% select(-flag) %>% filter(!is.na(tipo_filtro)) %>% mutate(origen="b7") %>% select(
+  id, fecha=h41_date_v2, id_filtro, tipo_filtro, origen
+)
+
+filtros_h41_54m<-dt_hapin_II %>% filter(!is.na(h41_date_v2)) %>% filter(redcap_event_name=="year4q3_54m_arm_1") %>% select(
+  id=record_id, h41_date_v2, h41_c_filter,
+h41_cos_filter,
+h41_cos_filter_2,
+h41_b_fid_v2
+) %>% gather(
+  key = "variable", value = "value", -id, -h41_date_v2
+) %>% select(id, h41_date_v2, id_filtro=value) %>%  mutate(
+  flag=toupper(substr(id_filtro,1,3)),
+  tipo_filtro=case_when(
+    flag=="3M5" ~ "15mm",
+    flag=="3V5" ~ "15mm",
+    flag=="3V1" ~ "15mm",
+    flag=="UVG" ~ "15mm",
+    flag=="3V3" ~ "37mm",
+  )
+) %>% select(-flag) %>% filter(!is.na(tipo_filtro)) %>% mutate(origen="b7_5") %>% select(
+  id, fecha=h41_date_v2, id_filtro, tipo_filtro, origen
+)
+
+filtros_h41_54m_local<-gt_osm_uvg_data %>%  filter(!is.na(hapi_date)) %>% filter(redcap_event_name=="54m_arm_2") %>% select(
+  id, hapi_date, hapi_c_ecm_filter,
+hapi_k_upas_filter,
+hapi_k_ecm_filter,
+hapi_k_upas_dup_filter,
+hapi_k_upas_ecm_filter,
+hapi_b_ecm_fid,
+hapi_b_upas_fid
+) %>% gather(
+  key = "variable", value = "value", -id, -hapi_date
+) %>% select(id, hapi_date, id_filtro=value) %>%  mutate(
+  flag=toupper(substr(id_filtro,1,3)),
+  tipo_filtro=case_when(
+    flag=="3M5" ~ "15mm",
+    flag=="3V5" ~ "15mm",
+    flag=="3V1" ~ "15mm",
+    flag=="UVG" ~ "15mm",
+    flag=="3V3" ~ "37mm",
+  )
+) %>% select(-flag) %>% filter(!is.na(tipo_filtro)) %>% mutate(origen="b7_5") %>% transmute(
+ # mutate(origen="54m_local") %>% transmute(
+  id, fecha=as.character(hapi_date), id_filtro, tipo_filtro, origen
+)
+
+filtros_h41_60m<-dt_hapin_II %>% filter(!is.na(h41_date_v2)) %>% filter(redcap_event_name=="year5_arm_1") %>% select(
+  id=record_id, h41_date_v2, h41_c_filter,
+h41_cos_filter,
+h41_cos_filter_2,
+h41_b_fid_v2
+) %>% gather(
+  key = "variable", value = "value", -id, -h41_date_v2
+) %>% select(id, h41_date_v2, id_filtro=value) %>% filter(!is.na(id_filtro)) %>%  mutate(
+  flag=toupper(substr(id_filtro,1,3)),
+  tipo_filtro=case_when(
+    flag=="3M5" ~ "15mm",
+    flag=="3V5" ~ "15mm",
+    flag=="3V1" ~ "15mm",
+    flag=="UVG" ~ "15mm",
+    flag=="3V3" ~ "37mm"
+  )
+) %>% select(-flag) %>% filter(!is.na(tipo_filtro)) %>% mutate(origen="b8") %>% select(
+  id, fecha=h41_date_v2, id_filtro, tipo_filtro, origen
+)
+
+
+#integrar todos los filtros usados en b5 y b6
+filtros_usados_hapin<-filtros_h41_24m %>% bind_rows(
+  filtros_h41_36m
+)%>% bind_rows(
+ filtros_h41_b4
+) %>% bind_rows(
+  filtros_h41_48m
+) %>% bind_rows(
+  filtros_h41_54m
+)%>% bind_rows(
+  filtros_h41_60m
+)
+
+filtros_h41_54m_local<-filtros_h41_54m_local %>% anti_join(
+  filtros_usados_hapin %>% select(id_filtro)
+)
+
+filtros_usados_hapin<-filtros_usados_hapin %>% bind_rows(
+  filtros_h41_54m_local
+)
+#datos de ecolectivos
+#datos piloto
+filtros_piloto_eco<-eco_estudio_data %>% filter(!is.na(h2_date)) %>% select(id_tamizaje, matches("*fid_")) %>% filter(
+  id_tamizaje!="99999"
+) %>% gather(
+  key = "variable", value = "value", -id_tamizaje
+) %>% filter(!is.na(value)) %>% select(id_tamizaje, id_filtro=value)
+
+#datos estudio ecolectivos
+filtros_estudio_eco<-eco_estudio_data %>% filter(!is.na(h2a_date)) %>% select(id_tamizaje, matches("*id_filt")) %>% gather(
+  key="variable", value="value", -id_tamizaje
+) %>% filter(!is.na(value)) %>% select(id_tamizaje, id_filtro=value) %>% distinct()
+
+filtros_usados_ecolecivos<- filtros_piloto_eco %>% mutate(usado="piloto") %>% bind_rows(
+ filtros_estudio_eco 
+) %>% mutate(usado=if_else(is.na(usado),"estudio",usado))
+
+filtros_usados_ecolecivos<-filtros_usados_ecolecivos %>% bind_rows(
+  cat_blancos_piloto %>% transmute(id_filtro, usado="piloto_blanco")
+) %>% bind_rows(
+  cat_pruebas_ecolectivos %>% transmute(id_filtro, usado=usado_en)
+) %>% bind_rows(
+  dt_filtros_blancos %>% transmute(id_filtro, usado="estudio_blancos")
+) %>% filter(substr(id_filtro,1,4)=="ECOT")
+
+# QC FILTROS QUE DEBEN INGRESARSE EN INVENTARIO DE FILTROS JALAPA
+# dt_pesajes_lab_uvg %>% filter(estado=="enviado") %>% left_join(
+#   dt_inventario_filtros %>% transmute(id_filtro, inventario=1) %>% distinct() %>% left_join(
+#     dt_inventario_filtros %>% transmute(id_filtro, record_id)
+#   )
+# ) %>% filter(is.na(inventario)) %>% writexl::write_xlsx("output/filtros/Ingresar_filtros_Inventario_jalapa.xlsx")
+# 
+
+#revisar uso de filtros enviados
+dt_filtros_integrados_general<- dt_pesajes_lab_uvg %>% filter(estado=="enviado") %>% left_join(
+  dt_inventario_filtros %>% transmute(id_filtro, inventario=1) %>% distinct() %>% left_join(
+    dt_inventario_filtros %>% transmute(id_filtro, record_id) 
+  )
+) %>% left_join(
+  filtros_usados_hapin %>% transmute(id_filtro, usados_hapin=1, visita=origen)
+) %>% left_join(
+  filtros_usados_ecolecivos %>% transmute(id_filtro, usados_ecolectivos=1, origen=usado)
+) %>% left_join(
+  dt_almacenamiento_filtros %>% transmute(id_filtro, fecha_almacenamiento=fecha, almacenamiento=1)
+) %>% left_join(
+  dt_envios %>% filter(destino=="UVG") %>%  transmute(id_filtro, envio=1)
+) %>% left_join(
+  dt_pesajes_lab_uvg %>% filter(operacion=="postweigh") %>% transmute(id_filtro, postpesado=1) 
+) 
+
+
+
+#corregir datos en almacenamiento
+dt_filtros_integrados_general %>% filter(!is.na(usados_hapin)) %>% filter(is.na(almacenamiento)) %>% transmute(
+  id_filtro, tipo_filtro
+) %>% left_join(
+  filtros_usados_hapin
+) %>% distinct() %>% writexl::write_xlsx("output/filtros/filtros_usados_hapin_pendientes_almacenamiento.xlsx")
+# pendientes de almacenar ecolectivos
+dt_filtros_integrados_general %>% filter(!is.na(usados_ecolectivos)) %>% filter(is.na(almacenamiento)) %>% transmute(
+  id_filtro, origen, inventario
+) %>% left_join(
+  filtros_usados_ecolecivos %>% select(id_tamizaje, id_filtro)
+) %>% writexl::write_xlsx("output/filtros/filtros_usados_ecolectivos_pendientes_almacenamiento.xlsx")
+
+dt_filtros_integrados_general %>% filter(project=="HAPIN") %>%  filter(!is.na(almacenamiento) | !is.na(postpesado)) %>% filter(
+  is.na(usados_hapin)
+) %>% writexl::write_xlsx("output/filtros/revision_no_estan_redcap.xlsx")
+
+#SACAR CONTEO DE FILTROS USADOS Y PENDIENTES DE ENVIAR
+dt_conteo_filtros_ubicacion<-dt_pesajes_lab_uvg %>% filter(operacion=="preweigh") %>% left_join(
+     filtros_usados_ecolecivos %>% transmute(id_filtro, usado_ecolectivos=usado)
+) %>% left_join(
+  filtros_usados_hapin %>% transmute(id_filtro, usado_hapin=origen)
+) %>% left_join(
+  dt_pesajes_lab_uvg %>% filter(operacion=="postweigh") %>% select(id_filtro, operacion_final=operacion)
+) %>% mutate(
+  ubicacion=case_when(
+    !is.na(operacion_final) ~ "postpesado_uvg",
+    !is.na(usado_ecolectivos) ~ "jalapa_ecolectivos",
+    !is.na(usado_hapin) ~ "jalapa_hapin",
+    TRUE ~ "jalapa_sin_usar"
+  )
+) 
+  
+dt_conteo_filtros_ubicacion_matriz<-dt_conteo_filtros_ubicacion %>% group_by(
+  project, tipo_filtro, ubicacion
+) %>% count()%>% arrange(desc(project), tipo_filtro) %>% 
+  mutate(
+    filtros_disponibles_Jalapa=case_when(
+      ubicacion=="jalapa_sin_usar" ~ n
+    ),
+    filtros_usados_sin_postpesar=case_when(
+      ubicacion=="jalapa_hapin" ~ n,
+      ubicacion=="jalapa_ecolectivos" ~ n,
+    ),
+    filtros_usados_postpesados=case_when(
+      ubicacion=="postpesado_uvg" ~ n
+    )
+  ) 
+
+#FILTROS DISPONIBLES EN JALAPA
+tabla_jalapa1<-dt_prepesados_enviados_jalapa %>% select(Proyecto, `Tipo filtro`=tipo_filtro,`Recibidos en Jalapa`=Enviados_Jalapa) %>% left_join(
+dt_conteo_filtros_ubicacion_matriz %>% ungroup() %>% transmute(Proyecto=project, `Tipo filtro`=tipo_filtro, `Filtros disponibles sin usar`=filtros_disponibles_Jalapa ) %>% filter(!is.na(`Filtros disponibles sin usar`)) )
+# %>% kable(caption = "FILTROS DISPONIBLES EN JALAPA") %>% kable_classic()
+
+tabla_matriz_filtros_jalapa<-dt_conteo_filtros_ubicacion_matriz %>% ungroup() %>% transmute(
+  Proyecto=project, `Tipo filtro`=tipo_filtro, filtros_usados_postpesados) %>% filter(!is.na(
+    filtros_usados_postpesados
+  )) %>% left_join(
+    dt_conteo_filtros_ubicacion_matriz %>% ungroup() %>% transmute(
+  Proyecto=project, `Tipo filtro`=tipo_filtro, filtros_usados_sin_postpesar ) %>% filter(!is.na(
+    filtros_usados_sin_postpesar
+  ))
+  ) %>% mutate(
+    Total_filtros_usados=as.numeric(filtros_usados_postpesados) + as.numeric(filtros_usados_sin_postpesar)
+  )  
+# %>% kable(
+#     caption = "FILTROS USADOS"
+#   ) %>% kable_classic()
+
+
+#QC para verificar datos en proyecto filtros redcap local, verificar trackings pendiente
+verificar_pesajes<-dt_pesaje_filtros %>% filter(operacion=="preweigh") %>%distinct() %>% 
+    mutate(prepesaje=1) %>% transmute(
+          id_filtro, prepesaje, origen="prepesaje"
+      ) %>% left_join(
+  dt_inventario_filtros %>% transmute(id_filtro, inventario=1) %>% distinct()
+) %>% left_join(
+  dt_almacenamiento_filtros %>% filter(operacion=="store") %>% transmute(id_filtro, almacenamiento=1)
+) %>% left_join(
+  dt_envios %>% filter(operacion=="ship") %>% distinct() %>% transmute(id_filtro, envio=1)
+)
+
+
+#verificar tracking de filtros
+
+dt_filtros_integrados<-dt_pesaje_filtros %>% filter(operacion=="preweigh") %>% mutate(prepesaje=1) %>% transmute(
+  id_filtro, prepesaje, origen="prepesaje"
+) %>% distinct() %>% left_join(
+  dt_inventario_filtros %>% transmute(id_filtro, inventario=1) %>% distinct()
+) %>% left_join(
+  dt_almacenamiento_filtros %>% filter(operacion=="store") %>% transmute(id_filtro, almacenamiento=1) %>% 
+    distinct()
+) %>% left_join(
+  dt_envios %>% filter(operacion=="ship") %>% transmute(id_filtro, envio=1) %>% distinct()
+) %>% left_join(
+ filtros_usados_hapin %>% select(id_filtro, origen_campo=origen ) %>% mutate(
+   b5=case_when(
+   origen_campo=="b5" ~ 1,
+   origen_campo=="b5_duplicado" ~ 1
+ ),
+ b6=case_when(
+   origen_campo=="b6" ~ 1
+ ),
+ b7=case_when(
+   origen_campo=="b7" ~ 1
+ )
+ ) %>% select(-origen_campo) %>% distinct()
+) %>%   left_join(
+  filtros_piloto_eco %>% distinct() %>% transmute(id_filtro, eco_piloto=1)
+) %>% left_join(
+  filtros_estudio_eco %>% distinct() %>% transmute(id_filtro, eco_estudio=1 )
+) 
+ 
+
+```
+
+```{r}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+dt_filtros_integrados_general %>% filter(operacion=="preweigh") %>% group_by(
+  project, tipo_filtro, visita_hapin=visita, visita_ecolectivos=origen
+) %>% count() %>% ungroup() %>% transmute(project, tipo_filtro,
+                                          visita=if_else(is.na(visita_hapin),visita_ecolectivos, visita_hapin),
+                                          cantidad_usada_campo=n) %>% filter(!is.na(visita)) %>% left_join(
+dt_filtros_integrados_general %>% filter(operacion=="preweigh") %>% group_by(
+  project, tipo_filtro, visita_hapin=visita, visita_ecolectivos=origen, postpesado
+) %>% count() %>% ungroup() %>% mutate(
+  cantidad_postpesados=if_else(!is.na(postpesado),as.numeric(n),0),
+  cantidad_pendiente_postpesar=if_else(is.na(postpesado),as.numeric(n),0)
+) %>%filter(postpesado==1) %>% transmute(project, tipo_filtro,
+                                          visita=if_else(is.na(visita_hapin),visita_ecolectivos, visita_hapin),
+                                          postpesados_uvg=n) %>% filter(!is.na(visita))
+) %>% mutate_if(., is.numeric, ~replace(.,is.na(.),0)) %>% select(
+`Proyecto que pertenece`=project, `Tipo de filtro`=tipo_filtro, `Visita`=visita,
+`Usado en campo`=cantidad_usada_campo, `Postpesados`=postpesados_uvg
+) %>%  kable(caption = "<center>CARGA DE TRABAJO<br>
+                  </center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria")
+
+
+# dt_filtros_integrados_general %>% filter(!is.na(postpesado)) %>% mutate(
+#   visita_usado=if_else(is.na(visita), origen,visita)
+# ) %>% filter(project=="HAPIN") %>% filter(is.na(usados_ecolectivos))
+
+
+
+```
+
+#### JALAPA
+```{r jalapa}
+# blancos_ecolectivos_general<-read_csv("data/dictionaries/cat_blancos_ecolectivos.csv", show_col_types = FALSE)
+# 
+# blancos_ecolectivos_general %>% mutate(id_filtro=h4a_fid_upas1) %>% filter(
+#   grepl("T",id_filtro)
+# ) %>% anti_join(
+#   cat_blancos_piloto %>% select(id_filtro)
+# ) %>% count()
+
+tabla_jalapa<-tabla_jalapa1 %>% mutate(
+ `Filtros disponibles sin usar`= case_when(
+        `Tipo filtro`  =="15mm"  ~ as.numeric(`Filtros disponibles sin usar`),
+         `Tipo filtro` =="37mm_hapin" ~ as.numeric(`Filtros disponibles sin usar`)- 3,
+         `Tipo filtro` =="37mm_ecolectivos" ~ as.numeric(`Filtros disponibles sin usar`) - 44 #blancos
+  )
+) %>% left_join(
+dt_filtros_integrados_general %>% mutate(usado_en=if_else(is.na(origen),visita, origen)) %>%  filter(operacion=="preweigh") %>% ungroup() %>%  group_by(
+  project,tipo_filtro, usado_en,envio,almacenamiento,postpesado
+) %>% count()  %>% filter(!is.na(almacenamiento) & is.na(envio) & !is.na(usado_en)) %>% ungroup() %>% select(
+  Proyecto=project, `Tipo filtro`=tipo_filtro, `Almacenados Pendientes de enviar`=n
+) %>%
+  group_by(Proyecto, `Tipo filtro`) %>%
+  summarize(`Almacenados Pendientes de enviar` = sum(`Almacenados Pendientes de enviar`))
+) %>% mutate_if(., is.numeric, ~replace(.,is.na(.),0)) %>%  kable(caption = "<center>EXISTENCIAS<br>
+                  </center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria")
+tabla_jalapa
+
+# dt_filtros_integrados_general %>% mutate(usado_en=if_else(is.na(origen),visita, origen)) %>%  filter(operacion=="preweigh") %>% ungroup() %>% filter(
+#   !is.na(almacenamiento) & is.na(envio)
+# ) %>% filter(project=="HAPIN") %>% left_join(
+#   filtros_usados_hapin, by="id_filtro"
+# ) %>% writexl::write_xlsx("output/revision_filtros_enviados.xlsx")
+
+```
+
+
+###### *Reporte Generado el  "`r Sys.Date() %>% format(.,"%A %d %B  %Y")`"*
+
+
+
+```{r}
+#revision de filtros faltantes
+# dt_filtros_usados_ecolectivos<-filtros_estudio_eco %>% filter(substr(id_filtro,1,4)=="ECOT") %>% mutate(
+#   usado_en="estudio"
+# ) %>% bind_rows(
+#   filtros_piloto_eco %>% filter(substr(id_filtro,1,4)=="ECOT") %>% mutate(
+#     usado_en="piloto"
+#   )
+# ) %>% bind_rows(
+#   cat_fuego_abierto %>% filter(substr(id_filtro,1,4)=="ECOT") %>%  transmute(id_tamizaje, id_filtro, usado_en="fuego_abierto")
+# ) %>% bind_rows(
+#   dt_filtros_blancos %>% filter(substr(id_filtro,1,4)=="ECOT") %>%  transmute(
+#     id_tamizaje="", id_filtro, usado_en="blanco_eco"
+#   )
+# ) %>% bind_rows(
+#   cat_blancos_piloto
+# ) %>% bind_rows(
+#   cat_pruebas_ecolectivos
+# )
+# 
+# dt_pesaje_filtros %>% filter(
+#   tipo_filtro=="37mm_ecolectivos" & operacion=="preweigh"
+# ) %>% anti_join(
+#   dt_filtros_usados_ecolectivos
+# ) %>% arrange(id_filtro) %>% writexl::write_xlsx(
+#   "output/revision_filtros_ecolectivos.xlsx"
+# )
+# 
+
+dt_pesaje_filtros %>% filter(substr(id_filtro,1,2)=="3V" & operacion=="preweigh") %>% anti_join(
+filtros_usados_hapin %>% select(id_filtro)
+) %>% arrange(tipo_filtro,id_filtro) %>% writexl::write_xlsx("output/revision_filtros_hapin.xlsx")
+
+```
+

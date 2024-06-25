@@ -1,0 +1,569 @@
+---
+title: "WEIGHING ROOM REPORT"
+output: 
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+
+~~~~
+ Reporte generado el "`r Sys.Date()`"
+~~~~
+
+
+
+```{r include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(kableExtra)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(scales)
+library(lubridate)
+#library(plotly)
+source("scripts/0_get_osm_uvg.R")
+
+files <- list.files(
+  path = "C:/Users/aramirez/ownCloud/Exposure_group/Export_Redcap/h41_h41b_h42_h43/",
+  pattern = "HAPINIIGuatemala-H41H42H43H41b_DATA_.+csv",
+  full.names = TRUE
+)
+
+file_info <- tibble(
+    file = files,
+    export_time = str_extract(file, "\\d{4}-\\d{2}-\\d{2}_\\d{4}") %>%
+      ymd_hm(tz = "America/New_York")
+  )
+  
+  most_recent_file <- file_info %>%
+    arrange(desc(export_time)) %>%
+    slice(1)
+  
+  file_h41_h41b <- most_recent_file$file
+
+# datos de redcap
+#leer archivos h41
+#buscar el mas reciente----
+# file_h41_h41b<-list.files(
+#   path = "C:/Users/aramirez/ownCloud/Exposure_group/Export_Redcap/h41_h41b_h42_h43/", pattern = "HAPINIIGuatemala-H41H42H43H41b_DATA_.+csv", full.names = TRUE
+# ) %>%  
+#   tibble(
+#     file = .,
+#     export_time = file %>%
+#       gsub(".+?_([-0-9_]+).csv", "//1", .) %>%
+#       lubridate::ymd_hm(tz = "America/New_York")
+#   ) %>%
+#   slice(which.max(export_time))
+# 
+#cargar los datos
+dt_h41_h41b<-read_csv(file_h41_h41b, cols(.default = "c"),show_col_types = FALSE)
+#renombrer columnas
+names(dt_h41_h41b) <- dt_h41_h41b[1,]
+dt_h41_h41b<-dt_h41_h41b[-1,]
+dt_h41_h41b<-dt_h41_h41b %>% filter(record_id!="99999")
+
+
+#preparar data set para conteos de B5
+##Table 1 - number of ECM files expected based on child
+###B5
+child_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41_person___3 == 1 & !is.na(h41_c_ecm_id) & !is.na(h41_c_ecm_fid)) %>% select(record_id, h41_person___3, h41_c_ecm_id, h41_c_ecm_fid, fecha=h41_date) %>% filter(h41_c_ecm_id!="888" )
+
+#duplicados en b5
+child_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>%  
+  filter(h41b_envir1 == 10 & h41b_type1 == 1)
+
+child_duplicate2_B5 <-  dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir2 == 10 & h41b_type2 == 1) %>% select(record_id, h41b_envir2, h41b_type2, fecha=h41b_date)
+
+child_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir3 == 10 & h41b_type3 == 1) %>% select(record_id, h41b_envir3,h41b_type3)
+
+##Table 1 - number of ECM files expected based on mother
+###B5
+mother_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41_person___1 == 1 & !is.na(h41_m_ecm_id) & !is.na(h41_m_ecm_fid)) %>% select(
+    record_id, h41_person___1, h41_m_ecm_id, h41_m_ecm_fid, fecha=h41_date
+  ) %>% filter(h41_m_ecm_id!="888")
+
+mother_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir1 == 8 & h41b_type1 == 1) %>% select(record_id, h41b_envir1, h41b_type1, fecha=h41_date)
+
+mother_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir2 == 8 & h41b_type2 == 1) %>% select(record_id, h41b_envir2, h41b_type2)
+
+mother_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir3 == 8 & h41b_type3 == 1) %>% select(record_id, h41b_envir3, h41b_type3)
+
+
+##Table 1 - number of ECM files expected based on kitchen
+###B5
+kitchen_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41_envir___1 == 1 | h41_envir___2 == 1) %>% select(record_id, h41_envir___1, h41_envir___2, h41_kap1_ecm_id, h41_kap1_ecm_fid, fecha=h41_date)
+
+kitchen_principal_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41b_envir1 == 1 & h41b_type1 == 1) %>% select(record_id, h41b_envir1, h41b_type1, h41b_ecm1, h41b_filter1, fecha=h41_date ) %>% filter(h41b_ecm1!="888")
+
+kitchen_principal_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41b_envir2 == 1 & h41b_type2 == 1) %>% select(record_id, h41b_envir2, h41b_type2, h41b_ecm2, 
+                                                        h41b_filter2, fecha=h41_date) %>% filter(h41b_ecm2!="888")
+
+kitchen_principal_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir3 == 1 & h41b_type3 == 1)
+
+kitchen_secondary_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir1 == 2 & h41b_type1 == 1)
+
+kitchen_secondary_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir2 == 2 & h41b_type2 == 1)
+
+kitchen_secondary_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir3 == 2 & h41b_type3 == 1)
+
+kitchen_b5_total <- kitchen_B5 %>% count() %>% .$n + kitchen_principal_duplicate1_B5 %>% count() %>% .$n + kitchen_principal_duplicate2_B5 %>% count() %>% .$n
+
+##Table 1 - number of ECM files expected based on bedroom
+###B5
+bedroom_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41_envir___3 == 1 | h41_envir___4 == 1 | h41_envir___5 == 1) %>% select(
+    record_id, h41_envir___3, h41_envir___4, h41_sap_ecm_id, h41_sap_ecm_fid, fecha=h41_date
+  ) %>% filter(h41_sap_ecm_id!="888")
+
+bedroom_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir1 == 3 & h41b_type1 == 1)
+
+bedroom_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir2 == 3 & h41b_type2 == 1)
+
+bedroom_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir3 == 3 & h41b_type3 == 1)
+
+other_room_primary_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir1 == 4 & h41b_type1 == 1)
+
+other_room_primary_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41b_envir2 == 4 & h41b_type2 == 1)
+
+other_room_primary_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41b_envir3 == 4 & h41b_type3 == 1)
+
+other_room_secondary_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir1 == 5 & h41b_type1 == 1)
+
+other_room_secondary_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41b_envir2 == 5 & h41b_type2 == 1)
+
+other_room_secondary_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41b_envir3 == 5 & h41b_type3 == 1)
+
+
+##Table 1 - number of ECM files expected based on OAW
+###B5
+oaw_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41_person___2 == 1 & !is.na(h41_o_ecm_id) & !is.na(h41_o_ecm_fid)) %>% select(
+    record_id, h41_person___2, h41_o_ecm_id, h41_o_ecm_fid, fecha=h41_date
+  ) %>% filter(h41_o_ecm_id!="888")
+
+oaw_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir1 == 9 & h41b_type1 == 1)
+
+oaw_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir2 == 9 & h41b_type2 == 1)
+
+oaw_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir3 == 9 & h41b_type3 == 1)
+
+###B6
+child_B6 <-  dt_h41_h41b %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>%   
+  filter( !is.na(h41_c_device) & !is.na(h41_c_filter)) %>% select(
+    record_id, c41_child_v2, h41_c_device,h41_c_filter,  fecha=h41_date_v2
+  )
+
+###B7
+child_B7 <-  dt_h41_h41b %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>%   
+  filter( !is.na(h41_c_device) & !is.na(h41_c_filter)) %>% select(
+    record_id, c41_child_v2, h41_c_device,h41_c_filter, fecha=h41_date_v2
+  )
+###B7
+child_B7_blancos <- dt_h41_h41b %>% filter(redcap_event_name=="year4q3_54m_arm_1") %>%   
+  filter( !is.na(h41_c_device) & !is.na(h41_b_fid_v2)) %>% select(
+    record_id, c41_child_v2, h41_blank_v2, h41_b_id_v2,h41_b_fid_v2,fecha=h41_date_v2
+  )
+
+###B7.5
+###B7
+child_B75 <-  dt_h41_h41b %>% filter(redcap_event_name=="year4q3_54m_arm_1") %>%   
+  filter( !is.na(h41_c_device) & !is.na(h41_c_filter)) %>% select(
+    record_id, c41_child_v2, h41_c_device,h41_c_filter, fecha=h41_date_v2
+  )
+
+# child_B75_local<-gt_osm_uvg_data %>% filter(!is.na(hapi_date)) %>% select(
+#     record_id=id, hapi_c_ecm_filter, hapi_k_upas_filter, hapi_k_ecm_filter, hapi_b_ecm_fid,
+#     hapi_b_ecm_fid, hapi_b_upas_fid, hapi_k_upas_dup_filter, hapi_k_upas_ecm_filter, fecha=hapi_date
+#   )
+
+child_B75_local<-child_B75_local %>% gather(
+  key = "variable", value="value", -record_id, -fecha
+) %>% filter(!is.na(value)) %>% transmute(
+  record_id, fecha, id_filtro=value, tipo=if_else(substr(id_filtro,1,3)=="3V3","37","15")
+)
+
+child_B75<-child_B75 %>% bind_rows(
+  child_B75_local %>% transmute(record_id, h41_c_filter=id_filtro, fecha=as.character(fecha))
+)
+child_B75_local<-child_B75_local %>% anti_join(
+  child_B75 %>% select(id_filtro=h41_c_filter)
+)
+
+
+
+kitchen_B5_integrado <- kitchen_B5 %>% select(
+  record_id, id_ecm=h41_kap1_ecm_id, id_filtro=h41_kap1_ecm_fid, fecha
+) %>% bind_rows(
+  kitchen_principal_duplicate1_B5 %>% select(
+    record_id, id_ecm=h41b_ecm1, id_filtro=h41b_filter1, fecha
+  ) 
+  ) %>% bind_rows(
+    kitchen_principal_duplicate2_B5 %>% select(
+      record_id, id_ecm=h41b_ecm2, id_filtro=h41b_filter2, fecha
+    ) 
+  )
+
+
+#leer los rds de lab pesaje
+rds_hapin_prepesaje_15<-readRDS("C:/GitHub_repo/qc_exposure_hapin/rds/hapin_prepesaje_15.rds")
+rds_hapin_pospesaje_15<-readRDS("C:/GitHub_repo/qc_exposure_hapin/rds/hapin_pospesaje_15.rds")
+rds_hapin_prepesaje_37<-readRDS("C:/GitHub_repo/qc_exposure_hapin/rds/hapin_prepesaje_37.rds")
+
+#INTEGRAR DATOS DE ECM Y FILTROS REDCAP ----
+
+#filter id matches en b5
+h41_filtros_b5<-child_B5 %>% transmute(id=record_id,
+                       id_ecm=if_else(
+                         str_length(h41_c_ecm_id)>2, paste0("ECM00",h41_c_ecm_id), paste0("ECM000",h41_c_ecm_id)
+                       ),
+                       id_filtro=h41_c_ecm_fid,
+                       fecha) %>% bind_rows(
+mother_B5 %>% transmute(id=record_id,
+                        id_ecm=if_else(
+                        str_length(h41_m_ecm_id)>2, paste0("ECM00", h41_m_ecm_id), paste0("ECM000",h41_m_ecm_id)
+                        ), id_filtro=h41_m_ecm_fid, fecha)
+                       ) %>% bind_rows(
+kitchen_B5 %>% transmute(id=record_id,
+                         id_ecm=if_else(
+                      str_length(h41_kap1_ecm_id)>2, paste0("ECM00", h41_kap1_ecm_id), paste0("ECM000", h41_kap1_ecm_id)
+                      ),
+                      id_filtro=h41_kap1_ecm_fid, fecha
+                         )
+                       ) %>% bind_rows(
+kitchen_principal_duplicate1_B5 %>% transmute(
+  id=record_id, id_ecm=if_else(
+    str_length(h41b_ecm1)>2, paste0("ECM00", h41b_ecm1), paste0("ECM000", h41b_ecm1)
+  ),
+  id_filtro=h41b_filter1, fecha
+)
+                       ) %>% bind_rows(
+kitchen_principal_duplicate2_B5 %>% transmute(
+  id=record_id, id_ecm=if_else(
+    str_length(h41b_ecm2)>2, paste0("ECM00", h41b_ecm2), paste0("ECM000",h41b_ecm2)
+  ), id_filtro=h41b_filter2, fecha
+)
+                       ) %>% bind_rows(
+bedroom_B5 %>% transmute(
+id=record_id, id_ecm=if_else(
+  str_length(h41_sap_ecm_id)>2, paste0("ECM00", h41_sap_ecm_id), paste0("ECM000", h41_sap_ecm_id)
+), id_filtro=h41_sap_ecm_fid, fecha
+)
+                       ) %>% bind_rows(
+oaw_B5 %>% transmute(
+  id=record_id, id_ecm=if_else(
+    str_length(h41_o_ecm_id)>2, paste0("ECM00", h41_o_ecm_id), paste0("ECM000", h41_o_ecm_id)
+  ), id_filtro=h41_o_ecm_fid, fecha
+)
+                       )
+
+h41_filtros_b5<-h41_filtros_b5 %>% filter(id_filtro!="888")
+#ecm filtros b6
+h41_filtros_b6<- child_B6 %>% transmute(
+  id=record_id, id_ecm=if_else(
+str_length(h41_c_device)>2, paste0("ECM00",h41_c_device),paste0("ECM000",h41_c_device)
+  ), id_filtro=h41_c_filter, fecha
+)
+
+h41_filtros_b7<- child_B7 %>% transmute(
+  id=record_id, id_ecm=if_else(
+    str_length(h41_c_device)>2, paste0("ECM00", h41_c_device), paste0("ECM000", h41_c_device)
+  ), id_filtro=h41_c_filter, fecha
+) %>% bind_rows(
+child_B7_blancos %>% transmute(
+  id=record_id, id_ecm=case_when(
+  h41_blank_v2=="1" ~ if_else(str_length(h41_b_id_v2)>2, paste0("ECM00", h41_b_id_v2), paste0("ECM000", h41_b_id_v2)),
+  h41_blank_v2=="5" ~ if_else(str_length(h41_b_id_v2)>2, paste0("PSP00", h41_b_id_v2), paste0("PSP000", h41_b_id_v2))
+  ), id_filtro=h41_b_fid_v2, fecha,
+  blanco="Si"
+)
+  
+)
+
+
+
+#eliminar los blancos de los rds de pesaje ----
+#quitar blancos y duplicados
+rds_hapin_prepesaje_15_clean<-rds_hapin_prepesaje_15 %>% mutate(
+  flag=substr(filter_id_exactly_as_on_label,1,3),
+  id_filtro=filter_id_exactly_as_on_label
+) %>% filter(flag=="3V5" & is.na(dup_prompt) & is.na(action_needed)) %>% select(-flag) %>% mutate(
+  tipo_filtro="15"
+)
+# # REVISAR FILTROS REPETIDOS
+# rds_hapin_prepesaje_15_clean %>% group_by(id_filtro) %>% count() %>% filter(n>1)
+# rds_hapin_prepesaje_15_clean %>% filter(id_filtro=="3V51973" | id_filtro=="3V52060")
+
+rds_hapin_pospesaje_15_clean<-rds_hapin_pospesaje_15 %>% mutate(
+  flag=substr(filter_id_exactly_as_on_label,1,3),
+  id_filtro=filter_id_exactly_as_on_label
+) %>% filter(flag=="3V5" & is.na(dup_prompt) & is.na(action_needed)) %>% select(-flag) %>% mutate(
+  tipo_filtro="15"
+)
+
+# rds_hapin_pospesaje_15_clean %>% group_by(id_filtro) %>% count() %>% filter(n>1)
+# rds_hapin_pospesaje_15_clean %>% filter( id_filtro=="3V51676")
+
+rds_hapin_prepesaje_37_clean<-rds_hapin_prepesaje_37 %>% mutate(
+  flag=substr(filter_id_exactly_as_on_label,1,3),
+  id_filtro=filter_id_exactly_as_on_label
+) %>% filter(flag=="3V3" & is.na(dup_prompt) & is.na(action_needed)) %>% select(-flag) %>% mutate(
+  tipo_filtro="37"
+)
+
+ #rds_hapin_prepesaje_37_clean %>% group_by(id_filtro) %>% count() %>% filter(n>1)
+
+
+
+```
+
+```{r}
+#integrar mass deposition y datos de redacap para b5
+# h41_filtros_b5 %>%select(id, id_ecm, id_filtro, fecha) %>%   left_join(
+# rds_hapin_prepesaje_15 %>% transmute(id_filtro=filter_id , prepesaje="Si") %>% distinct()
+# ) %>% filter(is.na(prepesaje)) %>% View()
+
+h41_filtros_b5<-h41_filtros_b5 %>% left_join(
+  rds_hapin_prepesaje_15_clean %>% select(id_filtro, promedio_prepesaje=mean_weight_mg  )
+) %>% left_join(
+  rds_hapin_pospesaje_15_clean %>% select(id_filtro, promedio_pospesaje=mean_weight_mg)
+) %>% left_join(
+  rds_hapin_prepesaje_37_clean %>% transmute(id_filtro, promedio_prepesaje=as.double(mean_weight_mg))
+)%>% mutate(
+  mass_deposition_b5=as.double(promedio_pospesaje) - as.double(promedio_prepesaje)
+)
+
+#integrar mass deposition y datos de redacap para b6
+h41_filtros_b6<-h41_filtros_b6 %>% left_join(
+  rds_hapin_prepesaje_15_clean %>% select(id_filtro, promedio_prepesaje=mean_weight_mg  )
+) %>% left_join(
+  rds_hapin_pospesaje_15_clean %>% select(id_filtro, promedio_pospesaje=mean_weight_mg)
+)  %>% left_join(
+  rds_hapin_prepesaje_37_clean %>% transmute(id_filtro, promedio_prepesaje=as.double(mean_weight_mg))
+) %>% mutate(
+  mass_deposition_b6=as.double(promedio_pospesaje) - as.double(promedio_prepesaje)
+)
+
+#convertir el promedio en double
+rds_hapin_prepesaje_37_review <- rds_hapin_prepesaje_37_clean %>% 
+  transmute(id_filtro, promedio_prepesaje = round(as.numeric(mean_weight_mg), 3), tipo_filtro)
+
+
+#integrar mass deposition y datos de redacap para b7
+h41_filtros_b7<-h41_filtros_b7 %>% left_join(
+  rds_hapin_prepesaje_15_clean %>% select(id_filtro, promedio_prepesaje=mean_weight_mg) 
+) %>% left_join(
+  rds_hapin_pospesaje_15_clean %>% select(id_filtro, promedio_pospesaje=mean_weight_mg)
+) %>% left_join(
+   rds_hapin_prepesaje_37_review %>% transmute(id_filtro, promedio_prepesaje_37=promedio_prepesaje)
+)  %>% mutate(
+  promedio_prepesaje=if_else(is.na(promedio_prepesaje), promedio_prepesaje_37, promedio_prepesaje),
+  mass_deposition_b7= as.double(promedio_pospesaje) - as.double(promedio_prepesaje)
+) %>% select(-promedio_prepesaje_37)
+
+
+```
+
+
+
+
+```{r}
+# 
+# # # Convertir la columna "fecha" a formato de fecha
+# h41_filtros_b5$fecha <- as.Date(h41_filtros_b5$fecha)
+# 
+# # Crear grupos de fechas para el eje x (por ejemplo, cada mes)
+# intervalos_fechas <- h41_filtros_b5 %>%
+#   mutate(grupo_fecha = cut.Date(fecha, breaks = "1 month")) %>%
+#   select(grupo_fecha) %>%
+#   distinct()
+# 
+# # Crear el gráfico utilizando ggplot2 con intervalos de fechas en el eje x
+# gg <- ggplot(h41_filtros_b5, aes(x = fecha, y = mass_deposition_b5)) +
+#   geom_point(aes(text = paste("ID filtro: ", id_filtro, "<br>",
+#                               "Promedio prepesaje: ", promedio_prepesaje, "<br>",
+#                               "Promedio pospesaje: ", promedio_pospesaje)), size = 2) +
+#   geom_smooth(method = "lm", se = FALSE, color = "blue") +
+#   labs(title = "Diferencia de masa (pospesaje - prepesaje) vs Fecha",
+#        x = "Fecha",
+#        y = "Diferencia de masa (g)") +
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+#   scale_x_date(labels = date_format("%Y-%m-%d"), date_breaks = "1 month")
+# 
+# # Convertir el gráfico a un gráfico interactivo utilizando plotly
+# ggplotly(gg)
+
+
+```
+
+#### Table 1 Gravimetric process completeness
+```{r}
+
+
+#armar la tabla 1
+actividad<-c("Total Filters (H41)","Filters pre-weight","Filters post-weight")
+tabla1<-data.frame(actividad=actividad)
+tabla1_datos <- tabla1 %>% mutate(
+  B5=case_when(
+    actividad=="Total Filters (H41)" ~ h41_filtros_b5 %>% distinct() %>%  count() %>% .$n,
+    actividad=="Filters pre-weight" ~ h41_filtros_b5 %>% distinct() %>%   filter(!is.na(promedio_prepesaje)) %>%  count() %>% .$n,
+    actividad=="Filters post-weight" ~ h41_filtros_b5 %>% distinct() %>%  filter(!is.na(promedio_pospesaje)) %>%  count() %>% .$n,
+  ),
+   B6=case_when(
+    actividad=="Total Filters (H41)" ~ h41_filtros_b6 %>% distinct() %>%  count() %>% .$n,
+    actividad=="Filters pre-weight" ~ h41_filtros_b6 %>% distinct() %>%   filter(!is.na(promedio_prepesaje)) %>%  count() %>% .$n,
+    actividad=="Filters post-weight" ~ h41_filtros_b6 %>% distinct() %>%  filter(!is.na(promedio_pospesaje)) %>%  count() %>% .$n,
+  ),
+   B7=case_when(
+    actividad=="Total Filters (H41)" ~ h41_filtros_b7 %>% distinct() %>%  count() %>% .$n,
+    actividad=="Filters pre-weight" ~ h41_filtros_b7 %>% distinct() %>%   filter(!is.na(promedio_prepesaje)) %>%  count() %>% .$n,
+    actividad=="Filters post-weight" ~ h41_filtros_b7 %>% distinct() %>%  filter(!is.na(promedio_pospesaje)) %>%  count() %>% .$n,
+  )
+)
+
+tabla1_proporciones <- tabla1_datos %>%
+  mutate(
+    B5_prop = paste0(B5, " (", round((B5 / lag(B5)) * 100,1), "%)"),
+    B6_prop = paste0(B6, " (", round((B6 / lag(B6)) * 100,1), "%)"),
+    B7_prop = paste0(B7, " (", round((B7 / lag(B7)) * 100,1), "%)")
+  )
+tabla1_datos<-tabla1_proporciones %>% mutate(
+  B5=if_else(actividad=="Total Filters (H41)", as.character(B5), B5_prop),
+  B6=if_else(actividad=="Total Filters (H41)", as.character(B6), B6_prop),
+  B7=if_else(actividad=="Total Filters (H41)", as.character(B7), B7_prop),
+) %>% select(Activity=actividad, B5, B6, B7)
+
+
+
+
+tabla1_datos %>% kable() %>% 
+  kable_classic(full_width=F, html_font="Cambria") %>% 
+  column_spec(1, bold = TRUE) %>%
+  footnote( general = "<span style='color: red;'>3V50938 filtro roto en acondicionamiento,  los filtros: 3V50267, 3V50047, 3V50296 </span> pending to Reweigh in B5 pos",
+            escape=FALSE
+  )
+
+
+
+#agregar nota: B5: 3V50938, 3V50267, 3V50047, 3V50296
+
+
+
+```
+
+```{r}
+#cargar datos de sootscan
+#pre 15
+rds_ss_hapin_pre<-readRDS("C:/Users/aramirez/Desktop/Sootscan/3 BC Calculations/ss_pre15_hapin.rds")
+rds_ss_hapin_pre_15_ids<- rds_ss_hapin_pre %>% mutate(tipo=substr(filter_id,1,3)) %>% filter(tipo=="3V5") %>% select(filter_id) %>% distinct()
+#post 15
+rds_ss_hapin_pos<-readRDS("C:/Users/aramirez/Desktop/Sootscan/3 BC Calculations/ss_post15_hapin.rds")
+rds_ss_hapin_pos_15_ids<- rds_ss_hapin_pos %>% mutate(tipo=substr(filter_id,1,3)) %>% filter(tipo=="3V5") %>% select(filter_id) %>% distinct()
+
+#pre 37
+rds_ss_hapin_pre_37<-readRDS("C:/Users/aramirez/Desktop/Sootscan/3 BC Calculations/ss_pre37_hapin.rds")
+rds_ss_hapin_pre_37_ids<- rds_ss_hapin_pre_37 %>% mutate(tipo=substr(filter_id,1,3)) %>% filter(tipo=="3V3") %>% select(filter_id) %>% distinct()
+#integrar ids pre sootscan hapin
+rds_ss_hapin_pre_integrado<-rds_ss_hapin_pre_15_ids %>% bind_rows(
+  rds_ss_hapin_pre_37_ids
+)
+
+#integrar datos redcap y sootscan
+#b5
+h41_filtros_b5_ss<-h41_filtros_b5 %>% left_join(
+  rds_ss_hapin_pre_integrado %>% transmute(id_filtro=filter_id, pre_sootscan="Si")
+) %>% left_join(
+  rds_ss_hapin_pos_15_ids %>% transmute(id_filtro=filter_id, pos_sootscan="Si")
+)
+
+#b6
+h41_filtros_b6_ss<-h41_filtros_b6 %>% left_join(
+  rds_ss_hapin_pre_integrado %>% transmute(id_filtro=filter_id, pre_sootscan="Si")
+) %>% left_join(
+  rds_ss_hapin_pos_15_ids %>% transmute(id_filtro=filter_id, pos_sootscan="Si")
+)
+
+#b7
+h41_filtros_b7_ss<-h41_filtros_b7 %>% left_join(
+  rds_ss_hapin_pre_integrado %>% transmute(id_filtro=filter_id, pre_sootscan="Si")
+) %>% left_join(
+  rds_ss_hapin_pos_15_ids %>% transmute(id_filtro=filter_id, pos_sootscan="Si")
+)
+
+```
+
+#### Table 2  Black Carbon process completeness
+```{r}
+#armar la tabla 2
+actividad2<-c("Total Filters (H41)","Filters pre sootscan","Filters post sootscan")
+tabla2<-data.frame(Activity=actividad2)
+tabla2_datos <- tabla2 %>% mutate(
+  B5=case_when(
+    Activity=="Total Filters (H41)" ~ h41_filtros_b5 %>% distinct() %>% count() %>% .$n,
+    Activity=="Filters pre sootscan" ~ h41_filtros_b5_ss %>% filter(pre_sootscan=="Si") %>% distinct() %>% count() %>% .$n,
+    Activity=="Filters post sootscan" ~ h41_filtros_b5_ss %>% filter(pos_sootscan=="Si") %>% distinct() %>% count() %>% .$n,
+  ),
+  B6=case_when(
+    Activity=="Total Filters (H41)" ~ h41_filtros_b6 %>% distinct() %>% count() %>% .$n,
+     Activity=="Filters pre sootscan" ~ h41_filtros_b6_ss %>% filter(pre_sootscan=="Si") %>% distinct() %>% count() %>% .$n,
+    Activity=="Filters post sootscan" ~ h41_filtros_b6_ss %>% filter(pos_sootscan=="Si") %>% distinct() %>% count() %>% .$n,
+  ),
+  B7=case_when(
+    Activity=="Total Filters (H41)" ~ h41_filtros_b7 %>% distinct() %>% count() %>% .$n,
+     Activity=="Filters pre sootscan" ~ h41_filtros_b7_ss %>% filter(pre_sootscan=="Si") %>% distinct() %>% count() %>% .$n,
+    Activity=="Filters post sootscan" ~ h41_filtros_b7_ss %>% filter(pos_sootscan=="Si") %>% distinct() %>% count() %>% .$n,
+  )
+)
+
+
+tabla2_proporciones <- tabla2_datos %>%
+  mutate(
+    B5_prop = paste0(B5, " (", round((B5 / lag(B5)) * 100,1), "%)"),
+    B6_prop = paste0(B6, " (", round((B6 / lag(B6)) * 100,1), "%)"),
+    B7_prop = paste0(B7, " (", round((B7 / lag(B7)) * 100,1), "%)")
+  )
+tabla2_datos<-tabla2_proporciones %>% mutate(
+  B5=if_else(Activity=="Total Filters (H41)", as.character(B5), B5_prop),
+  B6=if_else(Activity=="Total Filters (H41)", as.character(B6), B6_prop),
+  B7=if_else(Activity=="Total Filters (H41)", as.character(B7), B7_prop),
+) %>% select(Activity, B5, B6, B7)
+
+tabla2_datos %>% kable() %>% 
+  kable_classic(full_width=F, html_font="Cambria") %>% 
+  column_spec(1, bold = TRUE)
+
+
+#h41_filtros_b7_ss %>% filter(is.na(promedio_prepesaje)) 
+
+
+
+```
+

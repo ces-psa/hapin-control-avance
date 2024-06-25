@@ -1,0 +1,279 @@
+---
+title: "DataSet_Neumonia"
+author: "AIR"
+date: "26/4/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+# FIRST LOAD DATA
+
+library(package = "tidyverse")
+library(package= "kableExtra") 
+
+# find the las export files
+#amr1 file
+arm1_file <- list.files(
+  path = "data/exports",
+  pattern = "HAPINGuatemalaMainSt-Arm1_DATA",
+  full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    date = file %>%
+      sub(".+HAPINGuatemalaMainSt-Arm1_DATA_([0-9_-]{15}).+", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(date)) %>%
+  print()
+
+#arm2 file
+main_file <- list.files(
+  path = "data/exports",
+  pattern = "HAPINGuatemalaMainSt-Arm2_DATA",
+  full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    date = file %>%
+      sub(".+HAPINGuatemalaMainSt-Arm2_DATA_([0-9_-]{15}).+", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(date)) %>%
+  print()
+
+# find most recent files
+arm3_file <- list.files(
+  path = "data/exports",
+  pattern = "HAPINGuatemalaMainSt-Arm3_DATA",
+  full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    date = file %>%
+      sub(".+HAPINGuatemalaMainSt-Arm3_DATA_([0-9_-]{15}).+", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(date)) %>%
+  print()
+
+#repeat_file
+repeats_file <- list.files(
+  path = "data/exports",
+  pattern = "HAPINGuatemalaRepeat_DATA",
+  full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    date = file %>%
+      sub(".+HAPINGuatemalaRepeat_DATA_([0-9_-]{15}).+", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(date)) %>%
+  print()
+
+#piloto_file
+piloto_file <- list.files(
+  path = "data/exports",
+  pattern = "PilotoVigilanciaNeum_DATA",
+  full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    date = file %>%
+      sub(".+PilotoVigilanciaNeum_DATA_([0-9_-]{15}).+", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(date)) %>%
+  print()
+
+
+# Manually select data export
+arm1 <- read_csv(
+  file = arm1_file$file,
+  col_types = cols(.default = col_character())
+) %>%
+  # fix date types
+  mutate_at(
+    vars(matches("^[^_]+_date$"), m17_ga, c30_dob),
+    list(as.Date)
+  ) %>%
+  filter(id != "99999") %>%
+  mutate(
+    visit = redcap_event_name %>%
+      sub("_arm.*", "", .) %>%
+      recode(
+        .,
+        linea_de_base = "baseline",
+        .default = .
+      ) %>%
+      factor(
+        levels = c("baseline", "p1", "p2",  "b1", "b2", "b3", "b4")
+      ),
+    # manual fix for overwriten s4
+    s4_main_id = if_else(
+      condition = id == "G1488",
+      true = "33488",
+      false = s4_main_id
+    )
+  ) %>%
+  print()
+
+arm2 <- read_csv(
+  file = main_file$file,
+  col_types = cols(.default = col_character())
+) %>%
+  filter(id != "99999") %>%
+  # fix date types
+  mutate_at(
+    vars(matches("^[^_]+_date$"), c30_dob),
+    list(as.Date)
+  ) %>%
+  mutate(
+    visit = redcap_event_name %>%
+      sub("_arm.*", "", .) %>%
+      recode(
+        .,
+        linea_de_base = "baseline",
+        .default = .
+      ) %>%
+      factor(
+        levels = c("baseline", "p1", "p2","m1", "m2",  "b1", "m4", "m5", "b2", "m7", "m8", "b3", "m10","m11", "b4")
+      )
+  ) %>%
+  print()
+
+
+# repeated crfs ----
+
+
+repeats <- read_csv(
+  file = repeats_file$file,
+  col_types = cols(.default = col_character())
+) %>%
+  print()
+
+
+# arm3 monthly visits ----
+
+
+
+# Manually select data export
+arm3 <- read_csv(
+  file = arm3_file$file,
+  col_types = cols(.default = col_character())
+) %>%
+  filter(id != "99999") %>%
+  print()
+
+#datos del piloto
+piloto <- read_csv(
+  file = piloto_file$file,
+  col_types = cols(.default = col_character())
+) %>%
+  print()
+
+#DATA SET POR CRF DE MAIN STUDY
+
+#crear data set c36 main study
+dt_c36_main_study<-arm2 %>% filter(!is.na(c36_date)) %>% select(id, redcap_event_name, matches("^c36_")) %>%
+    mutate( evento=case_when(
+      redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+      redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+      redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+      redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+      redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                           )
+) %>% select(id, evento, everything())
+
+#data set para c36a main study
+dt_c36a_main_study<- arm2 %>% filter(!is.na(c36a_date)) %>% select(id, redcap_event_name, matches("^c36a_")) %>% 
+    mutate( evento=case_when(
+      redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+      redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+      redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+      redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+      redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                           )
+) %>% select(id, evento, everything())
+
+#data set para c40 main study
+dt_c40_main_study<-arm2 %>% filter(!is.na(c40_date)) %>% select(id, redcap_event_name, matches("^c40_")) %>%     mutate( evento=case_when(
+      redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+      redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+      redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+      redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+      redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                           )
+) %>% select(id, evento, everything())
+
+#data set para c41 main study
+dt_c41_main_study<-arm2 %>% filter(!is.na(c41_date)) %>% select(id, redcap_event_name, matches("^c41_")) %>% 
+   mutate( evento=case_when(
+      redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+      redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+      redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+      redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+      redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                           )
+) %>% select(id, evento, everything())
+
+dt_c37_main_study<-arm2 %>% filter(!is.na(c37_date)) %>% select(id, redcap_event_name, matches("^c37_"))  %>% 
+   mutate( evento=case_when(
+      redcap_event_name=="segun_sea_necesari_arm_2" ~ "ss1",
+      redcap_event_name=="segun_sea_necesari_arm_2b" ~ "ss2",
+      redcap_event_name=="segun_sea_necesari_arm_2c" ~ "ss3",
+      redcap_event_name=="segun_sea_necesari_arm_2d" ~ "ss4",
+      redcap_event_name=="segun_sea_necesari_arm_2e" ~ "ss5",
+                                                           )
+) %>% select(id, evento, everything())
+
+#DATA SET REPEATED
+
+#Data set c36a Repeated
+dt_c36a_repeated<-repeats %>% filter(!is.na(c36a_date)) %>% select(record_id, id=c36a_hhid, id_visita=c36a_visit, redcap_event_name, matches("^c36a_")) %>% mutate(
+  evento="repeated"
+) %>% select(record_id, id, evento,  everything())
+
+#c40 Repeated
+dt_c40_repeated<-repeats %>% filter(!is.na(c40_date)) %>% select(record_id, id=c40_hhid, id_visita=c40_visit, redcap_event_name, matches("^c40_")) %>% mutate(
+  evento="repeated"
+) %>% select(record_id, id, evento,  everything())
+
+#c41 Repeated
+dt_c41_repeated<-repeats %>% filter(!is.na(c41_date)) %>% select(record_id, id=c41_hhid, id_visita=c41_visit, redcap_event_name, matches("^c41_")) %>% mutate(
+  evento="repeated"
+) %>% select(record_id, id, evento,  everything())
+
+#c37 Repeated
+dt_c37_repeated<-repeats %>% filter(!is.na(c37_date)) %>% select(record_id, id=c37a_hhid, id_visita=c37_visit, redcap_event_name, matches("^c37_")) %>% mutate(
+  evento="repeated"
+) %>% select(record_id, id, evento,  everything())
+
+```
+
+## Creación de data sets
+
+```{r cars}
+
+
+
+```
+
+
+
+```{r pressure, echo=FALSE}
+
+ # FREQ DE C31 ----
+  gt_hapin_II_data %>% filter(!is.na(c31_date)) %>% transmute(c31_cough=recode(
+    c31_cough, "1"="Si", "0"="No"
+  ),
+  c31_breath=recode(
+    c31_breath, "1"="Si", "0"="No"
+  )
+    ) %>% table() %>% kable( ) %>% kable_classic_2()
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

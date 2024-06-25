@@ -4,7 +4,7 @@
 
 
 # Use date variable as a proxy for filling a CRF ----
-crf_id_dates <- gt_emory_data %>%
+crf_id_dates <- gt_emory_data_arm1 %>%
   filter(visit == "tamizaje") %>%
   select(
     study_id = s4_main_id, screening_id = id, visit, matches("^[^_]+_date$")
@@ -18,7 +18,7 @@ crf_id_dates <- gt_emory_data %>%
     {
       screening_data <- .
       
-      gt_emory_data %>%
+      gt_emory_data_arm2 %>%
         filter(visit != "tamizaje") %>%
         select(
           study_id = id, visit, matches("^[^_]+_date(_[oc])?$")

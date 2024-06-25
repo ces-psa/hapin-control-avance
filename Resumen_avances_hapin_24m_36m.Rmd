@@ -1,0 +1,254 @@
+---
+title: "Graficas_24_y_36_meses"
+author: "AIR"
+date: "12/5/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(scales)
+library(ggplot2)
+library(tidyverse)
+
+
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+
+# Participant information (z10)
+source(file = "scripts/0_get_participants.R", encoding = "UTF-8")
+
+# Participant information (z10)
+source(file = "scripts/0_get_salidas.R", encoding = "UTF-8")
+# Participant information (z10)
+source(file = "scripts/0_get_e3.R", encoding = "UTF-8")
+
+
+#participantes hapin 1
+candidatos_hapin1<-gt_emory_data_arm2 %>% filter(!is.na(s6_arm)) %>% select(id) %>% left_join(
+  gt_emory_data_arm1 %>% filter(!is.na(s4_main_id)) %>% select(id_tamizaje=id, 
+                                                               id=s4_main_id)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(c30_dob)) %>% select(id, c30_dob)
+) %>% left_join(
+  gt_emory_data_arm1 %>% filter(!is.na(m17_ga)) %>% select(id_tamizaje=id, m17_ga)
+) %>% mutate(
+  ventana=as.Date(c30_dob) + lubridate::days(350),
+  un_anio=as.Date(c30_dob) + lubridate::days(365)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_c)) %>% select(id, e3_date_exit_c)
+) %>% mutate(
+  descartar=case_when(
+    is.na(e3_date_exit_c) ~ "No",
+    as.Date(e3_date_exit_c)< as.Date(ventana) ~ "Si",
+    TRUE ~ "No"
+  )
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit_c)) %>% select(id, e3_reason_c)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit)) %>% select(id, e3_reason)
+)
+
+#sacar tabla de candidatos
+listado_bebes_graficas<-gt_emory_data_arm2 %>% filter(!is.na(c30_dob)) %>% select(id, c30_dob) %>% mutate(
+  ventana=as.Date(c30_dob) + lubridate::days(330),
+  un_anio=as.Date(c30_dob) + lubridate::days(365)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_c)) %>% select(id, e3_date_exit_c, e3_reason_c)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit)) %>% select(id, e3_date_exit, e3_reason)
+) %>% mutate(
+  descartar=case_when(
+    # is.na(e3_date_exit_c) ~ "No",
+    # as.Date(e3_date_exit_c)< as.Date(ventana) ~ "Si",
+    e3_reason=="8"  ~  "Si",
+    TRUE ~ "No"
+  )
+) %>% filter(descartar=="No") %>% select(id, fecha_nacimiento=c30_dob) %>% mutate(
+  `12_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*12)),
+  `24_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*24)),
+  `36_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*36)),
+  `48_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*48)),
+  `60_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*60))
+) %>% left_join(
+  datos_participantes %>% select(id=`ID estudio`, `ID tamizaje`, nombre_madre_nino=`Nombre embarazada`, comunidad=`Comunidad embarazada (original z10)`,
+                                 Celular_madre_nino=`Celular embarazada`,
+                                 Celular_papa_nino=`Celular esposo`, Celular_otro_miembro) %>% group_by(
+                                   id
+                                 ) %>% slice(1)
+)
+
+td_ninos<-listado_bebes_graficas %>% select(id, fecha_nacimiento,`24_meses` ) %>% left_join(
+  gt_hapin_II_data %>%filter(redcap_event_name=="24_month_arm_1") %>%  filter(!is.na(s4_date)) %>% select(id, s4_date, s4_consent)
+  ) %>%  select(id, `24_meses`, s4_date, s4_consent) %>% filter(!is.na(s4_date)) %>% left_join(
+    gt_hapin_II_data %>%filter(redcap_event_name=="24_month_arm_1") %>% filter(!is.na(c35_date)) %>% 
+      select(id, c35_date)
+  )
+
+
+dt_grafica_ninos<-td_ninos %>% select(id, fec_visita=`24_meses`, s4_date, 
+                                      s4_consent, c35_date)  %>% mutate(
+    Group=case_when(
+      is.na(s4_date) ~ "24m_Pending",
+      !is.na(c35_date)  ~ "   Visit_conducted",
+      s4_consent=="0" ~ " Rejected",
+      
+      s4_consent=="1" ~ "  Consented",
+      
+      
+      TRUE ~ NA_character_
+    ),
+    semana_date=lubridate::floor_date(fec_visita, unit = "weeks", week_start = 1),
+  ) %>% select(id, semana_date,Group)
+
+```
+
+
+
+```{r cars}
+##ELABORAR GRAFICA
+ggplot(dt_grafica_ninos,aes(x=semana_date, group=Group, fill=Group))+ 
+  scale_fill_manual(values=c("#1e8449","#2874a6","#a93226","#717d7e" ))+
+  stat_bin( binwidth=2, alpha=0.5,
+            position="stack") + theme_bw()+
+  xlab("Weeks")+
+  ylab("Visits")+
+  scale_x_date(breaks=date_breaks("1 week"), labels=date_format("%d %m %Y")) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) + scale_y_continuous(breaks=seq(1,30,2))
+
+
+
+#matriz de fechas para agrupar las visitas
+dt_fechas<-as.data.frame(seq(as.Date("2020-11-30"), as.Date("2022-05-30"), "days"))
+matriz_fechas<-dt_fechas %>% select(fec=`seq(as.Date("2020-11-30"), as.Date("2022-05-30"), "days")`)
+
+#realizados clinica
+realizados_clinica<-matriz_fechas %>% left_join(
+  gt_hapin_II_data %>% filter(redcap_event_name=="24_month_arm_1") %>% filter(!is.na(c33_date)) %>%transmute(
+    fec=c33_date, c33_realizado=1,
+    semana_date=lubridate::floor_date(fec, unit = "weeks", week_start = 1)
+  )
+) %>% group_by(semana_date, c33_realizado) %>% count() %>% filter(!is.na(c33_realizado)) %>% 
+  ungroup() %>% select(semana_date, realizados_clinica=n)
+
+#realizados exposicion
+realizados_exposicion<-matriz_fechas %>% left_join(
+  gt_hapin_II_data %>% filter(redcap_event_name=="24_month_arm_1") %>% filter(!is.na(h41_date)) %>%transmute(
+    fec=h41_date, h41_realizado=1,
+    semana_date=lubridate::floor_date(fec, unit = "weeks", week_start = 1)
+  )
+) %>% group_by(semana_date, h41_realizado) %>% count() %>% filter(
+  !is.na(h41_realizado)) %>% 
+  ungroup() %>% select(semana_date, realizados_exposicion=n)
+# #candidatos
+#   visitas<-td_ninos %>% select(id, fec_visita=`24_meses`, s4_date, 
+#                                       s4_consent, c35_date) %>% mutate(
+#        semana_date=lubridate::floor_date(fec_visita, unit = "weeks", week_start = 1)
+#   ) %>% select(id, semana_date) %>% group_by(semana_date) %>% count()
+# dt_grafica_ninos
+  
+#semanas del eje X
+matriz_semanas<-matriz_fechas %>% mutate(
+  semana_date=lubridate::floor_date(fec, unit = "weeks", week_start = 1)
+) %>% group_by(semana_date) %>% count() %>% select(semana_date)
+
+
+visitas<-candidatos_hapin1 %>% left_join(
+  td_ninos %>% mutate(fec_visita=`24_meses`)
+) %>%  mutate(
+  Anio=lubridate::year(fec_visita),
+  mes=lubridate::month(fec_visita)
+) %>% arrange(Anio,mes) %>% mutate(
+  candidato=case_when(
+    !is.na(fec_visita) ~ "1",
+    TRUE ~ NA_character_
+  ),
+  muerte_bebe=case_when(
+    e3_reason_c=="6" ~ "1",
+    TRUE ~ NA_character_
+  ),
+  aborto=case_when(
+    is.na(e3_reason_c) & e3_reason=="8" ~ "1",
+    TRUE ~ NA_character_
+  ),
+  salida_anticipada=case_when(
+    e3_reason=="3" | e3_reason=="4" | e3_reason=="5" ~ "1",
+    TRUE ~ NA_character_
+  )
+) %>% left_join(
+  gt_hapin_II_data %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+    filter(!is.na(s4_date)) %>% select(id, s4_consent,
+                                           s4_consent_c,
+                                       s4_ocon_date)
+) %>% left_join(
+  gt_hapin_II_data %>%  filter(redcap_event_name=="24_month_arm_1") %>% filter(!is.na(c35_date)) %>% select(id, c35_date)
+) %>%   mutate(
+  s4_realizado=case_when(
+    !is.na(s4_consent_c) & !is.na(fec_visita) ~ "1",
+    TRUE ~ NA_character_
+  ),
+  rechazados=case_when(
+    s4_consent_c=="0" & (muerte_bebe=="1" | aborto=="1" | salida_anticipada=="1") ~ NA_character_,
+    s4_consent_c=="0" ~ "1",
+  
+    TRUE ~ NA_character_
+  ),
+  realizadas=case_when(
+    !is.na(c35_date) & (muerte_bebe=="1" | aborto=="1" | salida_anticipada=="1") ~ NA_character_,
+    !is.na(c35_date) & !is.na(fec_visita) ~ "1",
+    TRUE ~ NA_character_
+  ),
+  `muertes/abortos/mortinatos`= case_when(
+    aborto=="1" ~ "1",
+    muerte_bebe=="1" ~ "1",
+    TRUE ~ NA_character_
+  ),
+  pendientes_consentir=case_when(
+    !is.na(fec_visita) & is.na(s4_consent_c) & is.na(`muertes/abortos/mortinatos`) ~ "1",
+    TRUE ~ NA_character_
+  ),
+  pendientes_visitar=case_when(
+    s4_consent_c=="1" & is.na(c35_date) & !is.na(fec_visita) ~ "1",
+    
+    TRUE ~ NA_character_
+  ),
+#agregar avances hapin 36m
+)  
+
+#generar la tabla matriz para las graficas
+tabla_integrada_graficas<-matriz_semanas %>% left_join(
+  visitas %>% mutate(
+       semana_date=lubridate::floor_date(fec_visita, unit = "weeks", week_start = 1)
+   )
+) %>% 
+  left_join(
+  realizados_clinica
+) %>% left_join(
+  realizados_exposicion
+) 
+
+# grafica_integrada<- tabla_integrada_graficas %>% transmute(
+#              `  cadidates` =candidato, ` antrho_visits`=realizados_clinica, `exposure_visits`=realizados_exposicion
+#            ) %>%   gather(key="variable", value="value", -semana_date)
+# 
+#            grafica_integrada<-grafica_integrada %>% mutate(semana_date=as.Date(semana_date), Group=variable)
+#            
+#            ggplot(grafica_integrada ,
+#                   aes(x=semana_date, y=value, color=Group))+geom_line()+ 
+#              geom_point()+
+#              xlab("Weeks")+
+#              ylab("Visits")+
+#              scale_x_date(breaks=date_breaks("1 week"),
+#                           labels=date_format("%d %m %Y"))+
+#              theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+#              scale_y_continuous(breaks=seq(1,30,2)) 
+
+
+
+```
+
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+

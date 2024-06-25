@@ -1,0 +1,75 @@
+---
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+library(package = "tidyverse")
+
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+
+
+```{r list-ids, include=FALSE}
+herc_ids <- crossing(
+  subject = c("M", "C"),
+  number = stringr::str_pad(1:150, width = 3, pad = "0"),
+  visit = 1:2,
+  type = c("OP", "NA", "CNTR")
+) %>%
+  arrange(number, visit, subject, type) %>%
+  transmute(
+    number,
+    id = paste0(subject, number, "-V", visit, "-", type)
+  ) %>%
+  print()
+```
+
+
+```{r fig.width=6, fig.height=9, out.width="\\linewidth", results='asis'}
+herc_qrs <- herc_ids %>%
+  nest(-number, .key = "qr") %>%
+  mutate(
+    qr = map(
+      qr,
+      ~ {
+        .x %>%
+          mutate(
+            qr = map(id, qrencoder::qrencode_df)
+          ) %>%
+          unnest()
+      }
+    )
+  ) %>%
+  mutate(
+    qr_plot = map(
+      qr,
+      ~ {
+        number <- sub(".([0-9]*)-.*", "\\1", .x$id[1])
+        qr_plot <- ggplot(.x) +
+          geom_raster(
+            aes(x = x, y = y, fill = factor(z)),
+            show.legend = FALSE
+          ) +
+          labs(
+            title = paste0("HERCULES participant ", number, "\n")
+          ) +
+          facet_wrap(~ id, ncol = 3) +
+          scale_fill_manual(values = c("white", "black")) +
+          coord_equal() +
+          theme_void() +
+          theme(
+            title = element_text(face = "bold", hjust = 0.5),
+            panel.spacing = unit(4, "line")
+          )
+        
+        plot(qr_plot)
+        
+        cat("\\newpage")
+        
+        tibble(qr_plot = list(qr_plot))
+      }
+    )
+  )
+```
+

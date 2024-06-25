@@ -1,0 +1,35 @@
+---
+title: "Inconsistencias_elegibilidad"
+author: "aramirez"
+date: "22/5/2019"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library("tidyverse")
+#leer datos de emory
+# Emory RedCap dictionary
+source(file = "scripts/0_get_emory_dictionary.R", encoding = "UTF-8")
+
+# Emory RedCap export data
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+
+
+```
+
+## Reporte "M17 con datos pendientes en edad gestacional"
+al "`r Sys.Date()`"
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+

@@ -1,0 +1,977 @@
+---
+title: "COMPLETENESS-REPORT"
+date: "October 26, 2023"
+output: 
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+---
+
+
+
+```{r include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+library(tidyverse)
+library(kableExtra)
+# library(readxl)
+# library(openxlsx)
+# library(data.table)
+# library(lubridate)
+library(dplyr)
+library(stringr)
+library(tidyr)
+library(scales)
+
+#leer archivos h41
+#buscar el mas reciente
+file_h41_h41b<-list.files(
+  path = "C:/Users/aramirez/ownCloud/Exposure_group/Export_Redcap/h41_h41b_h42_h43/", pattern = "HAPINIIGuatemala-H41H42H43H41b_DATA_.+csv", full.names = TRUE
+) %>%  
+  tibble(
+    file = .,
+    export_time = file %>%
+      gsub(".+?_([-0-9_]+).csv", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(export_time))
+
+#cargar los datos
+dt_h41_h41b<-read_csv(file_h41_h41b$file, cols(.default = "c"),show_col_types = FALSE)
+#renombrer columnas
+names(dt_h41_h41b) <- dt_h41_h41b[1,]
+dt_h41_h41b<-dt_h41_h41b[-1,]
+dt_h41_h41b<-dt_h41_h41b %>% filter(record_id!="99999")
+
+
+#preparar data set para conteos de B5
+##Table 1 - number of ECM files expected based on child
+###B5
+child_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41_person___3 == 1 & !is.na(h41_c_ecm_id) & !is.na(h41_c_ecm_fid)) %>% select(record_id, h41_person___3, h41_c_ecm_id, h41_c_ecm_fid, fecha=h41_date) %>% filter(h41_c_ecm_id!="888" )
+
+#duplicados en b5
+child_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>%  
+  filter(h41b_envir1 == 10 & h41b_type1 == 1)
+
+child_duplicate2_B5 <-  dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir2 == 10 & h41b_type2 == 1) %>% select(record_id, h41b_envir2, h41b_type2, fecha=h41b_date)
+
+child_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir3 == 10 & h41b_type3 == 1) %>% select(record_id, h41b_envir3,h41b_type3)
+
+##Table 1 - number of ECM files expected based on mother
+###B5
+mother_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41_person___1 == 1 & !is.na(h41_m_ecm_id) & !is.na(h41_m_ecm_fid)) %>% select(
+    record_id, h41_person___1, h41_m_ecm_id, h41_m_ecm_fid, fecha=h41_date
+  ) %>% filter(h41_m_ecm_id!="888")
+
+mother_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir1 == 8 & h41b_type1 == 1) %>% select(record_id, h41b_envir1, h41b_type1, fecha=h41_date)
+
+mother_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir2 == 8 & h41b_type2 == 1) %>% select(record_id, h41b_envir2, h41b_type2)
+
+mother_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir3 == 8 & h41b_type3 == 1) %>% select(record_id, h41b_envir3, h41b_type3)
+
+
+##Table 1 - number of ECM files expected based on kitchen
+###B5
+kitchen_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41_envir___1 == 1 | h41_envir___2 == 1) %>% select(record_id, h41_envir___1, h41_envir___2, h41_kap1_ecm_id, h41_kap1_ecm_fid, fecha=h41_date)
+
+kitchen_principal_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41b_envir1 == 1 & h41b_type1 == 1) %>% select(record_id, h41b_envir1, h41b_type1, h41b_ecm1, h41b_filter1, fecha=h41_date ) %>% filter(h41b_ecm1!="888")
+
+kitchen_principal_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41b_envir2 == 1 & h41b_type2 == 1) %>% select(record_id, h41b_envir2, h41b_type2, h41b_ecm2, 
+                                                        h41b_filter2, fecha=h41_date) %>% filter(h41b_ecm2!="888")
+
+kitchen_principal_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir3 == 1 & h41b_type3 == 1)
+
+kitchen_secondary_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir1 == 2 & h41b_type1 == 1)
+
+kitchen_secondary_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir2 == 2 & h41b_type2 == 1)
+
+kitchen_secondary_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir3 == 2 & h41b_type3 == 1)
+
+kitchen_b5_total <- kitchen_B5 %>% count() %>% .$n + kitchen_principal_duplicate1_B5 %>% count() %>% .$n + kitchen_principal_duplicate2_B5 %>% count() %>% .$n
+
+##Table 1 - number of ECM files expected based on bedroom
+###B5
+bedroom_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41_envir___3 == 1 | h41_envir___4 == 1 | h41_envir___5 == 1) %>% select(
+    record_id, h41_envir___3, h41_envir___4, h41_sap_ecm_id, h41_sap_ecm_fid, fecha=h41_date
+  ) %>% filter(h41_sap_ecm_id!="888")
+
+bedroom_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir1 == 3 & h41b_type1 == 1)
+
+bedroom_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir2 == 3 & h41b_type2 == 1)
+
+bedroom_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir3 == 3 & h41b_type3 == 1)
+
+other_room_primary_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir1 == 4 & h41b_type1 == 1)
+
+other_room_primary_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41b_envir2 == 4 & h41b_type2 == 1)
+
+other_room_primary_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41b_envir3 == 4 & h41b_type3 == 1)
+
+other_room_secondary_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir1 == 5 & h41b_type1 == 1)
+
+other_room_secondary_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41b_envir2 == 5 & h41b_type2 == 1)
+
+other_room_secondary_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1")  %>% 
+  filter(h41b_envir3 == 5 & h41b_type3 == 1)
+
+
+##Table 1 - number of ECM files expected based on OAW
+###B5
+oaw_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41_person___2 == 1 & !is.na(h41_o_ecm_id) & !is.na(h41_o_ecm_fid)) %>% select(
+    record_id, h41_person___2, h41_o_ecm_id, h41_o_ecm_fid, fecha=h41_date
+  ) %>% filter(h41_o_ecm_id!="888")
+
+oaw_duplicate1_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir1 == 9 & h41b_type1 == 1)
+
+oaw_duplicate2_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir2 == 9 & h41b_type2 == 1)
+
+oaw_duplicate3_B5 <- dt_h41_h41b %>% filter(redcap_event_name=="24_month_arm_1") %>% 
+  filter(h41b_envir3 == 9 & h41b_type3 == 1)
+
+###B6
+child_B6 <-  dt_h41_h41b %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>%   
+  filter( !is.na(h41_c_device) & !is.na(h41_c_filter)) %>% select(
+    record_id, c41_child_v2, h41_c_device,h41_c_filter, fecha=h41_date_v2
+  )
+
+
+
+###B7 blancos
+child_B7_blancos <- dt_h41_h41b %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>%   
+  filter( !is.na(h41_c_device) & !is.na(h41_b_fid_v2)) %>% select(
+    record_id, c41_child_v2, h41_blank_v2, h41_b_id_v2,h41_b_fid_v2,fecha=h41_date_v2
+  )
+
+###B7
+child_B7 <-  dt_h41_h41b %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>%   
+  filter( !is.na(h41_c_device) & !is.na(h41_c_filter)) %>% select(
+    record_id, c41_child_v2, h41_c_device,h41_c_filter, fecha=h41_date_v2
+  ) %>% bind_rows(
+  child_B7_blancos %>% mutate(
+    flag=substr(h41_b_fid_v2,1,3)
+  )  %>% filter(flag=="3V5") %>% transmute(record_id, c41_child_v2, h41_c_device=h41_b_id_v2,
+                           h41_c_filter=h41_b_fid_v2, fecha, flag, Blanco="Si") 
+)
+
+child_B7_upas<-child_B7 %>% mutate(
+  flag=substr(h41_c_filter,1,3)
+) %>% filter(flag=="3V3") %>% bind_rows(
+  child_B7_blancos %>% mutate(
+    flag=substr(h41_b_fid_v2,1,3)
+  )  %>% filter(flag=="3V3") %>% transmute(record_id, c41_child_v2, h41_c_device=h41_b_id_v2,
+                           h41_c_filter=h41_b_fid_v2, fecha, flag, Blanco="Si") 
+)
+
+child_B7<-child_B7 %>% anti_join(
+  child_B7_upas %>% select(record_id, h41_c_device, h41_c_filter, fecha)
+)
+
+```
+
+
+#### Table 1. ECM File Quality Control
+
+
+
+```{r}
+visit<-c("B5","B6","B7", "B7.5", "B8")
+tabla1<-data.frame(Visit=visit)
+tabla1_datos<- tabla1 %>% mutate(
+  Child=case_when(
+    Visit=="B5" ~ child_B5 %>% count() %>% .$n,
+    Visit=="B6" ~ child_B6 %>% count() %>% .$n,
+    Visit=="B7" ~ child_B7 %>% count() %>% .$n,
+    Visit=="B7.5" ~ as.integer(0),
+    Visit=="B8" ~ as.integer(0)
+  ),
+  Mother=case_when(
+    Visit=="B5" ~ mother_B5 %>% count() %>% .$n,
+    Visit=="B6" ~ as.integer(0),
+    Visit=="B7" ~ as.integer(0),
+    Visit=="B7.5" ~ as.integer(0),
+    Visit=="B8" ~ as.integer(0),
+   
+  ),
+  Kitchen=case_when(
+    Visit=="B5" ~ kitchen_B5 %>% count() %>% .$n + kitchen_principal_duplicate1_B5 %>% count() %>% .$n + kitchen_principal_duplicate2_B5 %>% count() %>% .$n,
+    Visit=="B6" ~ as.integer(0),
+    Visit=="B7" ~ as.integer(0),
+    Visit=="B7.5" ~ as.integer(0),
+    Visit=="B8" ~ as.integer(0),
+   
+  ),
+  Bedroom=case_when(
+    Visit=="B5" ~ bedroom_B5 %>% count() %>% .$n ,
+    Visit=="B6" ~ as.integer(0),
+    Visit=="B7" ~ as.integer(0),
+    Visit=="B7.5" ~ as.integer(0),
+    Visit=="B8" ~ as.integer(0),
+   
+  ),
+  OAW=case_when(
+    Visit=="B5" ~ oaw_B5 %>% count() %>% .$n ,
+    Visit=="B6" ~ as.integer(0),
+    Visit=="B7" ~ as.integer(0),
+    Visit=="B7.5" ~ as.integer(0),
+    Visit=="B8" ~ as.integer(0),
+   
+  )
+)
+
+# Crear la tabla con kable y aplicar estilos
+# tabla_con_estilo <- kable(tabla1_datos, format = "html", escape = FALSE) %>%
+#   kable_styling("striped", full_width = FALSE) %>%
+#   row_spec(0, bold = TRUE) %>%
+#   row_spec(1:5, bold = TRUE) %>%
+#   column_spec(1, bold = TRUE)
+
+tabla1_datos %>% kable(caption="<center>Table 1 <br>
+        Numbers of ECM files expected based on CRF H41 and H41b</center>", align="l") %>% 
+  kable_classic(full_width=F, html_font="Cambria") %>% 
+  column_spec(1, bold = TRUE)
+
+
+```
+
+#### Table 2. ECM file QC issues frequency (%)
+
+```{r}
+#leer rds b7
+rds_b7<-readRDS("C:/GitHub_repo/qc_exposure_hapin/rds/ecm_b7.rds")
+rds_b6<-readRDS("C:/GitHub_repo/qc_exposure_hapin/rds/ecm_b6.rds")
+rds_b5<-readRDS("C:/GitHub_repo/qc_exposure_hapin/rds/ecm_b5.rds")
+
+#crear hhid para rds ecm
+#b7
+ rds_b7_clean<-rds_b7 %>% mutate(
+   id=str_extract(ORIGEN, "\\d{5}")
+ )
+
+ #b6
+ rds_b6_clean<-rds_b6 %>% mutate(
+   id=str_extract(ORIGEN, "\\d{5}")
+ )
+
+#b5
+ rds_b5_clean<-rds_b5 %>% mutate(
+   id=str_extract(ORIGEN, "\\d{5}")
+ )
+
+ remove(rds_b5)
+ remove(rds_b6)
+ remove(rds_b7)
+
+ #ecm file identified
+ # id 05070 es un dato sin filtro
+# rds_b5_clean %>% filter(id=="05070") %>% View()
+
+ #ecm id en b5
+medidas_b5<- rds_b5_clean %>% group_by(id,`header_Device Serial`) %>% count() %>% select(id, id_ecm=`header_Device Serial`)
+
+#filter id matches en b5
+ecm_filtros_b5<-child_B5 %>% transmute(id=record_id,
+                       id_ecm=if_else(
+                         str_length(h41_c_ecm_id)>2, paste0("ECM00",h41_c_ecm_id), paste0("ECM000",h41_c_ecm_id)
+                       ),
+                       id_filtro=h41_c_ecm_fid,
+                       fecha) %>% bind_rows(
+mother_B5 %>% transmute(id=record_id,
+                        id_ecm=if_else(
+                        str_length(h41_m_ecm_id)>2, paste0("ECM00", h41_m_ecm_id), paste0("ECM000",h41_m_ecm_id)
+                        ), id_filtro=h41_m_ecm_fid, fecha)
+                       ) %>% bind_rows(
+kitchen_B5 %>% transmute(id=record_id,
+                         id_ecm=if_else(
+                      str_length(h41_kap1_ecm_id)>2, paste0("ECM00", h41_kap1_ecm_id), paste0("ECM000", h41_kap1_ecm_id)
+                      ),
+                      id_filtro=h41_kap1_ecm_fid, fecha
+                         )
+                       ) %>% bind_rows(
+kitchen_principal_duplicate1_B5 %>% transmute(
+  id=record_id, id_ecm=if_else(
+    str_length(h41b_ecm1)>2, paste0("ECM00", h41b_ecm1), paste0("ECM000", h41b_ecm1)
+  ),
+  id_filtro=h41b_filter1, fecha
+)
+                       ) %>% bind_rows(
+kitchen_principal_duplicate2_B5 %>% transmute(
+  id=record_id, id_ecm=if_else(
+    str_length(h41b_ecm2)>2, paste0("ECM00", h41b_ecm2), paste0("ECM000",h41b_ecm2)
+  ), id_filtro=h41b_filter2, fecha
+)
+                       ) %>% bind_rows(
+bedroom_B5 %>% transmute(
+id=record_id, id_ecm=if_else(
+  str_length(h41_sap_ecm_id)>2, paste0("ECM00", h41_sap_ecm_id), paste0("ECM000", h41_sap_ecm_id)
+), id_filtro=h41_sap_ecm_fid, fecha
+)
+                       ) %>% bind_rows(
+oaw_B5 %>% transmute(
+  id=record_id, id_ecm=if_else(
+    str_length(h41_o_ecm_id)>2, paste0("ECM00", h41_o_ecm_id), paste0("ECM000", h41_o_ecm_id)
+  ), id_filtro=h41_o_ecm_fid, fecha
+)
+                       )
+
+#ecm filtros b6
+ecm_filtros_b6<- child_B6 %>% transmute(
+  id=record_id, id_ecm=if_else(
+str_length(h41_c_device)>2, paste0("ECM00",h41_c_device),paste0("ECM000",h41_c_device)
+  ), id_filtro=h41_c_filter, fecha
+)
+
+ecm_filtros_b7<- child_B7 %>% transmute(
+  id=record_id, id_ecm=if_else(
+    str_length(h41_c_device)>2, paste0("ECM00", h41_c_device), paste0("ECM000", h41_c_device)
+  ), id_filtro=h41_c_filter, fecha
+)
+ 
+#comparar datos de rds y de redcap
+#ecm en b5
+ecm_rds_b5<-rds_b5_clean  %>% select(id, id_ecm=`header_Device Serial`, id_filtro=`header_Filter ID`) %>% group_by(
+  id, id_ecm, id_filtro
+) %>% count() %>% select(id, id_ecm, id_filtro)
+
+#ecm en b6
+ecm_rds_b6<-rds_b6_clean  %>% select(id, id_ecm=`header_Device Serial`, id_filtro=`header_Filter ID`) %>% group_by(
+  id, id_ecm, id_filtro
+) %>% count() %>% select(id, id_ecm, id_filtro)
+
+#ecm en b7
+ecm_rds_b7<-rds_b7_clean  %>% select(id, id_ecm=`header_Device Serial`, id_filtro=`header_Filter ID`) %>% group_by(
+  id, id_ecm, id_filtro
+) %>% count() %>% select(id, id_ecm, id_filtro)
+
+
+#sacar las fechas del primer registro en los rds
+#b5
+ecm_rds_b5_fechas<-rds_b5_clean %>% mutate(
+  id_filtro=if_else(`header_Filter ID`=="NULL", "888", `header_Filter ID`,
+  ),
+  fecha=as.Date(Date, format = "%d/%m/%Y")
+) %>% select(id, id_ecm=`header_Device Serial`, id_filtro, fecha) %>%  group_by(id, id_ecm, id_filtro) %>% summarize(
+  fecha_inicio=min(fecha),
+   fecha_fin=max(fecha)
+) 
+
+#match redcap and rds B5 ecm id
+matches_b5_ecm<-ecm_filtros_b5 %>% ungroup() %>%  select(id, id_ecm) %>% left_join(
+ ecm_rds_b5 %>% ungroup() %>% select(id, id_ecm) %>% mutate(flag="Si")
+) %>% filter(!is.na(flag))
+
+#match redcap y rds b5 filter id
+matches_b5_filtro<-ecm_filtros_b5 %>% ungroup() %>% select(id, id_ecm, id_filtro) %>% left_join(
+  ecm_rds_b5 %>% ungroup() %>% transmute(id, id_ecm, id_filtro=if_else(id_filtro=="NULL", "888", id_filtro), flag="Si")
+) %>% filter(!is.na(flag))
+
+#match fechas b5
+matches_b5_fechas<-ecm_filtros_b5 %>% transmute(
+  id, id_ecm, id_filtro, fecha=as.Date(fecha)
+) %>% left_join(
+  ecm_rds_b5_fechas %>% ungroup() %>% transmute(id, id_ecm, id_filtro, fecha_inicio, fecha_fin)
+) %>% mutate(
+  flag=if_else(
+   fecha>=as.Date(fecha_inicio) & fecha<=as.Date(fecha_fin),"Si","")
+) %>% filter(flag=="Si") %>% unique()
+
+
+# Extraer la parte de la fecha de la columna "ORIGEN" en B5
+ecm_rds_fechas_archivo <- rds_b5_clean %>%
+  mutate(fecha_archivo = str_extract(ORIGEN, "\\d{8}")) %>%
+  mutate(fecha_archivo = as.Date(fecha_archivo, format = "%d%m%Y"))
+
+#extraer la fecha del nombre del archivo para comparar con redcap en b5
+ecm_b5_fechas_archivo<-ecm_rds_fechas_archivo %>% mutate(
+  id_filtro=if_else(`header_Filter ID`=="NULL", "888", `header_Filter ID`,
+  ),
+  fechas=as.Date(fecha_archivo)
+) %>% select(id, id_ecm=`header_Device Serial`, id_filtro, fechas) %>%  group_by(id, id_ecm, id_filtro) %>% summarize(
+  fecha=min(fechas)
+) 
+#comparar id, ecm filtro y fecha del nombre del archivo con redcap en b5
+matches_b5_fechas_archivo<- ecm_filtros_b5 %>% transmute(
+  id, id_ecm, id_filtro, fecha=as.Date(fecha)
+) %>% left_join(
+  ecm_b5_fechas_archivo %>% ungroup() %>% transmute(id, id_ecm, id_filtro, fecha, flag="Si")
+) %>% filter(!is.na(flag)) 
+
+
+#sacar las fechas del primer registro en los rds, se buscara entre fecha inicio y fecha fin
+#b6
+ecm_rds_b6_fechas<-rds_b6_clean %>% mutate(
+  id_filtro=if_else(`header_Filter ID`=="NULL", "888", `header_Filter ID`,
+  ),
+  fecha=as.Date(Date, format = "%d/%m/%Y")
+) %>% select(id, id_ecm=`header_Device Serial`, id_filtro, fecha) %>%  group_by(id, id_ecm, id_filtro) %>% summarize(
+  fecha_inicio=min(fecha),
+  fecha_fin=max(fecha)
+) 
+
+#match redcap and rds b6 ecm id
+matches_b6_ecm<-ecm_filtros_b6 %>% ungroup() %>%  select(id, id_ecm) %>% left_join(
+ ecm_rds_b6 %>% ungroup() %>% select(id, id_ecm) %>% mutate(flag="Si")
+) %>% filter(!is.na(flag))
+
+#match redcap y rds b6 filter id
+matches_b6_filtro<-ecm_filtros_b6 %>% ungroup() %>% select(id, id_ecm, id_filtro) %>% left_join(
+  ecm_rds_b6 %>% ungroup() %>% transmute(id, id_ecm, id_filtro=if_else(id_filtro=="NULL", "888", id_filtro), flag="Si")
+) %>% filter(!is.na(flag))
+
+#match fechas b6
+matches_b6_fechas<-ecm_filtros_b6 %>% transmute(
+  id, id_ecm, id_filtro, fecha=as.Date(fecha)
+) %>% left_join(
+  ecm_rds_b6_fechas %>% ungroup() %>% transmute(id, id_ecm, id_filtro, fecha_inicio, fecha_fin)
+) %>% mutate(
+  flag=if_else(
+   fecha>=as.Date(fecha_inicio) & fecha<=as.Date(fecha_fin),"Si","")
+) %>% filter(flag=="Si") %>% unique()
+
+
+# Extraer la parte de la fecha de la columna "ORIGEN" en b6
+ecm_rds_fechas_archivo_b6 <- rds_b6_clean %>%
+  mutate(fecha_archivo = str_extract(ORIGEN, "\\d{8}")) %>%
+  mutate(fecha_archivo = as.Date(fecha_archivo, format = "%d%m%Y"))
+
+#extraer la fecha del nombre del archivo para comparar con redcap en b6
+ecm_b6_fechas_archivo<-ecm_rds_fechas_archivo_b6 %>% mutate(
+  id_filtro=if_else(`header_Filter ID`=="NULL", "888", `header_Filter ID`,
+  ),
+  fechas=as.Date(fecha_archivo)
+) %>% select(id, id_ecm=`header_Device Serial`, id_filtro, fechas) %>%  group_by(id, id_ecm, id_filtro) %>% summarize(
+  fecha=min(fechas)
+) 
+#comparar id, ecm filtro y fecha del nombre del archivo con redcap en b6
+matches_b6_fechas_archivo<- ecm_filtros_b6 %>% transmute(
+  id, id_ecm, id_filtro, fecha=as.Date(fecha)
+) %>% left_join(
+  ecm_b6_fechas_archivo %>% ungroup() %>% transmute(id, id_ecm, id_filtro, fecha, flag="Si")
+) %>% filter(!is.na(flag)) 
+
+
+
+#sacar las fechas del primer registro en los rds
+#b7
+ecm_rds_b7_fechas<-rds_b7_clean %>% mutate(
+  id_filtro=if_else(`header_Filter ID`=="NULL", "888", `header_Filter ID`,
+  ),
+  fecha=as.Date(Date, format = "%d/%m/%Y")
+) %>% select(id, id_ecm=`header_Device Serial`, id_filtro, fecha) %>%  group_by(id, id_ecm, id_filtro) %>% summarize(
+  fecha_inicio=min(fecha),
+   fecha_fin=max(fecha)
+) 
+
+#match redcap and rds b7 ecm id
+matches_b7_ecm<-ecm_filtros_b7 %>% ungroup() %>%  select(id, id_ecm) %>% left_join(
+ ecm_rds_b7 %>% ungroup() %>% select(id, id_ecm) %>% mutate(flag="Si")
+) %>% filter(!is.na(flag))
+
+#match redcap y rds b7 filter id
+matches_b7_filtro<-ecm_filtros_b7 %>% ungroup() %>% select(id, id_ecm, id_filtro) %>% left_join(
+  ecm_rds_b7 %>% ungroup() %>% transmute(id, id_ecm, id_filtro=if_else(id_filtro=="NULL", "888", id_filtro), flag="Si")
+) %>% filter(!is.na(flag))
+
+#match fechas b7
+matches_b7_fechas<-ecm_filtros_b7 %>% transmute(
+  id, id_ecm, id_filtro, fecha=as.Date(fecha)
+) %>% left_join(
+  ecm_rds_b7_fechas %>% ungroup() %>% transmute(id, id_ecm, id_filtro, fecha_inicio, fecha_fin)
+) %>% mutate(
+  flag=if_else(
+   fecha>=as.Date(fecha_inicio) & fecha<=as.Date(fecha_fin),"Si","")
+) %>% filter(flag=="Si") %>% unique()
+
+
+# Extraer la parte de la fecha de la columna "ORIGEN" en b7
+ecm_rds_fechas_archivo_b7 <- rds_b7_clean %>%
+  mutate(fecha_archivo = str_extract(ORIGEN, "\\d{8}")) %>%
+  mutate(fecha_archivo = as.Date(fecha_archivo, format = "%d%m%Y"))
+
+#extraer la fecha del nombre del archivo para comparar con redcap en b7
+ecm_b7_fechas_archivo<-ecm_rds_fechas_archivo_b7 %>% mutate(
+  id_filtro=if_else(`header_Filter ID`=="NULL", "888", `header_Filter ID`,
+  ),
+  fechas=as.Date(fecha_archivo)
+) %>% select(id, id_ecm=`header_Device Serial`, id_filtro, fechas) %>%  group_by(id, id_ecm, id_filtro) %>% summarize(
+  fecha=min(fechas)
+) 
+#comparar id, ecm filtro y fecha del nombre del archivo con redcap en b7
+matches_b7_fechas_archivo<- ecm_filtros_b7 %>% transmute(
+  id, id_ecm, id_filtro, fecha=as.Date(fecha)
+) %>% left_join(
+  ecm_b7_fechas_archivo %>% ungroup() %>% transmute(id, id_ecm, id_filtro, fecha, flag="Si")
+) %>% filter(!is.na(flag)) 
+
+
+#armar la tabla 2
+actividad<-c("Total Measures (H41)","ECM file identified","ECM ID matches", "Filter ID matches", "Date matches between ecm_data", "Date matches file_name")
+tabla2<-data.frame(Activity=actividad)
+tabla2_datos <- tabla2 %>% mutate(
+  B5=case_when(
+    Activity=="Total Measures (H41)" ~ child_B5 %>% count() %>% .$n + mother_B5 %>% count() %>% .$n + bedroom_B5 %>% count() %>% .$n + oaw_B5 %>% count() %>% .$n + kitchen_b5_total,
+   Activity=="ECM file identified" ~ ecm_rds_b5 %>% ungroup() %>% count() %>% .$n,
+   Activity=="ECM ID matches" ~ matches_b5_ecm %>% ungroup() %>% count() %>% .$n,
+   Activity=="Filter ID matches" ~ matches_b5_filtro %>% ungroup() %>% count() %>% .$n,
+   Activity=="Date matches between ecm_data" ~ matches_b5_fechas %>% ungroup() %>% count() %>% .$n,
+   Activity=="Date matches file_name" ~ matches_b5_fechas_archivo %>% ungroup() %>% count() %>% .$n
+  ),
+   B6=case_when(
+    Activity=="Total Measures (H41)" ~  child_B6 %>% count() %>% .$n,
+    Activity=="ECM file identified" ~ ecm_rds_b6 %>% ungroup() %>% count() %>% .$n,
+   Activity=="ECM ID matches" ~ matches_b6_ecm %>% ungroup() %>% count() %>% .$n,
+   Activity=="Filter ID matches" ~ matches_b6_filtro %>% ungroup() %>% count() %>% .$n,
+   Activity=="Date matches between ecm_data" ~ matches_b6_fechas %>% ungroup() %>% count() %>% .$n,
+   Activity=="Date matches file_name" ~ matches_b6_fechas_archivo %>% ungroup() %>% count() %>% .$n
+  ),
+   B7=case_when(
+    Activity=="Total Measures (H41)" ~  child_B7 %>% count() %>% .$n,
+    Activity=="ECM file identified" ~ ecm_rds_b7 %>% ungroup() %>% count() %>% .$n,
+   Activity=="ECM ID matches" ~ matches_b7_ecm %>% ungroup() %>% count() %>% .$n,
+   Activity=="Filter ID matches" ~ matches_b7_filtro %>% ungroup() %>% count() %>% .$n,
+   Activity=="Date matches between ecm_data" ~ matches_b7_fechas %>% ungroup() %>% count() %>% .$n,
+   Activity=="Date matches file_name" ~ matches_b7_fechas_archivo %>% ungroup() %>% count() %>% .$n
+  ),
+   `B7.5`=case_when(
+    Activity=="Total Measures (H41)" ~  as.integer(0)
+  ),
+   B8 = case_when(
+    Activity=="Total Measures (H41)" ~  as.integer(0)
+  )
+)
+
+
+# Calcular las proporciones para cada columna hasta la fila 5
+for (col in c("B5", "B6", "B7", "B7.5", "B8")) {
+  new_col_name <- paste0("proporcion_",col)
+  tabla2_datos[new_col_name] <- c(NA, tabla2_datos[2:5, col] / tabla2_datos[1:4, col], NA)
+}
+
+# Calcular la proporción para la fila 6 dividiendo entre la fila 6 y la fila 4
+tabla2_datos <- tabla2_datos %>%
+  mutate(B5_proporcion = if_else(row_number() == 6, B5 / lag(B5, 2), NA_real_),
+        B6_proporcion = if_else(row_number() == 6, B6 / lag(B6, 2), NA_real_),
+        B7_proporcion = if_else(row_number() == 6, B7 / lag(B7, 2), NA_real_))
+
+
+tabla2_datos %>% transmute( Activity,
+  B5=case_when(
+    Activity=="Date matches file_name" ~ paste0(B5," (",round(B5_proporcion*100,2)," %)" ),
+    Activity=="Total Measures (H41)" ~ as.character(B5),
+    TRUE ~ paste0( B5," (",round(proporcion_B5*100,2)," %)") 
+    ),
+  B6=case_when(
+    Activity=="Date matches file_name" ~ paste0(B6," (",round(B6_proporcion*100,2)," %)" ),
+    Activity=="Total Measures (H41)" ~ as.character(B6),
+    TRUE ~ paste0( B6," (",round(proporcion_B6*100,2)," %)") 
+    ),
+  B7=case_when(
+    Activity=="Date matches file_name" ~ paste0(B7," (",round(B6_proporcion*100,2)," %)" ),
+    Activity=="Total Measures (H41)" ~ as.character(B7),
+    TRUE ~ paste0( B7," (",round(proporcion_B7*100,2)," %)") 
+    ),
+  `B7.5`= if_else(is.na(`B7.5`),"0", as.character(`B7.5`)),
+  B8=if_else(is.na(B8), "0", as.character(B8))
+) %>% kable(caption="<center>Table 2 <br>
+        ECM file QC issues frequency (%) </center>", align="l") %>% 
+  kable_classic(full_width=F, html_font="Cambria") %>% 
+  column_spec(1, bold = TRUE)
+
+
+
+```
+
+Table 3: Duration (hours)
+
+```{r}
+#preparar rds para duracion b5
+rds_b5_duracion<-rds_b5_clean %>% select(id, filter_id=`header_Filter ID`, 
+                        ecm_id=`header_Device Serial`, fecha=Date, hora= Time) #%>% 
+
+
+# Unimos las columnas Date y Time en una sola columna "DateTime" b5
+rds_b5_duracion$DateTime <- as.POSIXct(paste(rds_b5_duracion$fecha, rds_b5_duracion$hora), format = "%d/%m/%Y %H:%M:%S")
+rds_b5_duracion<-rds_b5_duracion %>% arrange(id, filter_id, DateTime)
+
+# Calculamos la diferencia de tiempo entre cada medida y la siguiente b5
+rds_b5_duracion$TimeDiff <- c(NA, diff(rds_b5_duracion$DateTime))
+
+filtered_data_b5 <- rds_b5_duracion %>%
+  filter(is.na(TimeDiff) | (TimeDiff <= 900 &  TimeDiff >0))
+
+filtered_data_inicio_fin_b5<-filtered_data_b5 %>% mutate(filter_id=if_else(filter_id=="NULL","888",filter_id)) %>%  group_by(id,ecm_id, filter_id) %>% summarize(
+  inicio=min(DateTime),
+  fin=max(DateTime)
+) %>% select(id, ecm_id, filter_id, inicio, fin)
+
+filtered_data_inicio_fin_b5$inicio <- as.POSIXct(filtered_data_inicio_fin_b5$inicio, format = "%Y-%m-%d %H:%M:%S")
+filtered_data_inicio_fin_b5$final <- as.POSIXct(filtered_data_inicio_fin_b5$fin, format = "%Y-%m-%d %H:%M:%S")
+
+# Calculamos la duración por día b5
+Duration_b5 <- filtered_data_b5 %>% filter(!is.na(TimeDiff)) %>% 
+  group_by(id, ecm_id, filter_id) %>% 
+  summarize(
+    Duration = (sum(as.numeric(TimeDiff)))/3600) 
+
+#armar data set de duraciones b5
+Duration_b5<-Duration_b5 %>% mutate(filter_id=if_else(filter_id=="NULL", "888", filter_id) ) %>%   left_join(
+  filtered_data_inicio_fin_b5 %>% ungroup()
+) %>% select(id, ecm_id, filter_id, inicio, final, Duracion=Duration) 
+
+
+#calcular estadisticas de duración b5
+# Calcular estadísticas descriptivas para la columna "Duracion"
+estadisticas_duracion_b5 <- summary(Duration_b5$Duracion)
+
+
+# Crear un data frame con las estadísticas descriptivas en el formato deseado b5
+estadisticas_duracion_b5_df <- data.frame(
+  visita = "B5",
+  Min. = as.numeric(estadisticas_duracion_b5[1]),
+  `1st Qu.` = as.numeric(estadisticas_duracion_b5[2]),
+  Median = as.numeric(estadisticas_duracion_b5[3]),
+  Mean = as.numeric(estadisticas_duracion_b5[4]),
+  `3rd Qu.` = as.numeric(estadisticas_duracion_b5[5]),
+  Max. = as.numeric(estadisticas_duracion_b5[6])
+)
+
+
+# Crear un resumen de frecuencias y porcentajes b5
+resumen_b5 <- Duration_b5 %>% 
+  mutate(
+    tipo_duracion = case_when(
+      Duracion <= 18 ~ "Short",
+      Duracion > 18 & Duracion <= 28 ~ "Normal",
+      Duracion > 28 ~ "Long"
+    )
+  ) %>% 
+  group_by(tipo_duracion) %>% 
+  summarise(Frecuencia = n()) %>%
+  pivot_wider(names_from = tipo_duracion, values_from = Frecuencia, values_fill = 0)
+
+# Agregar la fila de totales b5
+resumen_total_b5 <- resumen_b5 %>% 
+  summarise_all(sum) %>%
+  mutate(
+    Total = sum(Long, Normal, Short),
+    Long = paste0(Long, " (", scales::percent(Long / Total), ")"),
+    Normal = paste0(Normal, " (", scales::percent(Normal / Total), ")"),
+    Short = paste0(Short, " (", scales::percent(Short / Total), ")"),
+    Total = paste0(Total, " (100%)")
+  ) %>%
+  select(Long, Normal, Short, Total)
+
+# Cambiar el orden de las filas b5
+resumen_final_b5 <- resumen_total_b5 %>%
+  arrange(desc(Long), desc(Normal), desc(Short))
+
+tabla_3_b5<- estadisticas_duracion_b5_df %>% bind_cols(
+  resumen_final_b5 %>% select(
+    Short, Normal, Long, Total
+  )
+)
+ 
+#preparar rds para duracion b6
+rds_b6_duracion<-rds_b6_clean %>% select(id, filter_id=`header_Filter ID`, 
+                        ecm_id=`header_Device Serial`, fecha=Date, hora= Time) #%>% 
+
+
+# Unimos las columnas Date y Time en una sola columna "DateTime" b6
+rds_b6_duracion$DateTime <- as.POSIXct(paste(rds_b6_duracion$fecha, rds_b6_duracion$hora), format = "%d/%m/%Y %H:%M:%S")
+rds_b6_duracion<-rds_b6_duracion %>% arrange(id, filter_id, DateTime)
+
+# Calculamos la diferencia de tiempo entre cada medida y la siguiente b6
+rds_b6_duracion$TimeDiff <- c(NA, diff(rds_b6_duracion$DateTime))
+
+filtered_data_b6 <- rds_b6_duracion %>%
+  filter(is.na(TimeDiff) | (TimeDiff <= 900 &  TimeDiff >0))
+
+filtered_data_inicio_fin_b6<-filtered_data_b6 %>% mutate(filter_id=if_else(filter_id=="NULL","888",filter_id)) %>%  group_by(id,ecm_id, filter_id) %>% summarize(
+  inicio=min(DateTime),
+  fin=max(DateTime)
+) %>% select(id, ecm_id, filter_id, inicio, fin)
+
+filtered_data_inicio_fin_b6$inicio <- as.POSIXct(filtered_data_inicio_fin_b6$inicio, format = "%Y-%m-%d %H:%M:%S")
+filtered_data_inicio_fin_b6$final <- as.POSIXct(filtered_data_inicio_fin_b6$fin, format = "%Y-%m-%d %H:%M:%S")
+
+# Calculamos la duración por día b6
+Duration_b6 <- filtered_data_b6 %>% filter(!is.na(TimeDiff)) %>% 
+  group_by(id, ecm_id, filter_id) %>% 
+  summarize(
+    Duration = (sum(as.numeric(TimeDiff)))/3600) 
+
+#armar data set de duraciones b6
+Duration_b6<-Duration_b6 %>% mutate(filter_id=if_else(filter_id=="NULL", "888", filter_id) ) %>%   left_join(
+  filtered_data_inicio_fin_b6 %>% ungroup()
+) %>% select(id, ecm_id, filter_id, inicio, final, Duracion=Duration) 
+
+
+#calcular estadisticas de duración b6
+# Calcular estadísticas descriptivas para la columna "Duracion"
+estadisticas_duracion_b6 <- summary(Duration_b6$Duracion)
+
+
+# Crear un data frame con las estadísticas descriptivas en el formato deseado b6
+estadisticas_duracion_b6_df <- data.frame(
+  visita = "B6",
+  Min. = as.numeric(estadisticas_duracion_b6[1]),
+  `1st Qu.` = as.numeric(estadisticas_duracion_b6[2]),
+  Median = as.numeric(estadisticas_duracion_b6[3]),
+  Mean = as.numeric(estadisticas_duracion_b6[4]),
+  `3rd Qu.` = as.numeric(estadisticas_duracion_b6[5]),
+  Max. = as.numeric(estadisticas_duracion_b6[6])
+)
+
+
+# Crear un resumen de frecuencias y porcentajes b6
+resumen_b6 <- Duration_b6 %>% 
+  mutate(
+    tipo_duracion = case_when(
+      Duracion <= 18 ~ "Short",
+      Duracion > 18 & Duracion <= 28 ~ "Normal",
+      Duracion > 28 ~ "Long"
+    )
+  ) %>% 
+  group_by(tipo_duracion) %>% 
+  summarise(Frecuencia = n()) %>%
+  pivot_wider(names_from = tipo_duracion, values_from = Frecuencia, values_fill = 0)
+
+# Agregar la fila de totales b6
+resumen_total_b6 <- resumen_b6 %>% 
+  summarise_all(sum) %>%
+  mutate(
+    Total = sum(Long, Normal, Short),
+    Long = paste0(Long, " (", scales::percent(Long / Total), ")"),
+    Normal = paste0(Normal, " (", scales::percent(Normal / Total), ")"),
+    Short = paste0(Short, " (", scales::percent(Short / Total), ")"),
+    Total = paste0(Total, " (100%)")
+  ) %>%
+  select(Long, Normal, Short, Total)
+
+# Cambiar el orden de las filas b6
+resumen_final_b6 <- resumen_total_b6 %>%
+  arrange(desc(Long), desc(Normal), desc(Short))
+
+tabla_3_b6<- estadisticas_duracion_b6_df %>% bind_cols(
+  resumen_final_b6 %>% select(
+    Short, Normal, Long, Total
+  )
+)
+
+
+
+#preparar datos para tabal de duraciones en B7 ----
+#preparar rds para duracion b7
+rds_b7_duracion<-rds_b7_clean %>% select(id, filter_id=`header_Filter ID`, 
+                        ecm_id=`header_Device Serial`, fecha=Date, hora= Time) #%>% 
+
+
+# Unimos las columnas Date y Time en una sola columna "DateTime" b7
+rds_b7_duracion$DateTime <- as.POSIXct(paste(rds_b7_duracion$fecha, rds_b7_duracion$hora), format = "%d/%m/%Y %H:%M:%S")
+rds_b7_duracion<-rds_b7_duracion %>% arrange(id, filter_id, DateTime)
+
+# Calculamos la diferencia de tiempo entre cada medida y la siguiente b7
+rds_b7_duracion$TimeDiff <- c(NA, diff(rds_b7_duracion$DateTime))
+
+filtered_data_b7 <- rds_b7_duracion %>%
+  filter(is.na(TimeDiff) | (TimeDiff <= 900 &  TimeDiff >0))
+
+filtered_data_inicio_fin_b7<-filtered_data_b7 %>% mutate(filter_id=if_else(filter_id=="NULL","888",filter_id)) %>%  group_by(id,ecm_id, filter_id) %>% summarize(
+  inicio=min(DateTime),
+  fin=max(DateTime)
+) %>% select(id, ecm_id, filter_id, inicio, fin)
+
+filtered_data_inicio_fin_b7$inicio <- as.POSIXct(filtered_data_inicio_fin_b7$inicio, format = "%Y-%m-%d %H:%M:%S")
+filtered_data_inicio_fin_b7$final <- as.POSIXct(filtered_data_inicio_fin_b7$fin, format = "%Y-%m-%d %H:%M:%S")
+
+# Calculamos la duración por día b7
+Duration_b7 <- filtered_data_b7 %>% filter(!is.na(TimeDiff)) %>% 
+  group_by(id, ecm_id, filter_id) %>% 
+  summarize(
+    Duration = (sum(as.numeric(TimeDiff)))/3600) 
+
+#armar data set de duraciones b7
+Duration_b7<-Duration_b7 %>% mutate(filter_id=if_else(filter_id=="NULL", "888", filter_id) ) %>%   left_join(
+  filtered_data_inicio_fin_b7 %>% ungroup()
+) %>% select(id, ecm_id, filter_id, inicio, final, Duracion=Duration) 
+
+
+#calcular estadisticas de duración b7
+# Calcular estadísticas descriptivas para la columna "Duracion"
+estadisticas_duracion_b7 <- summary(Duration_b7$Duracion)
+
+
+# Crear un data frame con las estadísticas descriptivas en el formato deseado b7
+estadisticas_duracion_b7_df <- data.frame(
+  visita = "B7",
+  Min. = as.numeric(estadisticas_duracion_b7[1]),
+  `1st Qu.` = as.numeric(estadisticas_duracion_b7[2]),
+  Median = as.numeric(estadisticas_duracion_b7[3]),
+  Mean = as.numeric(estadisticas_duracion_b7[4]),
+  `3rd Qu.` = as.numeric(estadisticas_duracion_b7[5]),
+  Max. = as.numeric(estadisticas_duracion_b7[6])
+)
+
+
+# Crear un resumen de frecuencias y porcentajes b7
+resumen_b7 <- Duration_b7 %>% 
+  mutate(
+    tipo_duracion = case_when(
+      Duracion <= 18 ~ "Short",
+      Duracion > 18 & Duracion <= 28 ~ "Normal",
+      Duracion > 28 ~ "Long"
+    )
+  ) %>% 
+  group_by(tipo_duracion) %>% 
+  summarise(Frecuencia = n()) %>%
+  pivot_wider(names_from = tipo_duracion, values_from = Frecuencia, values_fill = 0)
+
+# Agregar la fila de totales b7
+resumen_total_b7 <- resumen_b7 %>% 
+  summarise_all(sum) %>%
+  mutate(
+    Total = sum(Long, Normal, Short),
+    Long = paste0(Long, " (", scales::percent(Long / Total), ")"),
+    Normal = paste0(Normal, " (", scales::percent(Normal / Total), ")"),
+    Short = paste0(Short, " (", scales::percent(Short / Total), ")"),
+    Total = paste0(Total, " (100%)")
+  ) %>%
+  select(Long, Normal, Short, Total)
+
+# Cambiar el orden de las filas b7
+resumen_final_b7 <- resumen_total_b7 %>%
+  arrange(desc(Long), desc(Normal), desc(Short))
+
+tabla_3_b7<- estadisticas_duracion_b7_df %>% bind_cols(
+  resumen_final_b7 %>% select(
+    Short, Normal, Long, Total
+  )
+)
+
+
+
+
+#integrar tablas de duración
+tabla_3_datos<- tabla_3_b5 %>% bind_rows(
+  tabla_3_b6
+) %>%  bind_rows(
+  tabla_3_b7
+)
+
+#crear tabal de datos integrada
+tabla_3_datos %>% transmute(
+Visit=visita, Min., `1st.Qu`=X1st.Qu., Median, Mean, `3rd.Qu`=X3rd.Qu., Max., Short, Normal, Long, Total
+) %>%   kable(caption="<center>Table 3 <br>
+        Duration (hours) </center>", align="l") %>% 
+  kable_classic(full_width=F, html_font="Cambria") %>% 
+  column_spec(1, bold = TRUE)
+
+```
+### Completeness UPAS B7
+```{r}
+#cargar rds upas hapin
+rds_hapin_upas<-readRDS("C:/GitHub_repo/qc_exposure_hapin/rds/rds_hapin_upas.rds")
+
+
+#crear id de participante
+rds_hapin_upas_clean <- rds_hapin_upas %>%
+  mutate(id = str_extract(ORIGEN, "(?<=UTC_)[0-9]+"))
+#extraer los datos necesarios para la tabla de completitud
+rds_hapin_upas_clean<-rds_hapin_upas_clean %>% transmute(id, id_filtro=substr(id_filtro,1,7), duracion=head_PumpingDuration, id_upas=substr(head_UPASserial, nchar(head_UPASserial) - 2, nchar(head_UPASserial)), fecha_upas=as.Date(head_StartDateTimeLocal)  ) %>% distinct()
+
+#preparar datos de redcap
+child_B7_upas_clean<-child_B7_upas %>% transmute(
+  id=record_id, id_upas=h41_c_device, id_filtro=h41_c_filter, fecha
+)
+
+upas_matches_b7<- child_B7_upas_clean %>% left_join(
+  rds_hapin_upas_clean %>% transmute(id, id_upas, match_upas="Si")
+) %>% filter(!is.na(match_upas))
+
+upas_filtros_matches_b7<- child_B7_upas_clean %>% left_join(
+  rds_hapin_upas_clean %>% transmute(id, id_filtro , match_filtros="Si")
+) %>% filter(!is.na(match_filtros))
+
+upas_filtros_upas_matches_b7<- child_B7_upas_clean %>% left_join(
+  rds_hapin_upas_clean %>% transmute(id, id_upas, id_filtro , match_upas_filtros="Si")
+) %>% filter(!is.na(match_upas_filtros))
+
+upas_fechas_matches_b7<- child_B7_upas_clean %>% mutate(fecha=as.Date(fecha)) %>%  left_join(
+  rds_hapin_upas_clean %>% transmute(id,  fecha=fecha_upas, match_upas_id_fechas="Si") 
+) %>% filter(!is.na(match_upas_id_fechas))
+
+upas_file_matches_b7<- child_B7_upas_clean %>% left_join(
+  rds_hapin_upas_clean %>% transmute(id, matches_upas_file="Si") %>% distinct()
+) %>% filter(!is.na(matches_upas_file))
+
+```
+
+```{r}
+
+actividad<-c("Total Measures (H41)","UPAS file identified","UPAS ID matches", "Filter ID matches", "Date matches")
+tabla1_upas<-data.frame(Activity=actividad)
+tabla1_datos_upas <- tabla1_upas %>% mutate(
+  B7=case_when(
+    Activity=="Total Measures (H41)" ~ child_B7_upas_clean %>% count() %>% .$n,
+   Activity=="UPAS file identified" ~ upas_file_matches_b7 %>% distinct() %>% count() %>% .$n,
+   Activity=="UPAS ID matches" ~ upas_matches_b7 %>% distinct() %>%  count() %>% .$n,
+   Activity=="Filter ID matches" ~ upas_filtros_upas_matches_b7 %>% distinct()  %>% count() %>% .$n,
+   Activity=="Date matches" ~ upas_fechas_matches_b7 %>% distinct() %>%  count() %>% .$n
+  )
+)
+
+# Calcular las proporciones para cada columna hasta la fila 5
+for (col in c("B7" )) {
+  new_col_name <- paste0("proporcion_",col)
+  tabla1_datos_upas[new_col_name] <- c(NA, tabla1_datos_upas[2:4, col] / tabla1_datos_upas[1:3, col], NA)
+}
+
+# Calcular la proporción para la fila 6 dividiendo entre la fila 6 y la fila 4
+tabla1_datos_upas <- tabla1_datos_upas %>%
+  mutate(
+        B7_proporcion = if_else(row_number() == 5, B7 / lag(B7, 4), NA_real_)
+        )
+
+tabla1_datos_upas %>% mutate(
+  B7=case_when(
+    is.na(proporcion_B7) & is.na(B7_proporcion) ~ as.character(B7),
+    !is.na(B7_proporcion) ~ paste0(as.character(B7)," (", round((B7_proporcion * 100),2)," %)"),
+    TRUE ~ paste0(as.character(B7)," (", round((proporcion_B7 * 100),2)," %)")
+    
+  )
+  ) %>% select(Activity, B7)%>% kable(caption="<center>Table 1 <br>
+       UPAS frequency (%) </center>", align="l") %>% 
+  kable_classic(full_width=F, html_font="Cambria") %>% 
+  column_spec(1, bold = TRUE) %>%
+  footnote( general = "Starting use UPAS on August 2 and the week of August 28
+  exclusive use of UPAS in 4-year-old children (ECM in children outside the window)",
+            escape=FALSE
+  )
+
+```
+

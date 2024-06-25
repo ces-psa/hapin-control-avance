@@ -1,0 +1,900 @@
+---
+title: "REDCap/H48/Filter Weight/QAQC Merging and Analysis"
+author: "ap_rp_wy"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+version: "REDCap download: 4/23/2021"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    self_contained: yes
+    code_folding: show
+---
+
+# REDCap/H48/Filter Weight/QAQC filtering, merging, and data set preparation.
+
+### Data was analyzed for the following visits and locations:
+* `r  paste(visit_filter,collapse = ", ")` 
+* `r  paste(location_filter,collapse = ", ")` 
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, fig.width = 12, fig.height = 4)
+
+##### READ ME: This markdown must be run using the render function, using the run_ecm_markdown.R helper script.
+
+blank_filter = 30 # µg max and min for filters
+
+if(grepl("india",irc_name,ignore.case = TRUE)){irc_num = "1";null_filters = "NA"}else
+  if(grepl("rwanda",irc_name,ignore.case = TRUE)){irc_num = "2"; null_filters = rwanda_null$filters}else
+    if(grepl("guatemala",irc_name,ignore.case = TRUE)){irc_num = "3";null_filters = "NA"}else
+      if(grepl("peru",irc_name,ignore.case = TRUE)){irc_num = "4";null_filters = "NA"}
+```
+
+# `r irc_name` Rmarkdown for ECM analysis 
+### REDcap data filter name review
+
+```{r redcap_overview,echo=FALSE}
+#filter to IRC and visits of interest
+raw_rc_all_instruments_irc <- as.data.table(raw_rc_all_instruments)[irc == irc_name][visit %in% visit_filter,]
+
+#########################################
+#summarize rc visit data 
+#########################################
+#identify rows of rc data with missing filters for a given set of locations (specified in location_filter in run_ecm_markdown.R)
+missing_filters_redcap <- raw_rc_all_instruments_irc[
+  is.na(filter) & 
+    instrument == 'ecm'
+  & location %in% location_filter]
+
+kable(missing_filters_redcap,"pipe",caption = paste0('There are ', missing_filters_redcap %>% nrow(.), 
+                                                     ' missing filter IDs in REDcap (fix any erroneous ones if they can be found through other data sources): '))
+
+#import and make the null filter list from Rw uasble. 
+null_filter_list  <-  c(null_filters,"NUL","888","NULL","888","8889")
+
+
+#from rc data, select all filters that are not missing for a given set of locations that are not duplicates
+#count the number of filters and the number of null filters
+rc_filter_overview <- raw_rc_all_instruments_irc[
+  !is.na(filter) & 
+    instrument == 'ecm' & 
+    location %in% location_filter & 
+    copy == 'first' & 
+    source == 'general',
+  list(
+    num_filters = length(filter),
+    null_filters = length(which(filter %in% null_filter_list))
+  ), 
+  by = c('irc', 'visit', 'location', 'copy')]
+
+kable(rc_filter_overview %>% 
+        dcast.data.table(., irc + location ~ visit, value.var = 'num_filters') %>% 
+        arrange(., irc, location),"pipe",caption = 'REDcap filter overview') 
+
+
+kable(rc_filter_overview %>% 
+        dcast.data.table(., irc + location ~ visit, value.var = 'null_filters') %>% 
+        arrange(., irc, location),"pipe",caption='REDcap NULL filter ID summary by round')
+
+
+```
+
+# REDcap data summary
+* Contains all notes recorded in REDcap from H41.  Should be reviewed for actionable items.
+
+```{r redcap_notes,echo=FALSE}
+
+#Restrict REDCap data to ecm_rc samples
+ecm_rc <- raw_rc_all_instruments_irc[
+  location %in% c(location_filter,"b") & instrument == 'ecm'][
+    , c('bgi', 'hpem', 'skc', 'randomized', 'h41_by', 'instrument') := NULL][
+      , filter := toupper(filter)][!instrument_id == "888",]
+
+#change names from * to rc_*
+setnames(ecm_rc, colnames(ecm_rc), paste('rc', colnames(ecm_rc), sep = "_"))
+
+#Review notes
+kable(ecm_rc[, unique(rc_ins_note)],"pipe",caption='REDCap H41 instrument notes for review.  None are currently actionable.  Do not have a protocol for creating flags for these.')
+
+kable(ecm_rc[, unique(rc_fin_note)],"pipe",caption='REDCap H41 end of sampling notes for review. None currently actionable.  Do not have a protocol for creating flags for these.')
+
+
+#Are there any duplicate filter IDs in H41 still?
+arrange(ecm_rc[rc_filter %in% ecm_rc[duplicated(ecm_rc,by='rc_filter') == TRUE, rc_filter], ][!(rc_filter %in% null_filter_list),],rc_filter) %>%  
+  knitr::kable(., digits = 1, caption = "Duplicated Filters in H41 - to fix","pipe")
+
+#missing whether or not the monitor stopped
+
+DT::datatable(ecm_rc[is.na(rc_stopped)],
+              caption =paste0(ecm_rc[is.na(rc_stopped)] %>% nrow(), 
+                              " ecm files are missing whether or not the monitor is stopped at the end of the sample.  Use the first and last time stamp for run duration. Details:"))
+ecm_rc[is.na(rc_stopped), check_file := 1]
+
+#registered as stopped, but has stop timestamp
+if(ecm_rc[rc_stopped==1 & !is.na(rc_end)] %>% nrow() > 0){
+
+  missing_stop_timestamp_redcap <- data.table(ecm_rc[rc_stopped==1 & !is.na(rc_end)] %>% nrow(), 
+                                              " ecm_rc files are registered as stopped, but have no stop timestamp.  Use the first and last time stamp for run duration. Details:")
+  DT::datatable(data.table(ecm_rc[rc_stopped==1 & !is.na(rc_end)]),
+                  caption = paste0(ecm_rc[rc_stopped==1 & !is.na(rc_end)] %>% nrow(), 
+    " ecm_rc files are registered as stopped, but have no stop timestamp."))
+}
+ecm_rc[rc_stopped==1 & !is.na(rc_end), check_file := 1]
+# 2M51875 - this is a duplicated filter used in 23361 at visit 2, and 23499 at visit 1
+#not registered as stop, has no stop timestamp
+if(ecm_rc[rc_stopped==0 & is.na(rc_end)] %>% nrow() > 0){
+  not_stopped_missing_stop <- data.table(ecm_rc[rc_stopped==0 & is.na(rc_end)] %>% nrow(),
+                                         " ecm_rc files are not registered as stopped and have no stop timestamp. Use the first and last time stamp for run duration. ")
+  DT::datatable(ecm_rc[rc_stopped==0 & is.na(rc_end)],
+                caption = paste0(ecm_rc[rc_stopped==0 & is.na(rc_end)] %>% nrow(),
+    " ecm_rc files are not registered as stopped AND have no stop timestamp."))
+  
+}
+ecm_rc[rc_stopped==0 & is.na(rc_end), check_file := 1]
+
+stop_timestamp_overview <- rbind(
+  if(exists('missing_stop_redcap')) missing_stop_redcap, 
+  if(exists('missing_stop_timestamp_redcap')) missing_stop_timestamp_redcap, 
+  if(exists('not_stopped_missing_stop')) not_stopped_missing_stop
+)
+setnames(stop_timestamp_overview, c('Number', 'Characteristics'))
+kable(stop_timestamp_overview,"pipe",caption='Summary of problematic stop time messages (both from instrument and REDcap)') 
+
+files_to_check <- ecm_rc[
+  check_file == 1 &
+    rc_location %in% location_filter,
+  list(
+    num_filters = length(rc_instrument_id)
+  ),
+  by = c('rc_visit', 'rc_location', 'rc_copy')]  %>%
+  dcast.data.table(., rc_location ~ rc_visit, value.var = 'num_filters')
+kable(files_to_check,"pipe",caption='Summary of problematic stop time messages (both from instrument and REDcap), by visit') 
+
+#extract filter ids by ...
+rc_filter_list <- ecm_rc[, list(filter = unique(rc_filter)), by='rc_irc,rc_copy,rc_visit,rc_location,rc_h41_date,rc_id,rc_start']
+# rc_filter_numbers <- dcast.data.table(rc_filter_list[, list(n = length(unique(filter))), by = 'rc_irc,rc_copy,rc_visit,rc_location'], rc_irc+rc_location+rc_copy~rc_visit) <- ##### redundant
+setnames(rc_filter_list, 'rc_id', 'id')
+setnames(rc_filter_list, 'rc_irc', 'irc')
+setnames(rc_filter_list, 'rc_location', 'location')
+setnames(rc_filter_list, 'rc_copy', 'sample_num')
+setnames(rc_filter_list, 'rc_visit', 'visit')
+setnames(rc_filter_list, 'rc_h41_date', 'h41_date')
+
+
+```
+
+# Filter weights overview
+### H45 summaries for both UGA and SRU weighing rooms (IRC analysis dependant)
+
+```{r filter_weights_processing, echo=FALSE}
+wts <- rbind(wt_sriher, wt_uga)[irc == irc_name]
+weights_overview <- rbind(
+  data.table(wts[irc == irc_name, length(unique(filter))], " unique filters."),
+  data.table(wts[irc == irc_name & !is.na(mass_deposition), length(unique(filter))], " unique filters with mass deposition."),
+  data.table(wts[irc == irc_name & is.na(mass_deposition), length(unique(filter))], " unique filters without mass deposition.")
+)
+setnames(weights_overview, c('Number', 'Characteristics'))
+
+kable(weights_overview,"pipe",caption='Filter weight duplicates summary') 
+```
+
+# Review H48 pre and post flows
+### Highlight pre and post flows that are out of range for further checking
+* Identify issues in H48.  Automatically corrects some basic typos in the pre and post flow rates, like bad units.
+* Highlights NULL filters like those from ECMs with no pre-weighed filters.  Treats the separate list of filters provided by Rwanda as NULL filters.
+* H48 is filtered to remove duplicates based on copies of the Excel H48 files, and based on dates, 
+        since different date systems may be in use for different files, but the dates are not used in merging apart from error checking.
+```{r h48_flow_processing,echo=FALSE}
+
+
+xl_ecm_calibrations_irc <- xl_ecm_calibrations[irc == irc_name]
+#Remove duplicate entries from different files (critical for Peru)
+xl_ecm_calibrations_irc <- xl_ecm_calibrations_irc[!duplicated(xl_ecm_calibrations_irc[,c(2:10,12,14:16)]),]
+xl_ecm_calibrations_irc[, filter := toupper(filter)]
+
+
+kable(xl_ecm_calibrations_irc[!is.na(filter), length(filter), by = 'duty_cycle'],"pipe",
+      caption = 'Number of filter IDs by duty_cycle in H48. Fix any erroneous ones in H48.')
+
+
+DT::datatable(xl_ecm_calibrations_irc[!is.na(filter) & (duty_cycle != "1" | is.na(duty_cycle)),],
+              caption = 'Details on duty cycles in H48 that are not 1')
+
+#clean up ecm_ids
+xl_ecm_calibrations_irc[ecm_id %like% "ECM", ecm_id := gsub("ECM", '', ecm_id)]
+kable(setnames(as.data.frame(table(xl_ecm_calibrations_irc$ecm_id)),c('ECM ID', 'Number of calibrations')),"pipe",
+      caption = 'ECM IDs from H48.  Fix any erroneous ones (e.g. single instances of an ECM is likely a mistake).')
+
+DT::datatable(setDT(xl_ecm_calibrations_irc[!(filter %in% null_filter_list),])[, if(.N<5) .SD, by = ecm_id],
+              caption = 'H48 data associated with ECMs that have fewer than 5 calibrations') 
+
+#Reconcile the multiple pre and post flow measurements in case there are multiple.
+# xl_ecm_calibrations_irc_dup_filters_n5 <- xl_ecm_calibrations_irc[!(filter %like% "NUL"),][duplicated(filter), ]
+# kable(as.data.table(table(xl_ecm_calibrations_irc[filter %in% xl_ecm_calibrations_irc_dup_filters_n5$filter,filter]))[N>5,])
+
+xl_ecm_calibrations_irc_dup_filters <- xl_ecm_calibrations_irc[!(filter %in% null_filter_list),][duplicated(filter), filter]
+kable(as.data.table(table(xl_ecm_calibrations_irc[filter %in% xl_ecm_calibrations_irc_dup_filters,filter]))[N>5,],"pipe",
+      caption = 'Duplicated filter IDs in H48 with more than 5 occurrences (fix: are they NULL filters?)')
+
+DT::datatable(xl_ecm_calibrations_irc[filter %in% xl_ecm_calibrations_irc_dup_filters],
+              caption='Duplicated filter IDs in H48.  Fix if possible (NULL values removed)')
+
+# write_xlsx(
+#   arrange(xl_ecm_calibrations_irc[filter %in% xl_ecm_calibrations_irc_dup_filters], filter)
+#   , '~/Desktop/double_filters.xlsx') #WRITE OUT
+
+#Perform a few corrections for clearly incorrect unit flow rates.  The order of these matters, keep greatest to smallest.  Important for Peru.
+xl_ecm_calibrations_irc[post_sample_flow > 200000, post_sample_flow := post_sample_flow/1000]
+xl_ecm_calibrations_irc[pre_sample_flow > 200000, pre_sample_flow := pre_sample_flow/1000]
+xl_ecm_calibrations_irc[post_sample_flow > 1000, post_sample_flow := post_sample_flow/10]
+xl_ecm_calibrations_irc[pre_sample_flow > 1000, pre_sample_flow := pre_sample_flow/10]
+xl_ecm_calibrations_irc[post_sample_flow < 1, post_sample_flow := post_sample_flow*1000]
+xl_ecm_calibrations_irc[pre_sample_flow < 1, pre_sample_flow := pre_sample_flow*1000]
+xl_ecm_calibrations_irc[post_sample_flow < 10, post_sample_flow := post_sample_flow*100]
+xl_ecm_calibrations_irc[pre_sample_flow < 10, pre_sample_flow := pre_sample_flow*100]
+xl_ecm_calibrations_irc[post_sample_flow < 100, post_sample_flow := post_sample_flow*10]
+xl_ecm_calibrations_irc[pre_sample_flow < 100, pre_sample_flow := pre_sample_flow*10]
+
+#out of range
+h48_flow_overview <- rbind(
+  data.table(xl_ecm_calibrations_irc[!pre_sample_flow %between% flow_thresholds_ml] %>% nrow(), " pre-flows are out of range "),
+  data.table(xl_ecm_calibrations_irc[!post_sample_flow %between% flow_thresholds_ml] %>% nrow(), " post-flows are out of range")
+)
+setnames(h48_flow_overview, c('Number', 'Characteristics'))
+kable(h48_flow_overview,"pipe",caption = 'H48 flow overview')  
+
+DT::datatable(
+  arrange(
+    xl_ecm_calibrations_irc[
+      filter %in% xl_ecm_calibrations_irc[!(pre_sample_flow %between% flow_thresholds_ml) & !(filter %in% null_filter_list), filter] &
+        date %in% xl_ecm_calibrations_irc[!pre_sample_flow %between% flow_thresholds_ml & !(filter %in% null_filter_list), date] &
+        ecm_id %in% xl_ecm_calibrations_irc[!pre_sample_flow %between% flow_thresholds_ml & !(filter %in% null_filter_list), ecm_id]
+      ],date
+  ),caption = 'Details of flow calibrations (H48) that are out of range for PRE flows (fix/check for typos) (NULL filters removed):'
+)
+
+DT::datatable(
+  arrange(
+    xl_ecm_calibrations_irc[
+      filter %in% xl_ecm_calibrations_irc[!post_sample_flow %between% flow_thresholds_ml & !(filter %in% null_filter_list), filter] &
+        date %in% xl_ecm_calibrations_irc[!post_sample_flow %between% flow_thresholds_ml & !(filter %in% null_filter_list), date] &
+        ecm_id %in% xl_ecm_calibrations_irc[!post_sample_flow %between% flow_thresholds_ml & !(filter %like% null_filter_list), ecm_id]
+      ], date
+  ),caption = 'Look at details of flow calibrations (H48) that are out of range for POST flows (fix/check for typos) (NULL filters removed):'
+)
+
+
+
+```
+
+# Merge REDCap data with Excel H48 filter weights
+### Summarize merges, list the failed merges for further checking
+* Merges REDCap and H48 data by IRC and filter ID. 
+* Removes REDCap entries that have NA or other non-conforming filter IDs.
+* Removes merged entries that have NA filter mass depositions.
+
+```{r merge_rc_weights,echo=FALSE}
+#merge filter list with weights
+rc_filter_wts <- merge(rc_filter_list[!is.na(filter)], wts, by=c('irc','filter'), all.x = T) 
+# setnames(rc_filter_wts, 'rc_location', 'location')
+
+message(nrow(rc_filter_wts), " filters in the merged redcap and weights list")
+
+#confirm/enforce no NA filters in merged dataset
+rc_filter_wts <- rc_filter_wts[!is.na(filter)]  # THIS DOESN'T DO ANYTHING DOES IT?
+message(nrow(rc_filter_wts), " filters in the merged redcap and weights list after removing NA filters IDs")
+
+
+#merge additional filters with original dataset
+rc_filter_wts <- merge(rc_filter_wts , additional_filters, by = 'filter', all.x = T)
+#for missing mass depositions, transfer them over
+rc_filter_wts[is.na(mass_deposition), mass_deposition := mass_deposition_2]
+rc_filter_wts[, mass_deposition_2 := NULL]
+
+
+```
+
+
+# Identify filters in H45 that are not present in the REDCap data, and vice-versa
+
+```{r missing_filter_weights_rc,echo=FALSE}
+
+#filters missing weights / mass+dep.
+missing_weights_filternames <- rc_filter_wts[is.na(mass_deposition), list(filter = unique(filter))]
+message(nrow(missing_weights_filternames)," filters from REDCap have no corresponding H45 weights to merge with.")
+
+
+#filters with missing weights that have names not matching the standard naming protocol (worth reviewing)
+filters_with_bad_names <- missing_weights_filternames[!filter %like% paste0(irc_num,"M[0-9]{5}|P[0-9]{5}|T[0-9]{5}|V[0-9]{5}|[0-9]{1}P[0-9]{4}|UVG[0-9]{2}"), filter]
+filters_to_ignore <- c(filters_with_bad_names, null_filter_list)
+kable(filters_to_ignore,"pipe",caption = "List of filters with bad file names AND filters on the ignore list (including NULL filters).  Check and fix as needed.") 
+
+
+
+DT::datatable(rc_filter_wts[is.na(mass_deposition) & filter %like% paste0(irc_num,"M[0-9]{5}|P[0-9]{5}|V[0-9]{5}|[0-9]{1}P[0-9]{4}|UVG[0-9]{2}")],
+              caption=paste0(sum(nrow(missing_weights_filternames) + length(filters_with_bad_names))," filters from REDCap have no corresponding weights to merge with,  and filters that have filter names that do not conform to the naming protocol.  Complete list (excludes 888 and NULL filters) (Fix - use for reference):"))
+
+# rc_filter_wts <- rc_filter_wts[!(filter %in% filters_to_ignore)] #Change to set to NA?  What happens if we have an NA filter mass?
+rc_filter_wts[filter %in% filters_to_ignore, mass_deposition := NA] #Change to set to NA?  What happens if we have an NA filter mass?
+
+#Missing mass depositions
+missing_weights <- rc_filter_wts[is.na(mass_deposition), list(n = length(filter)), by = 'irc,visit,location']
+kable(dcast.data.table(missing_weights, irc+location~visit),"pipe") 
+message(rc_filter_wts[is.na(mass_deposition)] %>% nrow(), " mass depositions are missing.")
+for(i in rc_filter_wts[is.na(mass_deposition), unique(visit)]){
+  message(rc_filter_wts[is.na(mass_deposition) & visit == i] %>% nrow(), " mass depositions are missing from ", i, '.')
+}
+
+#Look at the filter weights that have no corresponding H41 data
+wts_filter_rc <- merge(wts,rc_filter_list[!is.na(filter)], by=c('irc','filter'), all.x = T) 
+
+
+#filters missing weights / mass+dep
+DT::datatable(wts_filter_rc[is.na(mass_deposition),],
+              caption = paste0(nrow(wts_filter_rc[is.na(mass_deposition),])," filters with missing depositions (missing either the pre or post weights, or both) (check/fix). "))
+
+#filters missing RC match
+DT::datatable(wts_filter_rc[is.na(id),],
+              caption = paste0(nrow(wts_filter_rc[is.na(id),])," filters that do not have matching REDcap entries (check/fix). "))
+
+
+```
+
+# Import and clean ECM QAQC data
+Standardize some variable names from the ECM qaqc data.  
+Also assigns region to the sample, for the purposes of doing a by-region blank correction.  So far only India uses this approach.
+```{r import_qaqc_data,echo=FALSE}
+#Merge RC data with QAQC data here, only focusing on the blanks, so we can get the region the blanks were from.
+#Import the IRC's qaqc summary
+ecm_qa_data = ecm_qa_data_read(irc_name,ecm_qa_files) #Different function is called whether using onedrive or box approach.
+
+ecm_qa_data$filter_id_insidefile <- trimws(ecm_qa_data$filter_id)
+ecm_qa_data$filter <- trimws(ecm_qa_data$filter_id2)
+ecm_qa_data$location <- tolower(ecm_qa_data$loc)
+ecm_qa_data$visit = ecm_qa_data$study_phase
+ecm_qa_data$irc = irc_name
+ecm_qa_data = visit_fun(ecm_qa_data)
+ecm_qa_data = loc_fun(ecm_qa_data) %>% as.data.table()
+ecm_qa_data$id = as.character(ecm_qa_data$pid)
+ecm_qa_data$neph_mean = as.numeric(ecm_qa_data$neph_mean)
+ecm_qa_data$neph_sd = as.numeric(ecm_qa_data$neph_sd)
+ecm_qa_data$neph_min = as.numeric(ecm_qa_data$neph_min)
+
+#drop columns
+ecm_qa_data <- ecm_qa_data[,
+                           -c(
+                             'download_date', 'qa_date', 'neph_slope',
+                             'neph_offset', 'hardware_dt', 'software_dt',
+                             'software_vers', 'flow_min', 'flow_max',
+                             'bl_start', 'bl_end', 'bl_night',
+                             'compliance_flag',
+                             'smry', 'filter_id', 'filter_id2', 'analysis',
+                             'study_phase','loc','pid'
+                           )]
+
+#Extract region variable for dealing with blanks in a more nuanced way
+ecm_qa_data[, region := dt_case_when(file %like% 'Villupuram' ~ 'Villupuram',
+                                     file %like% 'Nagapattinam' ~ 'Nagapattinam',
+                                     TRUE ~ irc_name)]
+
+
+```
+
+# Calculate blanks and limits of detection
+### Apply blank subtraction
+Calculate LOD as 3*stdev of blanks.  Grouped by year and region (India only)
+Blanks above or below `r  blank_filter` µg deposition are censored in the blank analysis.
+Set values below LOD to LOD/sqrt(2)
+
+```{r blanks_lod,echo=FALSE}
+#Blanks have an HHID.  Get list of HHID's regions from ecm_qa_data to figure out what region they were in.
+hhid_region_list <- ecm_qa_data %>%
+  dplyr::select(id,region) %>%  #Sometimes miscategorized data, so need to get the most frequent occurence and use that as the region for the given hhid.
+  dplyr::group_by(id,region) %>% 
+  dplyr::mutate(n = n()) %>% 
+  dplyr::arrange(id,desc(n)) %>% 
+  dplyr::group_by(id) %>% 
+  dplyr::filter(row_number()==1)
+rc_filter_wts <- merge(rc_filter_wts,hhid_region_list,by="id",all.x = TRUE,all.y=FALSE)
+
+if(irc_name %in% 'india'){
+  rc_filter_wts[,h41_date := as.factor(year(rc_filter_wts$h41_date))]
+}else{
+  rc_filter_wts[, h41_date := as.factor(year(ymd(rc_filter_wts$h41_date)))]
+}
+
+rc_filter_wts[is.na(damage), damage := 0]
+
+blanks_good <- rc_filter_wts[location == 'b' & size == '15mm' & 
+                               # (mass_deposition > -blank_filter/1000 & mass_deposition < blank_filter/1000) &
+                               (damage == 0)]
+saveRDS(blanks_good, paste0('../output/5_merged_ecm_data/ecm_blanks_good_',irc_name,'_',format(Sys.Date(), "%Y-%m-%d"),'.rds'))
+
+kable(rc_filter_wts[location == 'b' & size == '15mm' & 
+                      (mass_deposition < -blank_filter/1000 & mass_deposition > blank_filter/1000)],
+      caption = "blanks excluded from the analysis")
+
+#Rwanda doesn't have blanks for 2020 yet -- set to year - 1 (2019)
+if(irc_name %like% "rwanda"){
+  rc_filter_wts[h41_date == 2020, h41_date := as.factor('2019')]
+}
+
+blank_boxplot_in <- ggplot(aes(x=h41_date, y=mass_deposition*1000, colour = irc), data = blanks_good) + 
+  geom_boxplot(alpha = 0.25, aes(color = h41_date)) +
+  geom_jitter(height = 0,width = 0.2,alpha = 0.3, aes(color = h41_date)) +
+  # geom_rug(sides = 'rl', aes(x = 0, color = h41_date), position = 'jitter') + 
+  facet_grid(.~region)+
+  theme_bw() + 
+  labs(x = 'Year', y = expression(paste("PM"[2.5], " Mass Deposition ", ("μg")))) +
+  ggtitle('ECM blank mass depositions by year') +
+  coord_flip()
+blank_boxplot_in
+
+#plot blank mass dep distribution
+blank_distribution_in <- ggplot(aes(mass_deposition*1000), data = blanks_good) + 
+  geom_density(aes(color = h41_date, fill = h41_date), alpha = 0.3) + 
+  geom_rug(sides = 'b', aes(y = 0, color = h41_date), position = 'jitter', alpha = 0.5) + 
+  facet_grid(h41_date~region, scales = 'free_y')+
+  theme_bw() + 
+  labs(x = 'Mass Deposition', y = 'Density') +
+  ggtitle('ECM blank mass depositions') +
+  ylim(c(0, 0.4))
+blank_distribution_in
+
+#Calculate blank stats.
+median_blank_in <- blanks_good[, list(
+  mean_blank = mean(mass_deposition, na.rm = T),
+  median_blank = median(mass_deposition, na.rm = T),
+  sd_blank = sd(mass_deposition, na.rm = T),
+  LOD_blank = 3*sd(mass_deposition, na.rm = T),
+  n_blank = length(mass_deposition),
+  lod_adj_mass_dep = 3*sd(mass_deposition, na.rm = T)/sqrt(2)
+), by = c('h41_date','region')] 
+
+#if the number of blanks LT<3, re-estimate region-specific, year-1:year median
+region_year_blank_small_n <- median_blank_in[n_blank < 3, list(h41_date=unique(h41_date)), by = region]
+region_year_blank_small_n[, h41_date := as.numeric(as.character(h41_date))]
+
+blank_summary_fun <- function(row){
+  replacement_blanks <- blanks_good[
+    region == region_year_blank_small_n[row, region] & 
+      h41_date %in% c(region_year_blank_small_n[row, h41_date], region_year_blank_small_n[row, h41_date-1]),
+    list(
+      mean_blank = mean(mass_deposition, na.rm = T),
+      median_blank = median(mass_deposition, na.rm = T),
+      sd_blank = sd(mass_deposition, na.rm = T),
+      LOD_blank = 3*sd(mass_deposition, na.rm = T),
+      n_blank = length(mass_deposition),
+      lod_adj_mass_dep = 3*sd(mass_deposition, na.rm = T)/sqrt(2)
+    ),
+    by = 'region'
+    ]
+  replacement_blanks[, h41_date := region_year_blank_small_n[row, h41_date]]
+}
+
+#Get summary of good blanks by region
+broader_blanks <- ldply(1:nrow(region_year_blank_small_n), blank_summary_fun)
+
+median_blank_in <- median_blank_in[n_blank>=3]
+median_blank_in <- rbind(median_blank_in, broader_blanks)
+
+kable(median_blank_in,"pipe",caption = paste0('Filtering out blank mass values outside of +/- ',blank_filter,'µg due to clear problems.')) 
+
+#Merge blank stats with filter weights. By year.
+rc_filter_wts <- merge(rc_filter_wts, median_blank_in[, c('h41_date', 'median_blank','LOD_blank','lod_adj_mass_dep','region')], by = c('h41_date','region'), all.x = T)
+
+#Perform blank subtration (by year)
+rc_filter_wts[location != "b", adj_mass_dep := mass_deposition - median_blank]
+
+#flag samples where we are going to do LOD replacement
+rc_filter_wts[location != "b" & adj_mass_dep < LOD_blank, lod_replacement := 1, by =  c('h41_date','region')]
+rc_filter_wts[,lod_replacement := ifelse(is.na(lod_replacement),0,1)]
+
+#then, do LOD replacement for values below DL.
+rc_filter_wts[location != "b" & adj_mass_dep < LOD_blank, lod_adj_mass_dep := lod_adj_mass_dep, by =  c('h41_date','region')]
+
+```
+
+# Merge with excel H48 and RC data
+Here we are excluding filters from the merged REDCap and filter weight data that have repeated occurences of the same filter ID (ie. duplicate filters removed).
+Clean up many date and formatting issues with H48 ECM calibration data.
+Filter out the RC+H48+weight data from visits we are not interested in at the moment. 
+
+```{r merge_rc_h48flows,echo=FALSE}
+# rc_filter_wts <- rc_filter_wts[location!='b' & !filter %in% filters_to_ignore_in]
+#these filters have multiple entries -- exclude
+message(rc_filter_wts[filter %in% rc_filter_wts[duplicated(filter), filter]]  %>% nrow()/2, " filters have multiple weight-by-redcap entries: ", paste(rc_filter_wts[duplicated(filter), filter], " "), "-- these will be excluded from subsequent gravimetric analysis (nephelometer data may be used.")
+DT::datatable(rc_filter_wts[filter %in% rc_filter_wts[duplicated(filter), filter]])
+# rc_filter_wts <- rc_filter_wts[!filter %in% rc_filter_wts[duplicated(filter), filter]]
+# rc_filter_wts <- rc_filter_wts[filter %in% rc_filter_wts[duplicated(filter), filter],mass_deposition := NA] #RP test
+
+
+#these filters have multiple entries in the logs -- exclude
+message(length(unique(xl_ecm_calibrations_irc[(filter %like% paste0(irc_num,"M5")) & filter %in% xl_ecm_calibrations_irc[duplicated(filter), filter]]$filter)), " filters have multiple entries in H48")
+
+#Keep only the most complete rows of H48. Gets rid of cases where on row for a given filter/ecm/date combo had an incomplete post flow.
+xl_ecm_calibrations_irc <- xl_ecm_calibrations_irc %>% 
+  dplyr::arrange(filter,ecm_id,date,pre_sample_flow,post_sample_flow) %>% 
+  dplyr::group_by(filter,ecm_id,date) %>% 
+  dplyr::filter(row_number()==1) %>% 
+  dplyr::filter(!filter %in% filters_to_ignore,
+                !is.na(filter)) %>% 
+  as.data.table()
+
+#these filters have multiple entries in the logs -- exclude
+DT::datatable(
+  as.data.frame(
+    xl_ecm_calibrations_irc[(filter %like% paste0(irc_num,"M5")) & 
+                              filter %in% xl_ecm_calibrations_irc[duplicated(filter), filter]])  %>% 
+    arrange(., filter)  %>% 
+    dplyr::select(date, ecm_id, filter, pre_sample_flow, post_sample_flow, filename, post_sample_flow2),
+  caption = paste0(length(unique(xl_ecm_calibrations_irc[(filter %like% paste0(irc_num,"M5")) & filter %in% xl_ecm_calibrations_irc[duplicated(filter), filter]]$filter)), " filters have multiple entries in H48 after filtering for partially duplicated rows.  Below are those detailed entries:")) 
+
+
+#tons of date issues with H48. This starts to deal with them, and is working well at the moment.  
+message('Fixing H48 date formats.  Small subset have no date available, but the data look very good, so leaving them to allow for merging with ECM data.')
+
+xl_ecm_calibrations_irc[,date:=gsub("_", "-", date)]
+xl_ecm_calibrations_irc[,date:=gsub(" ", "", date)]
+xl_ecm_calibrations_irc[date %like% "Ago", date:=gsub("Ago", "AUG", date,ignore.case = TRUE)]
+xl_ecm_calibrations_irc[date %like% "ABR|Abr", date:=gsub("Abr", "APR", date,ignore.case = TRUE)]
+xl_ecm_calibrations_irc[date %like% "ENE|Ene", date:=gsub("ENE", "JAN", date,ignore.case = TRUE)]
+xl_ecm_calibrations_irc[date %like% "DIC|Dic", date:=gsub("DIC", "DEC", date,ignore.case = TRUE)]
+xl_ecm_calibrations_irc[date %like% "SET|Set", date:=gsub("Set", "SEP", date,ignore.case = TRUE)]
+xl_ecm_calibrations_irc[date %like% "APL", date:=gsub("APL", "APR", date,ignore.case = TRUE)]
+xl_ecm_calibrations_irc[date %like% "44|43|42|41", date2:= as.Date(as.numeric(date), origin = "1899-12-30")]
+# xl_ecm_calibrations_irc[is.na(date2) & !is.na(date), date2:=as.Date(date, c('dmy', 'dby','d-m-y',''))]
+xl_ecm_calibrations_irc[is.na(date2) & !is.na(date), date2:=as.Date(date,'%d-%b-%y')]
+xl_ecm_calibrations_irc[is.na(date2) & !is.na(date), date2:=as.Date(date,'%d-%b-%Y')]
+xl_ecm_calibrations_irc[is.na(date2) & !is.na(date), date2:=as.Date(date,'%d-%m-%y')]
+xl_ecm_calibrations_irc[is.na(date2) & !is.na(date), date2:=as.Date(date,'%d/%b/%Y')]
+xl_ecm_calibrations_irc[is.na(date2) & !is.na(date), date2:=as.Date(date,'%d/%m/%Y')]
+xl_ecm_calibrations_irc[is.na(date2) & !is.na(date), date2:=as.Date(date,'%m/%d/%Y')]
+bad_dates <- which(is.na(xl_ecm_calibrations_irc[is.na(date2) & !is.na(date), parse_date_time(date, c('dmy', 'dby'))]))
+xl_ecm_calibrations_irc[, date := NULL]
+xl_ecm_calibrations_irc[, date := date2]
+# xl_ecm_calibrations_irc <- xl_ecm_calibrations_irc[!filter %in% xl_ecm_calibrations_irc[duplicated(filter), filter]]
+
+#attempt merge of filter weights with ecm h48 calibration file
+filter_and_flow <- merge(rc_filter_wts, xl_ecm_calibrations_irc, by = c('irc','filter'), all.x = T,allow.cartesian = T) #3670
+
+#subset columns
+filter_and_flow <- filter_and_flow[, c('irc','id', 'visit', 'filter', 'sample_num','location', 'damage', 'mass_deposition', 'median_blank', 'adj_mass_dep', 'lod_replacement', 'lod_adj_mass_dep' , 'duty_cycle', 'pre_sample_flow', 'post_sample_flow','h41_date','rc_start'), with = F]
+
+#THIS CHUNK IS REDUNDANT until line 533...  The filter_and_flow variable already has this redcap data in there, and it makes me nervous to basically filter this stuff down in the same way, when something could change.  But we would need to do the visit filter on filter_and_flow to leave only the visits we care about.  Tested with identical.  Commenting out 512:520 but plrease lemme know if there is some check I'm not understanding here.
+
+#ecm log file cleaning
+#Ignore 888, 8889, NULL, NA and fix the smily face
+# ecm_rc_in <- ecm_rc[rc_irc == irc_name & !rc_filter %in% filters_to_ignore & !is.na(rc_filter)]
+
+#these filters have multiple entries -- exclude; n = 10
+# ecm_rc_in <- ecm_rc_in[!rc_filter %in% ecm_rc_in[duplicated(rc_filter), rc_filter]]
+
+#merge rc and ecm excel log
+# rc_filter_flow_in <- merge(filter_and_flow, ecm_rc_in, by.x = c('filter', 'location', 'irc'), by.y = c('rc_filter', 'rc_location', 'rc_irc'), all.x = T) #3670
+
+#subset columns
+rc_filter_flow_in <- filter_and_flow[
+  visit %in% visit_filter, 
+  c(
+    'filter','id', 'location', 'irc', 'visit', 'sample_num',
+    'damage', 'mass_deposition', 'median_blank', 'adj_mass_dep', 
+    'lod_replacement', 'lod_adj_mass_dep',
+    'pre_sample_flow', 'post_sample_flow','h41_date','rc_start'
+  ), with = F
+  ]
+
+#Check for filter and ECM issues
+DT::datatable(rc_filter_flow_in[adj_mass_dep < 0],
+              caption = paste0('Adjusted mass depositions below zero, for review. Only looking at data from the following visit(s): ', paste(visit_filter,collapse = ",")))
+
+DT::datatable(rc_filter_flow_in[damage == 1],
+              caption = paste0('Damaged filters, for review. Visit(s): ', paste(visit_filter,collapse = ","))) 
+
+DT::datatable(rc_filter_flow_in[
+  visit %in% visit_filter & 
+    location != 'b' &
+    (!(pre_sample_flow %between% flow_thresholds_ml) | 
+       !(post_sample_flow %between% flow_thresholds_ml) |
+       is.na(pre_sample_flow) |
+       is.na(post_sample_flow))
+  ],
+  caption = 'Filters with pre and post sample ECM flows that are out of range')
+```
+
+# Import and merge the REDCap+filter+H48 data with ECM QAQC data
+* Clean up the ECM qaqc data formatting.  Remove entries that match with the filter_to_ignore list.
+* If either the pre or post flow check from H48 is missing, we set the missing crf flow flag to 1.
+* If the flag is set to 1, use the average flow from the ECM file.  If both the pre and post flow exist, use them.
+* List of files that have different filter IDs in the file name vs. filter ID inside the file. Fix! 
+Note: we need to be careful with the saving approach!  When you re-save an ECM file, you will get this prompt: "Some features in your workbook might be lost if you ave it as CSV (Comma delimited). Do you want to keep using that format?"
+YOU MUST ENTER: "Yes."
+Then, when you close, you get another warning:
+Want to save your changes to `FILENAME`? 
+YOU MUST ENTER: "Dont Save".
+Save a copy of the original file in the Archive folder!!!
+
+```{r merge_qa,echo=FALSE}
+
+DT::datatable(ecm_qa_data[filter_id_insidefile != filter,c('file','serial','id','location','visit','filter_id_insidefile','filter','datetime_start','flags')])
+
+#something is wrong with the automated extraction of the filter id - rerun
+ecm_qa_data$basename <- gsub("-", "_", basename(ecm_qa_data$file))
+ecm_qa_data$file <- gsub("/Volumes/Crucial/hedi/","../",ecm_qa_data$file) 
+#Toss out file names with too few underscores.
+kable(ecm_qa_data[str_count(basename, "_")<5,],"pipe",
+      caption = paste0('These files are poorly formatted and should be fixed (they are currently removed from further analysis) for visit(s): ',
+               paste(visit_filter,collapse = ',')))
+ecm_qa_data <- ecm_qa_data[str_count(basename, "_")>4,]
+
+# ecm_qa_data[, filter := trimws(ecm_qa_data[, sapply(strsplit(basename, "_"), '[[', 5)])]  #This should already be in this data table... removing.
+# ecm_qa_data <- unique(ecm_qa_data[!(filter %in% filters_to_ignore)]) #Stop filtering this out? #RP Test
+
+#Filter weights and redcap data with ecm qaqc data.  Added merging by visit.  We can add location too, just need to recode the visits in the qaqc data.
+ecm_merged <- merge(rc_filter_flow_in, ecm_qa_data, by = c('filter','visit','location','id','irc'))
+
+#Check to see what is not being joined with flow calibration data.
+# ecm_merged <- anti_join(ecm_qa_data,rc_filter_flow_in, by = c('filter','visit','location','id'))
+
+
+#Filter out duplicate entries that may be due to repeated files in different directories
+ecm_merged <- distinct(ecm_merged,ecm_merged[,c('id','region','filter','visit',
+                                                'location','pre_sample_flow','post_sample_flow')],
+                       .keep_all = TRUE) %>% 
+  as.data.table()
+
+#FLAGS
+#Flag samples that are missing pre and/or post flow checks.  Allows us to rely on the interal flows for these samples even if they do not have valid pre and/or post flows.
+#Still may be discarded later if the realtime flow flags indicate.
+ecm_merged[is.na(pre_sample_flow) | is.na(post_sample_flow), missing_crf_flow := 1] 
+
+#If the file's flow is flagged, but the pre and post flows are good, remove the flag and retain it.
+#Scrapping this for now.
+# flow_flag_hierarchical should be 1 if the flow flag is one.  Change it to zero if the pre and post flows are good.#Don't change it if we are missing the crf flow
+# ecm_merged[, flow_flag_hierarchical := dt_case_when(!is.na(missing_crf_flow) ~ flow_flag,
+#                                                     pre_sample_flow %between% flow_thresholds_ml &
+#                                                       post_sample_flow %between% flow_thresholds_ml ~ 0,
+#                                                     TRUE ~ flow_flag)]
+
+#Make this change be reflected in the flags string.
+# ecm_merged[,flags:=ifelse(flow_flag_hierarchical == 0, gsub("flow", "",flags),flags)] #If override is zero, remove the flow flag from the flags string.
+
+#for those missing pre or post-sample flows, set flow to ECM flow reading
+ecm_merged[missing_crf_flow == 1, flow := flow_avg*1000]
+DT::datatable(ecm_merged[missing_crf_flow == 1],
+              caption = paste0('Pre and/or post flow checks missing for the following samples.  Average ECM readings are used instead. For visit(s): ', 
+               paste(visit_filter,collapse = ',')))
+
+#for the rest, flow = (pre_sample_flow + post_sample_flow)/2
+ecm_merged[is.na(missing_crf_flow), flow := (pre_sample_flow + post_sample_flow)/2]
+# ecm_merged[!flow %between% flow_thresholds_ml]
+```
+
+# Plots of data included/QAQC thresholds
+
+
+```{r included_data,echo=FALSE}
+#plot of what we're going to include
+qplot(ecm_merged[, flow]) + 
+  annotate("rect", xmin = flow_thresholds_ml[1], xmax = flow_thresholds_ml[2], ymin = 0, ymax = 1500,alpha = .5) + 
+  scale_y_continuous(expand = c(0,0), trans = 'log10') +
+  xlim(c(100, 600))+
+  theme_bw() + 
+  labs(x = 'Flow Rate (mL/min)', y = 'count [log10 scale]', caption = 'The shaded area is the flow tolerance.')
+
+#exclude missing flows and flows outside of range
+# ecm_merged <- ecm_merged[!is.na(flow)] #Moved to 6_ecm_results
+# ecm_merged <- ecm_merged[flow %between% flow_thresholds_ml]
+
+#DURATION
+#plot of what we're going to include
+qplot(ecm_merged[!is.infinite(dur), dur]) +
+  annotate("rect", xmin = 1152, xmax = 1728, ymin = 0, ymax = 10000, alpha = .1) + 
+  scale_y_continuous(expand = c(0,0),trans = 'log10')  + 
+  xlim(c(0, 1750)) + 
+  theme_bw() + 
+  labs(x = 'Duration (mins)', y = 'count [log10 scale]', caption = 'The shaded area is the duration tolerance.')
+
+#Analyze RC H41 start and stop times
+h41_start_stop <- ecm_rc %>% as.data.frame %>%
+  dplyr::mutate(durrrration = difftime(rc_end,rc_start,units = "mins")) %>%
+  ggplot(aes(x=durrrration)) +
+  geom_histogram(alpha = 0.25) +
+  theme_bw() +
+  labs(x = 'Duration (minutes)', y = 'count [log10 scale]') +
+  ggtitle('Sample durations per H41a') +
+  scale_y_continuous(expand = c(0,0),trans = 'log10')  +
+  annotate("rect", xmin = 1152, xmax = 1728, ymin = 0, ymax = 10000, alpha = .1)
+h41_start_stop
+
+# ecm_merged <- ecm_merged[!is.na(dur)] #Exclude 2 missing durations - exclude.  Moved to 6_ecm_reuslts
+# ecm_merged <- ecm_merged[dur %between% c(1440*.90, 1440*1.10)]
+```
+
+
+# Calculate final concentrations
+Calculate mass concentrations (µg/m^3) using the blank adjusted mass depositions and the flows as described in the previous section.  Includes a duty cycle correction as identified in the ECM file, and carried through the ECM QAQC code.
+```{r calculate_concentrations,echo=FALSE}
+#adj_mass_deposition
+DT::datatable(ecm_merged[is.na(mass_deposition)],
+              caption = 'NA mass deposition list')
+# ecm_merged[is.na(adj_mass_dep)]
+
+#remove those missing mass depositions
+# ecm_merged <- ecm_merged[!(is.na(mass_deposition) | is.na(adj_mass_dep))]
+
+# ecm_merged <- ecm_merged[mass_deposition > 0] #remove 9.  Moved to 6_ecm_results.RMD
+
+dcast.data.table(ecm_merged[, length(unique(filter)), by = c('visit', 'location')], location~visit)
+
+ecm_merged[, ecm_air_volume_m3 := (flow * dur * sampling_mode)/1e6]
+#Calculate concentrations using mass depositios in µg.  If values were below LoD, LoD replacement is carried out of LoD.sqrt(2).
+#LoD = 3*stdev of the year's blanks for the given IRC.
+ecm_merged[, ecm_mass_conc := dt_case_when(lod_replacement == 0 ~ 1000*adj_mass_dep/ecm_air_volume_m3,
+                                           lod_replacement == 1 ~ 1000*lod_adj_mass_dep/ecm_air_volume_m3)]
+
+ecm_merged <- ecm_merged[filter!='3M51399']
+
+message(paste0('Number of ecm concentration values for the selected locations, for the selected visits: ',
+               ecm_merged[visit %in% visit_filter & location %in% location_filter, length(filter)]))
+
+#Get breakdown of the visits and households that have more than one visit for them (duplicates that must be resolved!)
+kable(ecm_merged %>% 
+        group_by(irc, visit,filter) %>%
+        dplyr::summarise(N = n()) %>%
+        pivot_wider(names_from=visit,values_from = N) %>% 
+        dplyr::filter(baseline>1 | p1>1 | p2>1),
+      caption = "Filters that appear more than once in a visit")
+
+
+
+
+
+duplicated_filters <- ecm_merged[duplicated(filter), filter]
+duplicated_filters <- ecm_merged[visit %in% visit_filter  & location %in% location_filter & duplicated(filter), filter]
+DT::datatable(ecm_merged[visit %in% visit_filter & location %in% location_filter & filter %in% duplicated_filters],
+              caption = paste0('Duplicated filter IDs in the final data set.  Fix/resolution required or will be removed.  For visit(s): ',  paste(visit_filter,collapse = ',')))
+```
+
+# Summary stats
+Save .rds file of the final mass concentration data.
+
+```{r summary_stats,echo=FALSE}
+
+##THIS DOESN'T SEEM TO WORK.
+kable(arrange(
+  ecm_merged[
+    sample_num == 'first',
+    list(
+      mean = mean(ecm_mass_conc),
+      median = median(ecm_mass_conc),
+      sd = sd(ecm_mass_conc),
+      n = length(ecm_mass_conc)
+    ),
+    by = 'location,irc,visit'
+    ],
+  location, visit),"pipe")
+
+add_hash <- function(path){
+  if(file.exists(path)){
+    hash = digest::digest(path, file = TRUE, algo = 'md5')
+  }else{
+    hash = NA
+  }
+}
+
+ecm_merged[, hash := sapply(file, add_hash)]
+
+ecm_file_comment_list_irc <- ecm_file_comment_list  %>% 
+  dplyr::mutate(file = paste0("../",processed_path)) %>% 
+  dplyr::filter(irc == irc_name) %>% 
+  dplyr::select(file,irc,qaqc_comment,qaqc_outcome) %>% 
+  dplyr::distinct()
+
+ecm_merged <- merge(ecm_merged,
+                    ecm_file_comment_list_irc,
+                    by = c("irc","file"),all.x = TRUE)
+
+DT::datatable(ecm_merged[!is.na(comment),c("irc","visit","file","filter","location","dur_flag","flow_flag","qaqc_outcome","qaqc_comment","ecm_mass_conc")],
+              caption = "List of files that have been addressed in the qaqc inventory/ \n
+      Lista de archivos que se han abordado en el inventario de qaqc") 
+
+#Add a table showing the files that were not merged with?  Should be all raw data files.
+
+DT::datatable(anti_join(ecm_file_comment_list_irc,ecm_merged,by="file"),
+              caption = "List of files that were addressed in the qaqc inventory but did not merge with the
+      ecm concentration data.  Should include raw data files and cases like poorly formatted ECM data that did not import, or missing ECM data")
+
+saveRDS(ecm_merged, paste0('../output/5_merged_ecm_data/ecm_merged_',irc_name,'_',format(Sys.Date(), "%Y-%m-%d"),'.rds'))
+```
+
+
+# Compare the mass concentration calculation results between HAPIN Exposure Core and SRU
+
+```{r compare_w_sru,echo=FALSE}
+#Compare blank values, flows, damage designations
+#Only compare for cases where both have masses.  
+#Completeness could vary for data processing progress reasons, but we should be able to resolve differences with the data we do have.
+#Plot differences by year and by concentrations
+
+if(irc_name %like% "india"){
+  sriher <- as.data.table(read_excel('../data/filter-files/india/H45E_India_QAQC _Report-BASELINE_SRU_V1.xlsx', skip = 5, sheet = 'ECM Conc Calculations'))
+  sriher[, `S.No` := NULL]
+  setnames(sriher, c('filter', 'size', 'type', 'preweight', 'postweight', 'mass_deposition', 'pre_notes', 'post_notes', 'blank_adj_mass_dep', 'usable', 'flow_lpm', 'air_vol_l', 'air_vol_m3', 'filter_type', 'pm_conc_mg', 'pm_conc', 'fw_notes', 'filter_2', 'irc', 'hhid', 'visit', 'start_date', 'end_date' , 'duration' , 'location', 'ecm_id', 'concat', 'filter_3', 'pre_cal_flow', 'post_cal_flow'))
+  sriher$blank_mass = sriher$mass_deposition-sriher$blank_adj_mass_dep
+  sriher_bl <- sriher[location == 'PEM', c('filter', 'usable', 'flow_lpm', 'pm_conc','blank_mass','air_vol_m3')]
+  setnames(sriher_bl, colnames(sriher_bl), paste("sh_", colnames(sriher_bl), sep = ""))
+  setnames(sriher_bl, 'sh_filter', 'filter')
+  
+  ind_bl <- ecm_merged[visit %in% visit_filter & location == 'm', c('filter', 'damage', 'flow', 'ecm_mass_conc','ecm_air_volume_m3','mass_deposition','median_blank','h41_date')]
+  setnames(ind_bl, colnames(ind_bl), paste("ap_", colnames(ind_bl), sep = ""))
+  setnames(ind_bl, 1, 'filter')
+  
+  ap_sh <- merge(ind_bl, sriher_bl, by = 'filter', all= T )
+  ap_sh[!is.na(ap_damage) | sh_usable == 0]
+  ap_sh[, mc_diff := (round(ap_ecm_mass_conc,1) - round(sh_pm_conc,1))]
+  ap_sh[, volume_diff_m3 := (round(ap_ecm_air_volume_m3,1) - round(sh_air_vol_m3,1))]
+  ap_sh[!is.na(mc_diff)]
+  ap_sh[is.na(ap_damage) & sh_usable == 1 & abs(mc_diff) > 2.5]
+  
+  p1 <- ggplot(ap_sh,aes(y=sh_blank_mass,x=ap_median_blank)) +
+    geom_point(aes(color = ap_h41_date),alpha=.2) +   
+    geom_abline(slope=1, intercept=0)+
+    ggtitle('AP vs. SRU blanks, by year')
+  print(p1)
+  
+  p2 <- ggplot(ap_sh,aes(y=sh_air_vol_m3,x=ap_ecm_air_volume_m3)) +
+    geom_point(alpha=.2) +   
+    geom_rug(alpha=.2) +   
+    geom_abline(slope=1, intercept=0)+
+    ggtitle('AP vs. SRU sample volumes')
+  print(p2)
+  
+  p3 <- ggplot(ap_sh,aes(y=sh_pm_conc,x=ap_ecm_mass_conc)) +
+    geom_point(alpha=.2) +   
+    geom_rug(alpha=.2) +   
+    geom_abline(slope=1, intercept=0)+
+    ggtitle('AP vs. SRU concentrations')
+  print(p3)
+  
+  ap_sh$AvgVol <- (ap_sh$sh_air_vol_m3 + ap_sh$ap_ecm_air_volume_m3) / 2
+  ap_sh$DifVol <- ap_sh$sh_air_vol_m3 - ap_sh$ap_ecm_air_volume_m3
+  
+  ap_sh$AvgConc <- (ap_sh$sh_pm_conc + ap_sh$ap_ecm_mass_conc) / 2
+  ap_sh$DifConc <- ap_sh$sh_pm_conc - ap_sh$ap_ecm_mass_conc
+  
+  bland_vol <- ggplot(ap_sh, aes(x = AvgVol, y = DifVol)) +
+    geom_point(alpha = 0.5) +
+    geom_hline(yintercept = mean(ap_sh$DifVol,na.rm=TRUE), colour = "blue", size = 0.5) +
+    geom_hline(yintercept = mean(ap_sh$DifVol,na.rm=TRUE) - (1.96 * sd(ap_sh$DifVol,na.rm=TRUE)), colour = "red", size = 0.5) +
+    geom_hline(yintercept = mean(ap_sh$DifVol,na.rm=TRUE) + (1.96 * sd(ap_sh$DifVol,na.rm=TRUE)), colour = "red", size = 0.5) +
+    ylab("Diff. Between Volume Measures") +
+    xlab("Average Volume Measure")
+  print(bland_vol)
+  
+  bland_conc <- 
+    ggplot(ap_sh, aes(x = AvgConc, y = DifConc)) +
+    geom_point(alpha = 0.5) +
+    geom_hline(yintercept = mean(ap_sh$DifConc,na.rm=TRUE), colour = "blue", size = 0.5) +
+    geom_hline(yintercept = mean(ap_sh$DifConc,na.rm=TRUE) - (1.96 * sd(ap_sh$DifConc,na.rm=TRUE)), colour = "red", size = 0.5) +
+    geom_hline(yintercept = mean(ap_sh$DifConc,na.rm=TRUE) + (1.96 * sd(ap_sh$DifConc,na.rm=TRUE)), colour = "red", size = 0.5) +
+    ylab("Diff. Between Concentration Measures") +
+    xlab("Average Concentration Measure")
+  print(bland_conc)
+  
+  message('lm of AP vs. SRU ECM concentrations')
+  print(summary(lm(ap_ecm_mass_conc~sh_pm_conc,ap_sh)))
+  
+  saveRDS(ap_sh, '../output/5_merged_ecm_data/ecm_SRU_EXP_comparison.rds')
+  
+  #ecm files
+  # ecm_files <- grep("raw", list.files('data/monitor-files/india', recursive = T, full.names = T, pattern = '_ECM'), invert = TRUE, value = TRUE) #6217
+  # ecm_files <- grep("raw", list.files('~/hedi/data/monitor-files/india', recursive = T, full.names = T, pattern = '_ECM'), invert = TRUE, value = TRUE) #6217
+  
+  # dummy_meta_data <- fread('/hedi/thresholds/dummy_meta_data.csv')
+  # dummy_meta_data <- fread('~/hedi/scripts/qaqc/thresholds-master/dummy_meta_data.csv')
+  # ecm_qa_data(ecm_files[1])
+}
+
+```

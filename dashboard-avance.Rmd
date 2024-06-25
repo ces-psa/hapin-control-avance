@@ -18,8 +18,15 @@ source(file = "scripts/zz_output.R")
 ```
 
 
+```{r get_data}
+# Emory RedCap dictionary
+source(file = "scripts/0_get_emory_dictionary.R", encoding = "UTF-8")
 
-```{r get-uvg-data}
+# Emory RedCap export data
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+```
+
+```{r get-uvg-data, include=FALSE}
 # Participant information (z10)
 source(file = "scripts/0_get_participants.R", encoding = "UTF-8")
 
@@ -33,19 +40,13 @@ source(file = "scripts/0_get_exposure_start.R", encoding = "UTF-8")
 
 
 
-```{r get_data}
-# Emory RedCap dictionary
-source(file = "scripts/0_get_emory_dictionary.R", encoding = "UTF-8")
 
-# Emory RedCap export data
-source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
-```
 
 
 
 ```{r export-stove-use-report, include=FALSE}
 # Stops knitting if lpg delivery data is not up to date
-source(file = "scripts/uso-estufas.R", encoding = "UTF-8")
+#source(file = "scripts/uso-estufas.R", encoding = "UTF-8")
 source(file = "scripts/reporte_gas.R", encoding = "UTF-8")
 ```
 
@@ -53,7 +54,7 @@ source(file = "scripts/reporte_gas.R", encoding = "UTF-8")
 
 
 ```{r, include=FALSE}
-gt_emory_data %>%
+gt_emory_data_arm1 %>%
   select(id, s1_ultra, matches("m17.+(fl|crl|hc)"), s4_main_id) %>%
   filter(s1_ultra == 1) %>%
   print(n = Inf)
@@ -151,7 +152,7 @@ all_events %>%
 
 # Elegibles - no inscritas
 
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+Datos exportados en `r lubridate::with_tz(gt_emory_file1$export_time, 'America/Guatemala')`
 
 ## Tabla y mapa
 
@@ -223,10 +224,10 @@ bscols(
 
 ```{r}
 # Prepare data for enrolled table and map
-mapa_inscritas <- inscritas %>%
+ <- inscritas %>% mutate(screening_id=id, id=s4_main_id) %>% 
   # Add randomization date to all visit records
   left_join(
-    gt_emory_data %>%
+    gt_emory_data_arm2 %>%
       select(id, hh_arm = s6_arm, randomization_date = s6_date) %>%
       filter(!is.na(randomization_date))
   ) %>%
@@ -238,7 +239,7 @@ mapa_inscritas <- inscritas %>%
   ) %>%
   # Add **current** gestational age from m17
   left_join(
-    gt_emory_data %>%
+    gt_emory_data_arm1 %>%
       filter(grepl("^G", id), !is.na(m17_ga)) %>%
       mutate(
         ga = 280 - as.numeric(m17_ga - Sys.Date(), units = "days"),
@@ -278,13 +279,13 @@ mapa_inscritas <- inscritas %>%
 # Baseline
 
 
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+Datos exportados en `r lubridate::with_tz(gt_emory_file1$export_time, 'America/Guatemala')`
 
 
 ## Mapa
 
 ```{r}
-sd <- mapa_inscritas %>%
+sd <- mapa_inscritas %>% 
   magrittr::extract2("baseline") %>%
   # Wrap data frame in SharedData
   SharedData$new()
@@ -306,7 +307,7 @@ bscols(
 # p1
 
 
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+Datos exportados en `r lubridate::with_tz(gt_emory_file1$export_time, 'America/Guatemala')`
 
 
 ## Mapa
@@ -334,7 +335,7 @@ bscols(
 # p2
 
 
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+Datos exportados en `r lubridate::with_tz(gt_emory_file1$export_time, 'America/Guatemala')`
 
 
 ## Mapa
@@ -362,7 +363,7 @@ bscols(
 # salida
 
 
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+Datos exportados en `r lubridate::with_tz(gt_emory_file1$export_time, 'America/Guatemala')`
 
 
 ## Mapa
@@ -390,7 +391,7 @@ bscols(
 # Libres 1
 
 
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+Datos exportados en `r lubridate::with_tz(gt_emory_file1$export_time, 'America/Guatemala')`
 
 
 ## Mapa
@@ -418,7 +419,7 @@ bscols(
 # Mensual 1
 
 
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+Datos exportados en `r lubridate::with_tz(gt_emory_file1$export_time, 'America/Guatemala')`
 
 
 ## Mapa
@@ -446,7 +447,7 @@ bscols(
 # Mensual 2
 
 
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+Datos exportados en `r lubridate::with_tz(gt_emory_file1$export_time, 'America/Guatemala')`
 
 
 ## Mapa
@@ -475,7 +476,7 @@ bscols(
 
 # No elegibles
 
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+Datos exportados en `r lubridate::with_tz(gt_emory_file1$export_time, 'America/Guatemala')`
 
 ## Tabla
 
@@ -497,7 +498,7 @@ tamizadas %>%
 
 # Partos esperados
 
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+Datos exportados en `r lubridate::with_tz(gt_emory_file1$export_time, 'America/Guatemala')`
 
 ## Tabla
 
@@ -531,7 +532,15 @@ inscritas %>%
   ) %>%
   anti_join(births) %>%
   anti_join(losses) %>%
-  arrange(fpp < Sys.Date(), preterm_birth) %>%
+  anti_join(
+    gt_emory_data %>% 
+      filter(!is.na(e3_date)) %>% 
+      select(study_id=id, e3_date)
+  ) %>% 
+  filter(
+    early_birth < (lubridate::ceiling_date(Sys.Date(), unit = "weeks") + lubridate::weeks(1))
+  ) %>% 
+  arrange(preterm_birth) %>%
   tabla_interactiva()
 ```
 
@@ -540,7 +549,7 @@ inscritas %>%
 # Gas y uso de estufa
 
 
-Datos exportados en `r lubridate::with_tz(gt_emory_file$export_time, 'America/Guatemala')`
+Datos exportados en `r lubridate::with_tz(gt_emory_file1$export_time, 'America/Guatemala')`
 
 
 ## Tabla
@@ -557,7 +566,7 @@ gt_emory_repeat_data %>%
   ) %>%
   filter(
     lubridate::floor_date(date, unit = "week", week_start = 1) ==
-      lubridate::floor_date(Sys.Date()-7, unit = "week", week_start = 1)
+      lubridate::floor_date(Sys.Date(), unit = "week", week_start = 1)
   ) %>%
   full_join(
     select(h54, id, h54_by = by, date) %>%
@@ -571,6 +580,7 @@ gt_emory_repeat_data %>%
       ) %>%
       filter(
         lubridate::floor_date(date, unit = "week", week_start = 1) ==
+          lubridate::floor_date(Sys.Date(), unit = "week", week_start = 1)
       )
   ) %>%
   group_by(id, date) %>%

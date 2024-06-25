@@ -4,15 +4,15 @@ source(file = "scripts/0_get_emory_repeated.R", encoding = "UTF-8")
 source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
 
 
-
-if(
-  as.Date(gt_emory_repeat_file$export_time) <
-  as.Date(gt_emory_file$export_time)
-) stop("Debe actualizar los datos exportados de \"HAPIN-Guatemala-Repeated CRFs\"")
-
-days_diff <- function(date1, date2){
-  as.numeric(date1 - date2, units = "days")
-}
+# 
+# if(
+#   as.Date(gt_emory_repeat_file$export_time) <
+#   as.Date(gt_emory_file$export_time)
+# ) stop("Debe actualizar los datos exportados de \"HAPIN-Guatemala-Repeated CRFs\"")
+# 
+# days_diff <- function(date1, date2){
+#   as.numeric(date1 - date2, units = "days")
+# }
 
 
 # dots download ----
@@ -35,7 +35,7 @@ h54 <- gt_repeated %>%
   ) %>%
   select(-record) %>%
   bind_rows(
-    gt_emory_data %>%
+    gt_emory_data_arm1 %>%
       select(id, matches("h54_")) %>%
       mutate_all(as.character) %>%
       filter(!is.na(h54_date)) %>%
@@ -76,7 +76,7 @@ h51_data <- h51_emory
 h54_mes <- h54 %>%
   filter(!is.na(date)) %>%
   left_join(
-    gt_emory_data %>%
+    gt_emory_data_arm2 %>%
       filter(!is.na(s6_date) | visit == "baseline") %>%
       select(id, brazo = s6_arm)
   ) %>%
@@ -95,13 +95,13 @@ h54_mes <- h54 %>%
   print()
 
 
-h53_mes <- gt_emory_data %>%
+h53_mes <- gt_emory_data_arm3 %>%
   select(
     visit, id, matches("h53_")
   ) %>%
   filter(!is.na(h53_date)) %>%
   left_join(
-    gt_emory_data %>%
+    gt_emory_data_arm2 %>%
       filter(!is.na(s6_date)) %>%
       select(id, brazo = s6_arm)
   ) %>%
@@ -185,7 +185,7 @@ uso_casas %>%
 #------------------------------------------------------------------------------*
 
 
-dot_use <- gt_emory_data %>%
+dot_use <- gt_emory_data_arm3 %>%
   select(id, matches("h40_(date|use_num|(stove[0-9](_v[0-9])?$))")) %>%
   mutate_all(as.character) %>%
   group_by(id) %>%
@@ -240,8 +240,8 @@ dot_month <- dot_use %>%
 
 date_range <- c(
   dot_use$date,
-  gt_emory_data$h54_date,
-  gt_emory_data$h50_date,
+  gt_emory_data_arm3$h54_date,
+  gt_emory_data_arm2$h50_date,
   h54$date,
   Sys.Date()
 ) %>%
@@ -264,7 +264,7 @@ h54_day <- h54 %>%
 
 
 # h53 - reported behavioural intervention ----
-h53_day <- gt_emory_data %>%
+h53_day <- gt_emory_data_arm3 %>%
   select(
     visit, id, matches("h53_")
   ) %>%
@@ -282,8 +282,8 @@ h51_day <- h51_data %>%
 
 
 # all study visits ----
-emory_crfs <- gt_emory_data %>%
-  filter(visit != "tamizaje") %>%
+emory_crfs <- gt_emory_data_arm2 %>%
+  filter(visit != "tamizaje") %>% full_join( gt_emory_data_arm3 %>% filter(visit != "tamizaje")) %>% 
   select(id, visit, matches("^[^_]+_(date|by)$")) %>%
   mutate_all(as.character) %>%
   gather(key = column, value = value, -id, -visit, na.rm = TRUE) %>%
@@ -327,12 +327,12 @@ house_visited <- all_crfs %>%
 
 
 # for all enrolled households
-intervention_events <- gt_emory_data %>%
+intervention_events <- gt_emory_data_arm2 %>%
   filter(
     !is.na(m11_date) | !is.na(h41_date) | !is.na(m10_date), visit == "baseline"
   ) %>%
   left_join(
-    gt_emory_data %>%
+    gt_emory_data_arm1 %>%
       filter(!is.na(s4_date), !is.na(s4_main_id)) %>%
       select(id = s4_main_id, community = s1_community_name) %>%
       mutate_all(as.character)
@@ -591,3 +591,4 @@ list(
     )
 ) %>%
   writexl::write_xlsx(path = "output/uso-estufa-tradicional.xlsx")
+

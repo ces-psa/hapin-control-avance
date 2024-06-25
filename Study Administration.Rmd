@@ -1,0 +1,750 @@
+---
+title: "Study_administration"
+output: html_document
+---
+
+#### a.	Overall CONSORT Diagram 
+
+```{r include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(kableExtra)
+library(tidyr)
+library(scales)
+library(lubridate)
+library(DiagrammeR)
+library(ggplot2)
+
+# Emory RedCap export data
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+#salidas
+#source(file = "scripts/0_get_salidas.R", encoding = "UTF-8")
+# Emory HAPIN II  
+source(file = "scripts/0_get_hapinII.R", encoding = "UTF-8")
+
+# OSM redcap uvg 
+source(file = "scripts/0_get_hapin_plus.R", encoding = "UTF-8")
+
+
+
+
+#candidatos todos los niños que nacieron en hapin 1
+candidates_60m<-gt_emory_data_arm2 %>% filter(!is.na(c30_dob)) %>% select(id, c30_dob)  %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_c)) %>% select(id, e3_date_exit_c, e3_reason_c)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit)) %>% select(id, e3_date_exit, e3_reason)
+) %>% mutate(
+  descartar=case_when(
+    e3_reason=="8"  ~  "Si",
+    TRUE ~ "No"
+  )
+) %>% filter(descartar=="No") %>% select(id, fecha_nacimiento=c30_dob) %>% mutate(
+  # `12_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*12)),
+  # `24_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*24)),
+  # `36_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*36)),
+  # `48_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.30*48)),
+  `60_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*60))
+)
+
+#los niños que han fallecido
+fallecidos_ninos<-candidates_60m %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e2_date)) %>% select(id, e2_date, e2_participant, e2_title, redcap_event_name)
+) %>% filter(!is.na(e2_date)) %>% filter(e2_participant=="3") %>% filter(e2_title=="7") %>% mutate(
+  evento=recode(
+    redcap_event_name, "year4_q1_48m_arm_1"="48m",
+    "year5_arm_1"="60m"
+  )
+) %>% group_by(
+  evento
+) %>% count()
+#exit E3
+#categorizar las salidas registradas en 60m
+type_exit<-  gt_hapin_II_data %>% filter(!is.na(e3_date)) %>% filter(visit=="b8") %>%  select(id, e3_reason) %>% mutate(
+  motivo_rechazo=recode(e3_reason,
+                        "3"="Retiro voluntario",
+                        "4"="Retirada por el equipo de estudio",
+                        "5"="Se mudó del área de estudio",
+                        "6"="Muerte de la madre",
+                        "7"="Muerte Infantil",
+                        "8"="Fuera de la ventana",
+                        "555"="Otro")
+) 
+
+under_follow_up<-candidates_60m %>% anti_join(
+ candidates_60m %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e2_date)) %>% select(id, e2_date, e2_participant, e2_title, redcap_event_name)
+) %>% filter(!is.na(e2_date)) %>% filter(e2_participant=="3") %>% filter(e2_title=="7") %>% mutate(
+  evento=recode(
+    redcap_event_name, "year4_q1_48m_arm_1"="48m",
+    "year5_arm_1"="60m"
+  )
+)
+) %>% anti_join(
+  gt_hapin_II_data %>% filter(!is.na(e3_date)) %>% filter(visit=="b8") %>%  select(id, e3_reason)
+) %>% left_join(
+  gt_hapin_II_data %>% filter(visit=="b8") %>% filter(s4_consent_c=="1") %>% select(
+    id, s4_consent_c
+  )
+) %>% filter(!is.na(s4_consent_c)) %>% count() %>% .$n
+
+#death total niños fallecidos
+death<-sum(fallecidos_ninos$n)
+#not living in study area, migraciones
+not_living_area<-type_exit %>% filter(motivo_rechazo=="Se mudó del área de estudio") %>% group_by(motivo_rechazo) %>% count() %>% .$n
+#•	Assessed for eligibility (S4)
+assessed_elegibility<-750 - (sum(fallecidos_ninos$n)+not_living_area)
+#visited
+visited<-gt_hapin_II_data %>% filter(visit=="b8") %>% filter(!is.na(s4_consent_c)) %>% select(id, s4_consent_c) %>% count() %>% .$n
+#not accepted participate
+not_participated<-gt_hapin_II_data %>% filter(visit=="b8") %>% filter(!is.na(s4_consent_c)) %>% select(id, s4_consent_c) %>% filter(s4_consent_c=="0") %>% count() %>% .$n
+
+#type of rejection
+resultados <- type_exit %>% group_by(motivo_rechazo) %>% count()
+
+motivos <- unique(resultados$motivo_rechazo)
+
+# Crear variables para cada motivo de rechazo
+for (motivo in motivos) {
+  # Obtener el recuento para el motivo de rechazo actual
+  recuento <- resultados$n[resultados$motivo_rechazo == motivo]
+  
+  # Crear una variable con el nombre del motivo y asignar el recuento
+  assign(paste0(motivo), recuento)
+}
+
+Death=`Muerte Infantil`
+voluntary_retirement=`Retiro voluntario`
+Migracion= `Se mudó del área de estudio`
+
+willing_participate<-gt_hapin_II_data %>% filter(visit=="b8") %>% filter(!is.na(s4_consent_c)) %>% select(id, s4_consent_c) %>% filter(s4_consent_c=="1") %>% count() %>% .$n
+
+
+```
+
+~~~~
+Data as of: "`r gt_hapin_II_file$export_time`"
+Date of report: "`r Sys.time()`"
+~~~~
+
+```{r}
+
+# Construye la cadena con el valor de visited
+label_A<-paste0("Assessed for eligibility ( ", (assessed_elegibility+death+not_living_area)," )")
+label_A1 <- paste("Assessed for eligibility (S4):", assessed_elegibility)
+#label_A2 <- paste("Death (E2, E3 – during versus not during study [only E3]) : ", death)
+label_A2 <- paste("Death (E2, E3 –\nduring versus not during\nstudy [only E3]) : ", death)
+label_B <- paste("Not living in study site (S4): ", not_living_area )
+label_B1 <- paste("Consent (S4 screened) : ", visited)
+label_B2 <- paste0("Not Willing participate: ", (Migracion+Death+voluntary_retirement))
+label_B2a <- paste("Not living study area : ", Migracion)
+label_B2b <- paste("Death : ", Death)
+label_B2c <- paste("Vountary retirement: ", voluntary_retirement)
+label_B3 <- paste0("Willing participate : ", (visited-(Migracion+Death+voluntary_retirement)))
+label_C1 <- paste0("Study completetion: 0\nParticipant withdrawal: 0\nStudy team withdrawal: 0\nMoved away: 0\nDeceasd: 0\nOther: 0")
+label_D1 <- paste0("Under follow-up: ", under_follow_up)
+
+
+graph_code <- paste('
+digraph consort {
+  graph [overlap = true, fontsize = 10];
+
+  node [shape = box,
+        fontname = Helvetica];
+  A0[label="Consort Report", width=1, height=0.5, fontname="Helvetica-Bold", style=filled, fillcolor=lightblue];
+  A[label="Assessed for eligibility", width=3, height=0.4, color=blue, fontname="Helvetica-Bold"];
+  A1 [label="', label_A1,'"]; 
+  A2 [label="',label_A2,'"]; 
+  A3 [label="',label_B,'"]; 
+  B [label="Screened", width=3, height=0.4, color=blue, fontname="Helvetica-Bold"];
+  B1 [label="',label_B1,'"];
+  B2 [label="',label_B2,'"];
+  B2a [label="',label_B2a,'"];
+  B2b [label="',label_B2b,'"];
+  B2c [label="',label_B2c,'"];
+  B3 [label="',label_B3,'"];
+  C [label="Exit after enrollment (E3)", width=3, height=0.4, color=blue, fontname="Helvetica-Bold"];
+  C1 [label="',label_C1,'"];
+  D [label="Follow up", width=3, height=0.4, color=blue, fontname="Helvetica-Bold"]
+  D1 [label="',label_D1,'"];
+  
+// Agrupación de nodos por columnas
+  {rank=same; A; B; C; D;}
+
+  A0->A;
+  A->A1->A2->A3;
+  A0->B;
+  B->B1->B2
+  B1->B3;
+  B2->B2a
+  B2->B2b;
+  B2->B2c;
+  A0->C;
+  C->C1;
+  A0->D;
+  D->D1
+}
+')
+
+# Llama a grViz con el código de Graphviz formateado
+#grViz(graph_code)
+
+```
+
+
+```{r}
+esperados<-candidates_60m %>%  mutate( fecha_60m=as.Date(fecha_nacimiento)+lubridate::days(round(30.25*60)),
+  Mes=format(fecha_60m, "%B")) %>% select(id, fecha_nacimiento, fecha_60m)
+#   group_by(
+#   Anio=lubridate::year(fecha_60m),
+#   mes=lubridate::month(fecha_60m),
+#   Mes
+# ) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Esperados=n) 
+
+#esperados en 5 años
+target_enrollment<-esperados %>% anti_join(
+  candidates_60m %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e2_date)) %>% select(id, e2_date, e2_participant, e2_title, redcap_event_name)
+) %>% filter(!is.na(e2_date)) %>% filter(e2_participant=="3") %>% filter(e2_title=="7") %>% mutate(
+  evento=recode(
+    redcap_event_name, "year4_q1_48m_arm_1"="48m",
+    "year5_arm_1"="60m"
+  )
+) %>% select(id)
+) %>% anti_join(
+  type_exit %>% filter(motivo_rechazo=="Se mudó del área de estudio") %>% select(id)
+)
+
+expected_date<-as.Date(gt_hapin_II_file$export_time)
+expected_enrollment_date<-target_enrollment %>% filter(as.Date(fecha_60m)<=expected_date)
+
+p_expected_enrollment<-(round((expected_enrollment_date %>% count() %>% .$n / target_enrollment %>% count() %>% .$n),2)*100)
+
+#datos para la grafica, lo esperado a la fecha
+expected_epi<-expected_enrollment_date %>% mutate(
+anio=year(as.Date(fecha_60m)),
+semana_epi=strftime(as.Date(fecha_60m), format = "%U"),
+tipo="Expected"
+) %>% select(tipo, anio, semana_epi) %>% group_by(anio, semana_epi, tipo) %>% count()
+
+#datos para grafica los enrolados
+enrollment<-candidates_60m %>% anti_join(
+ candidates_60m %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e2_date)) %>% select(id, e2_date, e2_participant, e2_title, redcap_event_name)
+) %>% filter(!is.na(e2_date)) %>% filter(e2_participant=="3") %>% filter(e2_title=="7") %>% mutate(
+  evento=recode(
+    redcap_event_name, "year4_q1_48m_arm_1"="48m",
+    "year5_arm_1"="60m"
+  )
+)
+) %>% anti_join(
+  gt_hapin_II_data %>% filter(!is.na(e3_date)) %>% filter(visit=="b8") %>%  select(id, e3_reason)
+) %>% left_join(
+  gt_hapin_II_data %>% filter(visit=="b8") %>% filter(s4_consent_c=="1") %>% select(
+    id, s4_consent_c, s4_date
+  )
+) %>% filter(!is.na(s4_consent_c)) %>% transmute(id, fecha_nacimiento, s4_date,
+                            fecha_60m=as.Date(fecha_nacimiento) + lubridate::days(round(30.25*60))
+                                                   )
+
+enrollment_epi<-enrollment %>% mutate(
+anio=year(as.Date(s4_date)),
+semana_epi=strftime(as.Date(s4_date), format = "%U"),
+tipo="Enrollment"
+) %>% select(tipo, anio, semana_epi) %>% group_by(anio, semana_epi, tipo) %>% count()
+
+#sacar el acumulado
+# Convertir semana_epi a numérico para ordenamiento adecuado
+enrollment_epi$semana_epi <- as.numeric(enrollment_epi$semana_epi)
+expected_epi$semana_epi <- as.numeric(expected_epi$semana_epi)
+# Ordenar los registros por año y semana_epi
+enrollment_epi <- enrollment_epi %>% 
+  arrange(anio, semana_epi)
+
+expected_epi <- expected_epi %>% 
+  arrange(anio, semana_epi)
+
+# Calcular la suma acumulada dentro de cada grupo de año
+enrollment_epi <- enrollment_epi %>% 
+  group_by(tipo) %>%
+  mutate(epi_acumulado = cumsum(n))
+
+expected_epi <- expected_epi %>% 
+  group_by(tipo) %>%
+  mutate(epi_acumulado = cumsum(n))
+
+
+#CREAR LA GRAFICA
+# Unir los dos conjuntos de datos
+all_data <- rbind(expected_epi, enrollment_epi)
+
+# Convertir semana_epi a factor y ordenar los niveles
+all_data$semana_epi <- factor(all_data$semana_epi, levels = c("0", "1", "2","3","4","5","6","7","8","9","10","11", "48", "49", "50", "51", "52", "53"))
+
+# Crear la etiqueta año-semana
+all_data$anio_semana <- paste(all_data$anio, "-", all_data$semana_epi)
+
+# Convertir a factor y ordenar por año y semana
+all_data$anio_semana <- factor(all_data$anio_semana, levels = unique(all_data$anio_semana))
+
+max_n <- max(all_data$epi_acumulado)
+
+# Crear la gráfica de líneas
+# ggplot(all_data, aes(x = anio_semana, y = epi_acumulado, color = tipo, group = tipo)) +
+#   geom_line() +
+#   labs(x = "Epi week", y = "Participants") +
+#   ggtitle("Actual versus expected visits at age 5 years") +
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+#   theme(legend.position = "bottom") + 
+#   scale_color_manual(name = NULL, values = c("Expected" = "blue", "Enrollment" = "red")) +
+#   scale_y_continuous(limits = c(0, ceiling(max_n)), breaks = seq(0, ceiling(max_n), by = 10))
+
+# Crear la gráfica de líneas con puntos en cada semana
+# ggplot(all_data, aes(x = anio_semana, y = epi_acumulado, color = tipo, group = tipo)) +
+#   geom_line() +
+#   geom_point() +  # Agregar puntos en cada semana
+#   labs(x = "Epi week", y = "Participants") +
+#   ggtitle("Actual versus expected visits at age 5 years") +
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 90, hjust = 1),
+#         legend.position = "bottom",
+#         panel.grid.major = element_blank(),
+#         panel.grid.minor = element_blank()) + 
+#   scale_color_manual(name = NULL, values = c("Expected" = "blue", "Enrollment" = "red")) +
+#   scale_y_continuous(limits = c(0, ceiling(max_n)), breaks = seq(0, ceiling(max_n), by = 10))
+#   
+
+```
+
+
+```{r}
+esperados<-candidates_60m %>%  mutate( fecha_60m=as.Date(fecha_nacimiento)+lubridate::days(round(30.25*60)),
+  Mes=format(fecha_60m, "%B")) %>% select(id, fecha_nacimiento, fecha_60m)
+
+#esperados en 5 años
+target_enrollment<-esperados %>% anti_join(
+  candidates_60m %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e2_date)) %>% select(id, e2_date, e2_participant, e2_title, redcap_event_name)
+) %>% filter(!is.na(e2_date)) %>% filter(e2_participant=="3") %>% filter(e2_title=="7") %>% mutate(
+  evento=recode(
+    redcap_event_name, "year4_q1_48m_arm_1"="48m",
+    "year5_arm_1"="60m"
+  )
+) %>% select(id)
+) %>% anti_join(
+  type_exit %>% filter(motivo_rechazo=="Se mudó del área de estudio") %>% select(id)
+)
+
+# Convertir la columna fecha_60m a formato de fecha
+target_enrollment$fecha_60m <- as.Date(target_enrollment$fecha_60m)
+
+# Agregar columnas de Año, Mes y Semana
+target_enrollment$anio <- year(target_enrollment$fecha_60m)
+# Agregar columna de Mes en texto
+target_enrollment$mes <- month(target_enrollment$fecha_60m, label = TRUE)
+target_enrollment$semana <- week(target_enrollment$fecha_60m)
+
+
+expected_enrollment<-target_enrollment  %>% 
+  arrange(anio, mes, semana) %>% filter(as.Date(fecha_60m)<="2024-03-13") %>%  mutate(
+  tipo="Expected"
+)
+
+
+
+## Enrolados a la fecha
+enrollment<-candidates_60m %>% anti_join(
+ candidates_60m %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e2_date)) %>% select(id, e2_date, e2_participant, e2_title, redcap_event_name)
+) %>% filter(!is.na(e2_date)) %>% filter(e2_participant=="3") %>% filter(e2_title=="7") %>% mutate(
+  evento=recode(
+    redcap_event_name, "year4_q1_48m_arm_1"="48m",
+    "year5_arm_1"="60m"
+  )
+)
+) %>% anti_join(
+  gt_hapin_II_data %>% filter(!is.na(e3_date)) %>% filter(visit=="b8") %>%  select(id, e3_reason)
+) %>% left_join(
+  gt_hapin_II_data %>% filter(visit=="b8") %>% filter(s4_consent_c=="1") %>% select(
+    id, s4_consent_c, s4_date
+  )
+) %>% filter(!is.na(s4_consent_c)) %>% transmute(id, fecha_nacimiento, s4_date=as.Date(s4_date),
+          consent=recode(s4_consent_c,"1"="Yes","2"="No"), fecha_60m=as.Date(fecha_nacimiento) + lubridate::days(round(30.25*60)))
+
+consent_total<-enrollment %>% filter(consent=="Yes")
+
+# Convertir la columna fecha_60m a formato de fecha
+enrollment$s4_date <- as.Date(enrollment$s4_date)
+
+# Agregar columnas de Año, Mes y Semana
+enrollment$anio <- year(enrollment$s4_date)
+# Agregar columna de Mes en texto
+enrollment$mes <- month(enrollment$s4_date, label = TRUE)
+
+enrollment$semana <- week(enrollment$s4_date)
+
+
+enrollment<-enrollment  %>% 
+  arrange(anio, mes, semana) %>% filter(as.Date(s4_date)<="2024-03-13") %>%  mutate(
+  tipo="Visited"
+)
+
+#preparar set de datso de consentidos:
+# Convertir la columna fecha_60m a formato de fecha
+consent_total$s4_date <- as.Date(consent_total$s4_date)
+
+# Agregar columnas de Año, Mes y Semana
+consent_total$anio <- year(consent_total$s4_date)
+# Agregar columna de Mes en texto
+consent_total$mes <- month(consent_total$s4_date, label = TRUE)
+
+consent_total$semana <- week(consent_total$s4_date)
+
+
+consent_total<-consent_total  %>% 
+  arrange(anio, mes, semana) %>% filter(as.Date(s4_date)<="2024-03-13") %>%  mutate(
+  tipo="Consent"
+)
+
+
+# agrupar y calcular por semana
+expected_enrollment<-expected_enrollment %>% group_by(anio, mes, semana, tipo) %>% count()
+
+enrollment<-enrollment %>% group_by(anio, mes, semana, tipo) %>% count()
+
+#sacar acumulado
+expected_enrollment<-expected_enrollment %>% group_by(tipo) %>%
+  mutate(epi_acumulado = cumsum(n))
+
+
+enrollment<-enrollment %>% group_by(tipo) %>%
+  mutate(epi_acumulado = cumsum(n))
+
+
+# agrupar y calcular por semana los consentidos
+consent_total<-consent_total %>% group_by(anio, mes, semana, tipo) %>% count()
+
+#sacar acumulado
+consent_total<-consent_total %>% group_by(tipo) %>%
+  mutate(epi_acumulado = cumsum(n))
+
+
+
+#CREAR LA GRAFICA
+# Unir los dos conjuntos de datos
+all_data <- rbind(expected_enrollment, enrollment, consent_total)
+
+# Convertir semana_epi a factor y ordenar los niveles
+all_data$semana <- factor(all_data$semana, levels = c("0", "1", "2","3","4","5","6","7","8","9","10", "11","48", "49", "50", "51", "52", "53"))
+
+# Crear la etiqueta año-semana
+all_data$anio_mes_semana <- paste(all_data$anio, "-", all_data$mes,"-", all_data$semana)
+
+# Convertir a factor y ordenar por año y semana
+all_data$anio_mes_semana <- factor(all_data$anio_mes_semana, levels = unique(all_data$anio_mes_semana))
+
+max_n <- max(all_data$epi_acumulado)
+
+
+#crear la gráfica
+# Crear la gráfica de líneas con puntos en cada semana
+# ggplot(all_data, aes(x = anio_mes_semana, y = epi_acumulado, color = tipo, group = tipo)) +
+#   geom_line() +
+#   geom_point() +  # Agregar puntos en cada semana
+#   labs(x = "Year-Mont-Week", y = "Visit") +
+#   ggtitle("Actual versus expected visits at age 5 years") +
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 90, hjust = 1),
+#         legend.position = "bottom",
+#         panel.grid.major = element_blank(),
+#         panel.grid.minor = element_blank()) + 
+#   scale_color_manual(name = NULL, values = c("Expected" = "blue", "Visited" = "red", "Consent"="Green")) +
+#   scale_y_continuous(limits = c(0, ceiling(max_n)), breaks = seq(0, ceiling(max_n), by = 10))
+
+
+
+```
+
+
+```{r}
+#nueva gráfica
+candidatos<-candidates_60m %>% anti_join(
+ candidates_60m %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e2_date)) %>% select(id, e2_date, e2_participant, e2_title, redcap_event_name)
+) %>% filter(!is.na(e2_date)) %>% filter(e2_participant=="3") %>% filter(e2_title=="7") %>% mutate(
+  evento=recode(
+    redcap_event_name, "year4_q1_48m_arm_1"="48m",
+    "year5_arm_1"="60m"
+  )
+) %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>% select(id)
+)
+
+
+# Convierte las fechas a objetos de fecha si aún no lo están
+candidatos<-candidatos %>% mutate(fecha_60m=as.Date(`60_meses`)+lubridate::days(1825))
+candidatos$fecha_60m <- as.Date(candidatos$fecha_60m)
+
+# Redondea las fechas al primer lunes de cada semana
+candidatos$primer_lunes_semana <- floor_date(candidatos$fecha_60m, unit = "week", week_start = 1)
+
+# Convierte las fechas a objetos de fecha si aún no lo están
+expected_enrollment_date$fecha_60m <- as.Date(expected_enrollment_date$fecha_60m)
+
+# Redondea las fechas al primer lunes de cada semana
+expected_enrollment_date$primer_lunes_semana <- floor_date(expected_enrollment_date$fecha_60m, unit = "week", week_start = 1)
+
+visitados<-candidates_60m %>% anti_join(
+ candidates_60m %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e2_date)) %>% select(id, e2_date, e2_participant, e2_title, redcap_event_name)
+) %>% filter(!is.na(e2_date)) %>% filter(e2_participant=="3") %>% filter(e2_title=="7") %>% mutate(
+  evento=recode(
+    redcap_event_name, "year4_q1_48m_arm_1"="48m",
+    "year5_arm_1"="60m"
+  )
+) %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>% select(id)
+) %>% left_join(
+  gt_hapin_II_data %>% filter(visit=="b8") %>% filter(!is.na(s4_date)) %>% select(id, s4_date, s4_consent_c)
+) %>% filter(!is.na(s4_date))
+
+
+consentidos<-visitados %>% filter(s4_consent_c=="1")
+
+# Convierte las fechas a objetos de fecha si aún no lo están
+visitados$fecha_visita <- as.Date(visitados$s4_date)
+
+# Redondea las fechas al primer lunes de cada semana
+visitados$primer_lunes_semana <- floor_date(visitados$fecha_visita, unit = "week", week_start = 1)
+
+
+# Convierte las fechas a objetos de fecha si aún no lo están
+consentidos$fecha_visita <- as.Date(consentidos$s4_date)
+
+# Redondea las fechas al primer lunes de cada semana
+consentidos$primer_lunes_semana <- floor_date(consentidos$fecha_visita, unit = "week", week_start = 1)
+
+dt_esperados<-expected_enrollment_date %>% group_by(primer_lunes_semana) %>% count() %>% transmute(
+  fecha=primer_lunes_semana, n, tipo="expected"
+)
+
+dt_visitados<-visitados %>% group_by(primer_lunes_semana) %>% count()%>% transmute(
+  fecha=primer_lunes_semana, n, tipo="visited"
+)
+
+dt_consentidos<-consentidos %>% group_by(primer_lunes_semana) %>% count() %>% transmute(
+  fecha=primer_lunes_semana, n, tipo="consented"
+)
+
+# Calcula el acumulado de la columna n
+dt_esperados$acumulado_n <- cumsum(dt_esperados$n)
+# Calcula el acumulado de la columna n
+dt_visitados$acumulado_n <- cumsum(dt_visitados$n)
+# Calcula el acumulado de la columna n
+dt_consentidos$acumulado_n <- cumsum(dt_consentidos$n)
+
+all_data<-dt_esperados %>% bind_rows(
+  dt_visitados
+) %>% bind_rows(
+  dt_consentidos
+) %>% ungroup() %>% select(fecha, acumulado_n, tipo)
+
+
+#nueva grafica
+# Convierte la columna fecha a formato de fecha si aún no lo está
+all_data$fecha <- as.Date(all_data$fecha)
+
+# # Define los colores que deseas utilizar para cada tipo
+# colores <- c("expected" = "blue", "visited" = "orange", "consented" = "green")
+# 
+# # Calcula el máximo del acumulado de "expected"
+# max_acumulado_expected <- max(all_data$acumulado_n[all_data$tipo == "expected"])
+# 
+# 
+# # Crea la gráfica utilizando ggplot2 y especifica los colores manualmente
+# ggplot(all_data, aes(x = fecha, y = acumulado_n, color = tipo)) +
+#   geom_line() +
+#   labs(title = "Enrollment: Actual versus expected visits at age 5 years",
+#        x = "Date",
+#        y = "Enrolled Participants",
+#        color = "Tipo") +
+#   scale_color_manual(values = colores) +  # Especifica los colores manualmente
+#   scale_x_date(date_labels = "%Y-%m-%d", date_breaks = "1 week") +  # Formato de fecha completo
+#   scale_y_continuous(limits = c(0, max_acumulado_expected), breaks = seq(0, max_acumulado_expected, by = 10)) +  # Define los límites y los intervalos del eje y
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 90, hjust = 1))  # Rota las etiquetas del eje x 90 grados
+
+
+# Define los colores que deseas utilizar para cada tipo
+colores <- c("expected" = "blue", "consented" = "green")
+
+# Filtra los datos para incluir solo "expected" y "consented"
+filtered_data <- all_data[all_data$tipo %in% c("expected", "consented"), ]
+# Calcula el máximo del acumulado de "expected"
+max_acumulado_expected <- max(filtered_data$acumulado_n[filtered_data$tipo == "expected"])
+
+# Crea la gráfica utilizando ggplot2 y especifica los colores manualmente
+ggplot(filtered_data, aes(x = fecha, y = acumulado_n, color = tipo)) +
+  geom_line() +
+  labs(title = "Enrollment: Actual versus expected visits at age 5 years",
+       x = "Date",
+       y = "Enrolled Participants",
+       color = "Tipo") +
+  scale_color_manual(values = colores) +  # Especifica los colores manualmente
+  scale_x_date(date_labels = "%Y-%m-%d", date_breaks = "1 week") +  # Formato de fecha completo
+  scale_y_continuous(limits = c(0, max_acumulado_expected), breaks = seq(0, max_acumulado_expected, by = 10)) +  # Define los límites y los intervalos del eje y
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+
+```{r}
+library(consort)
+
+#armar tabla 
+#sacar candidatos iniciales para 60 meses
+population_60m<-candidates_60m %>% transmute(id, candidate=1, fecha_nacimiento) %>% anti_join(
+  #quitar los niños fallecidos antes de los 60 meses
+candidates_60m  %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e2_date)) %>% select(id, e2_date, e2_participant, e2_title, redcap_event_name)
+) %>% filter(!is.na(e2_date)) %>% filter(e2_participant=="3") %>% filter(e2_title=="7") %>% mutate(
+  evento=recode(
+    redcap_event_name, "year4_q1_48m_arm_1"="48m"
+  )
+) %>% filter(evento=="48m") %>% select(id)
+) %>% mutate(
+  #crear la columna expected a la fecha en que se corre el reporte
+  espected=if_else(
+    as.Date(fecha_nacimiento)+1815 <= Sys.Date(), "In visit window", NA_character_
+  )
+) %>% 
+  #crear la columna Assessed for elegebility
+  left_join(
+  gt_hapin_II_data %>%filter(visit=="b8") %>%   filter(!is.na(s4_date)) %>% select(id, s4_date)
+) %>% mutate(
+  assessed_eleg=if_else(
+    !is.na(s4_date), 1, NA_integer_
+  )
+) %>% select(-s4_date, -fecha_nacimiento) %>% left_join(
+  # Excluded to visit died and migrations
+  candidates_60m  %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e2_date)) %>% select(id, e2_date, e2_participant, e2_title, redcap_event_name)
+) %>% filter(!is.na(e2_date)) %>% filter(e2_participant=="3") %>% filter(e2_title=="7") %>% mutate(
+  evento=recode(
+    redcap_event_name, "year5_arm_1"="60m"
+  )
+  #identificar muertes de niños durante 60m
+) %>% filter(evento=="60m") %>% transmute(id, died=1)
+) %>% left_join(
+  gt_hapin_II_data %>% filter(visit=="b8") %>% filter(e3_reason=="5") %>% transmute(id, migration=1)
+) %>% mutate(
+  excluded=case_when(
+    !is.na(died) ~ "Child death",
+    !is.na(migration) ~ "Child not living in study site",
+    TRUE ~ NA_character_
+  )
+) %>% select(-died, -migration) %>% mutate(
+  assessed_consent=if_else(
+    !is.na(assessed_eleg) & is.na(excluded)  ,1, NA_integer_
+  )
+) %>% left_join(
+  gt_hapin_II_data %>% filter(visit=="b8") %>% filter(s4_consent_c=="0") %>% transmute(id,
+        s4_reason_c=toupper(s4_reason_c)) %>% mutate(
+           not_willing=case_when(
+             grepl("FAMILIA NO QUIERE", s4_reason_c) ~ "Don\\'t Authorize",
+             grepl("NO QUIEREN", s4_reason_c) ~ "Don\\'t Authorize",
+             grepl("NO QUIERE QUE", s4_reason_c) ~ "Don\\'t Authorize",
+             grepl("TIEMPO", s4_reason_c) ~ "Don\\'t have time",
+             grepl("NO AUTORIZA", s4_reason_c) ~ "Don\\'t Authorize",
+             grepl("TIEMPO", s4_reason_c) ~ "Don\\'t value the study",
+             TRUE ~ NA_character_
+           )
+         )
+) %>% select(-s4_reason_c) %>% mutate(
+  under_follow=if_else(
+    !is.na(assessed_consent) & is.na(not_willing), 1, NA_integer_
+  )
+) %>% left_join(
+  gt_hapin_II_data %>% filter(visit=="b8") %>% filter(s4_consent_c=="1") %>% select(id, s4_consent_c) %>%  left_join(
+    gt_hapin_II_data %>% filter(visit=="b8") %>% filter(!is.na(m10_date)) %>% select(id, m10_date)
+  ) %>% left_join(
+    gt_hapin_II_data %>% filter(visit=="b8") %>% filter(!is.na(h41_date_v2)) %>% select(id, h41_date_v2)
+  ) %>% left_join(
+    gt_hapin_II_data %>% filter(visit=="b8") %>% filter(!is.na(e3_reason)) %>% select(id, e3_reason)
+  ) %>%  filter(!is.na(m10_date) & !is.na(e3_reason) & is.na(h41_date_v2)) %>% transmute(
+    id,
+    exit_after_enrollment=recode(
+      e3_reason, "3"="Participant withdrawal",
+      "4"="Study team withdrawal",
+      "5"="Moved away",
+      "6"="Deceased mother",
+      "7"="Deceased child",
+      "8"="Out Window",
+      "555"="Other"
+      
+    )
+  )
+) %>% mutate(
+  under_follow_expo=if_else(!is.na(under_follow) & is.na(exit_after_enrollment), 1, NA_integer_)
+) %>% left_join(
+    gt_hapin_II_data %>% filter(visit=="b8") %>% filter(!is.na(h41_date_v2)) %>% select(id, h41_date_v2)
+   %>% left_join(
+    gt_hapin_II_data %>% filter(visit=="b8") %>% filter(!is.na(e3_reason)) %>% select(id, e3_reason)
+  ) %>% filter(!is.na(h41_date_v2) & is.na(e3_reason)) %>% transmute(id, completed="exposure crf and osm crf")
+  
+) %>% mutate(
+  pending_exposure=if_else(!is.na(under_follow_expo) & is.na(completed),1,NA_integer_)
+) 
+
+
+
+```
+
+
+```{r}
+#labels
+candidate= as.numeric(population_60m %>% group_by(candidate) %>% count() %>% .$n)
+espected=as.numeric(population_60m %>%  filter(!is.na(espected)) %>%  count() %>% .$n)
+label_espected=paste0("Expected enrollment by date (",percent( espected/candidate ),")")
+#crear el consort
+consort_hapin_plus <- consort_plot(data = population_60m,
+             orders = c(candidate = "Target enrollment",
+                          espected = label_espected,
+                          assessed_eleg = "Assessed for eligibility",
+                          excluded   = "Excluded",
+                        assessed_consent="Assessed for consent",
+                        not_willing="Not willing to participate",
+                        under_follow="Enrolled",
+                       # exit_after_enrollment="Exist after enrollment",
+                       # under_follow_expo="Consented to exposure and OSM follow-up",
+                        completed="Completed Exposure and OSM visit",
+                        pending_exposure="Active under follow-up"
+                        
+                          # trialno = "Finished Followup",
+                          # fow2    = "Not evaluable for the final analysis",
+                          # trialno = "Final Analysis"),
+             ),
+             side_box = c("excluded", "not_willing", "completed"),
+             cex = 0.9)
+
+#plot(consort_hapin_plus)
+
+plot(consort_hapin_plus, grViz = TRUE)
+
+consentidos_ultimas_4_semanas<-consentidos %>% filter(as.Date(fecha_visita)>=Sys.Date()-lubridate::days(30)) %>% count()
+
+consentidos_ultimas_1_semanas<-consentidos %>% filter(as.Date(fecha_visita)>= (Sys.Date()-lubridate::days(8)) ) %>% count()
+
+print(paste0("consentidos en las ultimas 4 semanas: ",consentidos_ultimas_4_semanas))
+print(paste0("Consentidos en la ultima semana: ", consentidos_ultimas_1_semanas))
+
+osm_total<-dt_hapin_plus %>% filter(redcap_event_name=="5_arm_1") %>% count()
+no_hizo_osm<-dt_hapin_plus %>% filter(redcap_event_name=="5_arm_1") %>% filter(r2_visit_do=="0" | r2_osm_do=="0" ) %>% count()
+
+no_hizo_salbutamol<-dt_hapin_plus %>% filter(redcap_event_name=="5_arm_1") %>% filter(r2_brondil_do=="0") %>% count()
+
+print(paste0("osm realizados: ", osm_total - no_hizo_osm))
+print(paste0("osm realizados con reversibilidad: ", (osm_total - no_hizo_osm) - no_hizo_salbutamol))
+
+
+```
+

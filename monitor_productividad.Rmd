@@ -1,0 +1,160 @@
+---
+title: "productividad"
+output: html_document
+---
+```{r, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(kableExtra)
+library(knitr)
+library(lubridate)
+library(ggplot2)
+library(dplyr)
+
+# Emory RedCap export data
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+# Emory HAPIN II  
+source(file = "scripts/0_get_hapinII.R", encoding = "UTF-8")
+
+# uvg intensivo oms_project 
+source(file = "scripts/0_get_osm_intensivo.R", encoding = "UTF-8")
+
+# uvg hapin plus
+source(file = "scripts/0_get_hapin_plus.R", encoding = "UTF-8")
+#R1 examen fisico
+examen_fisico<-dt_hapin_plus %>% filter(!is.na(r1_visit_date)) %>% select(
+  id, r1_visit_date,r1_isit_time,  r1_visit, r1_crf_by, r1_by_feelix, r1_time_end
+) %>% mutate(
+  inicio=ymd_hm(paste0(r1_visit_date," ", r1_isit_time)),
+   fin=ymd_hm(paste0(r1_visit_date," ", r1_time_end)),
+  duracion=as.numeric(difftime(fin, inicio), units="mins")
+) 
+
+# examen_fisico %>% arrange(duracion) %>% View()
+# 
+# summary(examen_fisico$duracion)
+
+#R2 OSM
+osm<-dt_hapin_plus %>% filter(!is.na(r2_visit_date)) %>% select(id, r2_visit_date, r2_visit_time, r2_crf_by, r2_osm_by,r2_software_by, r2_visit, r2_visit_do,time_end  ) %>% mutate(
+inicio=ymd_hm(paste0(r2_visit_date," ", r2_visit_time)),
+   fin=ymd_hm(paste0(r2_visit_date," ", time_end)),
+  duracion=as.numeric(difftime(fin, inicio), units="mins")
+                                                           )
+
+# osm %>% arrange(duracion) %>% View()
+# 
+# summary(osm$duracion)
+
+#C88 Presion Arterial
+presion_arterial<-gt_hapin_II_data %>% filter(visit=="b8") %>% filter(!is.na(c88_date)) %>% select(id, c88_date,
+                                          c88_t_bp1,c88_by, c88_t_bp3) %>% mutate(
+inicio=ymd_hm(paste0(c88_date," ", c88_t_bp1)),
+   fin=ymd_hm(paste0(c88_date," ", c88_t_bp3)),
+  duracion=as.numeric(difftime(fin, inicio), units="mins")
+  ) 
+
+# presion_arterial %>% arrange(duracion) %>% View()
+# 
+# summary(presion_arterial$duracion)
+
+#hapin plus antro
+antropometria<-dt_hapin_plus %>% filter(!is.na(d1_visit_date)) %>% select(id, d1_visit_date, d1_visit_time, d1_crf_by,
+                                                          d1_visit_do, d1_time_end) %>% mutate(
+inicio=ymd_hm(paste0(d1_visit_date," ", d1_visit_time)),
+   fin=ymd_hm(paste0(d1_visit_date," ", d1_time_end)),
+  duracion=as.numeric(difftime(fin, inicio), units="mins")
+ )
+
+# antropometria %>% arrange(duracion) %>% View()
+# 
+# summary(antropometria$duracion)
+
+#h42 exposure compliance
+h42<-gt_hapin_II_data %>% filter(visit=="b8") %>% filter(!is.na(h42_date_2)) %>% select(id, h42_date_2, h42_st_2,
+                                                                            h42_by_2,h42_et_2) %>% mutate(
+inicio=ymd_hm(paste0(h42_date_2," ", h42_st_2)),
+   fin=ymd_hm(paste0(h42_date_2," ", h42_et_2)),
+  duracion=as.numeric(difftime(fin, inicio), units="mins") 
+ )
+
+# h42 %>% arrange(duracion) %>% View()
+# 
+# summary(h42$duracion)
+
+#sacar duraciones
+datos_grafica_duracion<-examen_fisico %>% select(id, inicio, fin, duracion,  iniciales1=r1_crf_by, iniciales2=r1_crf_by) %>% bind_rows(
+  osm %>% select(id, inicio, fin, duracion, iniciales1=r2_crf_by, iniciales2=r2_osm_by, inciales3=r2_software_by)
+) %>% bind_rows(
+  presion_arterial %>% select(id, inicio, fin, duracion, iniciales1=c88_by)
+) %>% bind_rows(
+  antropometria %>% select(id, inicio, fin, duracion, iniciales1=d1_crf_by)
+) %>% bind_rows(
+  h42 %>% select(id,inicio, fin, duracion, iniciales1=h42_by_2 )
+)  %>% group_by(id) %>% summarize(duracion_final=sum(duracion), inicio=min(inicio), fin=max(fin)) 
+
+#agregar equipos
+cat_equipos<-examen_fisico %>% select(id, inicio, fin, duracion,  iniciales1=r1_crf_by, iniciales2=r1_crf_by) %>% bind_rows(
+  osm %>% select(id, inicio, fin, duracion, iniciales1=r2_crf_by, iniciales2=r2_osm_by, iniciales3=r2_software_by)
+) %>% bind_rows(
+  presion_arterial %>% select(id, inicio, fin, duracion, iniciales1=c88_by)
+) %>% bind_rows(
+  antropometria %>% select(id, inicio, fin, duracion, iniciales1=d1_crf_by)
+) %>% bind_rows(
+  h42 %>% select(id,inicio, fin, duracion, iniciales1=h42_by_2 )
+) %>% mutate(
+  equipo=if_else(iniciales1=="APL" | iniciales2=="APL" | iniciales3=="APL", "1","2")
+) %>% group_by(id, equipo)  %>% ungroup() %>% filter(!is.na(equipo)) %>% select(id, equipo)
+
+datos_grafica_duracion_equipo<-datos_grafica_duracion %>% left_join(
+  cat_equipos
+) %>% mutate(
+  test=as.Date(inicio),
+  equipo=if_else(test=="2024-02-23","3",equipo )
+  ) %>% select(-test)
+
+#datos grafica 
+datos_grafica_duracion_equipo<-datos_grafica_duracion_equipo %>% unique() %>% mutate(
+  tipo_visita="60m"
+)
+
+datos_grafica_duracion_equipo %>% writexl::write_xlsx("output/bd_grafica_tiempos_60m.xlsx")
+
+#SACAR DATOS PARA 48  MESES
+gt_hapin_II_data %>% filter(visit=="b7") %>%  filter(!is.na(c86_date)) %>%filter(as.Date(c86_date)>="2024-02-23") %>%   select(id, c86_date, c86_time, c86_by) 
+
+
+```
+
+
+
+```{r}
+
+#volteando la torta
+datos_grafica_duracion_long<-datos_grafica_duracion %>% gather(
+  key="variable", value = "value", -id, -duracion_final
+) %>% select(id, duracion_final, tiempo=value)
+
+
+datos_grafica_duracion_long<-datos_grafica_duracion_long %>% left_join(
+  cat_equipos
+)
+
+ggplot(datos_grafica_duracion_long, aes(x = as.Date(tiempo), y = hour(tiempo), color=equipo)) +
+  geom_boxplot(aes(group = id))+ geom_text(aes(label = tiempo, colour=equipo, hjust=as.numeric(equipo)-1 ), vjust = -0.5, size=1.5) +
+# scale_y_continuous(breaks = seq(8, 18, by = 1), labels = sprintf("%02d:00", seq(8, 18, by = 1))) +
+#    labs(x = "Día de la visita", y = "Hora de inicio y fin", color = "Equipo", shape = "Evento",
+#        title = "Duración de visita por niño") +
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  scale_x_date(date_labels = "%Y-%m-%d", date_breaks = "1 day") +
+  scale_y_continuous(breaks = seq(8, 18, by = 1), labels = sprintf("%02d:00", seq(8, 18, by = 1))) +
+  labs(x = "Fecha", y = "Hora", color = "Equipo", shape = "Evento", 
+       title = "Tiempos en hogares visita 60m") +
+  scale_color_manual(values = c("red", "blue", "green")) +
+  scale_shape_manual(values = c(19, 19)) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+
+```
+

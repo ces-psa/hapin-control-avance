@@ -1,0 +1,23 @@
+---
+title: "wilder"
+author: "aramirez"
+date: "16/3/2020"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+#AQUI CARGAS LAS LIBRERÍAS
+library(R0)
+library(package = "tidyverse")
+```
+
+## resultados de analisis
+
+```{r cars}
+#AQUI PONES TU FUNCION
+sim.epid(epid.nb=100, GT=generation.time("gamma",c(3,1.5)), R0=1.5, 
+         epid.length=30, family="poisson", peak.value=20) 
+```
+
+
+Nota maestro: `Lo que lleva numeral es tu texto titulo` este es otro ejemplo de texto que quieras agregar

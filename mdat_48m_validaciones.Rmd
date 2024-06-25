@@ -1,0 +1,104 @@
+---
+title: "reporte_mdat_kcastellanos"
+author: 
+date: "19/3/2024"
+output: html_document
+---
+
+```{r, echo=FALSE}
+
+library(tidyverse)
+
+#leer datos diccionario
+cat_variables_mdat<-read_csv("export/Diccionario_MDAT_v8.csv", show_col_types = FALSE)
+
+#CARGAR DATOS EXPORT MDAT 48
+#buscar el export mas reciente
+file_48m<-list.files(
+  path = "export", pattern = "HAPINIIGuatemala-MDAT48MExclusive_DATA_.+csv", full.names = TRUE
+) %>%
+  tibble(
+    file = .,
+    export_time = file %>%
+      gsub(".+?_([-0-9_]+).csv", "\\1", .) %>%
+      lubridate::ymd_hm(tz = "America/New_York")
+  ) %>%
+  slice(which.max(export_time))
+
+
+#cargar los datos
+dt_mdat<-read_csv(file_48m$file, cols(.default = "c"),show_col_types = FALSE)
+#renombrer columnas
+names(dt_mdat) <- dt_mdat[1,]
+dt_mdat<-dt_mdat[-1,]
+dt_mdat<-dt_mdat %>% filter(record_id!="99999")
+
+#ARMAR DATA SET PARA LOS DOMINIOS
+#sacar variables para motor grueso
+var_motor_grueso<-cat_variables_mdat %>% filter(domain=="Motor Grueso") %>% select(
+  variable, order_number
+)
+
+#dataset para motor grueso
+dt_mdat_motor_grueso <- dt_mdat %>%
+  filter(!is.na(c85_date)) %>%
+  select(record_id, matches(paste0("^", var_motor_grueso$variable, "$"))) 
+
+# Filtrar las visitas que tienen algún dato faltante en cualquiera de las variables
+#ids que tienen un item vacio
+visitas_con_dato_faltante <- dt_mdat_motor_grueso %>%
+  filter_all(any_vars(is.na(.))) %>%
+  pull(record_id)
+
+item_vacio<-dt_mdat_motor_grueso %>%
+  filter_all(any_vars(is.na(.)))
+
+#seguimos verificando los casos que no tienen item vacio para validar que del registro 1 al 12 tengan valor 1
+dt_mdat_motor_grueso_novacio<-dt_mdat_motor_grueso %>% anti_join(
+  item_vacio %>% select(record_id)
+)
+
+
+revisar <- dt_mdat_motor_grueso_novacio %>%
+  filter(!(rowSums(select(., 2:13) != 98, na.rm = TRUE) == 0 |
+           rowSums(select(., 2:13) != 1, na.rm = TRUE) == 0))
+# 
+# list(
+#   "item_vacio"=item_vacio,
+#   "revisar"=revisar
+# ) %>% writexl::write_xlsx("output/QC_revisar.xlsx")
+
+ no_completos1<-dt_mdat_motor_grueso_novacio %>%
+  filter(!(rowSums(select(., 2:13) == 98, na.rm = TRUE) == 0 ))
+
+
+dt_mdat_motor_grueso_novacio_revisar<-dt_mdat_motor_grueso_novacio %>% anti_join(
+  revisar %>% select(record_id)
+) %>% anti_join(
+  no_completos1 %>% select(record_id)
+)
+
+#validar que antes de un 98 haya 6 valores 0
+# Encontrar las posiciones donde hay un valor de 98 en alguna variable
+# Convertir todas las columnas relevantes a numérico
+dt_mdat_motor_grueso_novacio_revisar[, -1] <- lapply(dt_mdat_motor_grueso_novacio_revisar[, -1], as.numeric)
+
+# Encontrar las posiciones donde hay un valor de 98 en alguna variable
+posiciones_98 <- apply(dt_mdat_motor_grueso_novacio_revisar[, -1], 1, function(x) which(x == 98))
+
+# Verificar si hay 6 variables hacia atrás desde la posición donde se encontró un 98
+filas_incompletas <- sapply(posiciones_98, function(pos) {
+  if (length(pos) > 0) {
+    inicio <- max(1, (pos - 6))
+    todas_cero <- all(rowSums(dt_mdat_motor_grueso_novacio_revisar[inicio:pos, -1], na.rm = TRUE) == 0)
+    return(todas_cero)
+  } else {
+    return(FALSE)
+  }
+})
+
+# Crear el nuevo data frame "incompleto" con las filas que no cumplen con los criterios
+incompleto <- dt_mdat_motor_grueso_novacio_revisar[filas_incompletas, ]
+
+```
+

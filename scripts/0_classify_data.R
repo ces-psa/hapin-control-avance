@@ -3,7 +3,7 @@
 #------------------------------------------------------------------------------*
 
 # Mujeres tamizadas elegibles pero no inscritas
-elegibles <- gt_emory_data %>%
+elegibles <- gt_emory_data_arm1 %>%
   mutate(
     # eligibility
     eligible = (
@@ -34,7 +34,7 @@ elegibles <- gt_emory_data %>%
 
 
 # Tabla de referencia IDs tamizaje y estudio principal
-id_screening_enrolled <- gt_emory_data %>%
+id_screening_enrolled <- gt_emory_data_arm1 %>%
   filter(redcap_event_name == "elegibilidad_arm_1") %>%
   select(
     id,
@@ -44,7 +44,7 @@ id_screening_enrolled <- gt_emory_data %>%
 
 
 # Mujeres inscritas en el estudio
-inscritas <- gt_emory_data %>%
+inscritas <- gt_emory_data_arm2 %>%
   # Only keep those that are enrolled
   filter(
     id %in% {
@@ -53,17 +53,17 @@ inscritas <- gt_emory_data %>%
         pull(s4_main_id) %>%
         as.character()
     }
-  ) %>%
+  ) %>% 
   # Gather variable-value pairs
   mutate_at(
     vars(matches("_date")),
     list(~ as.character)
-  ) %>%
+  ) %>% group_by(visit)
   # Add dates for started H41s
   left_join(
     gt_exposure_start %>%
       filter(gth4x_crf == "h41") %>%
-      select(visit, id = record_id, gth4x_date)
+      select(visit, id_estudio = record_id, gth4x_date)
   ) %>%
   mutate(
     h41_date = if_else(
@@ -88,12 +88,12 @@ inscritas <- gt_emory_data %>%
     select(
       id_screening_enrolled,
       community,
-      screening_id = id, id = s4_main_id
+      screening_id = id, id_estudio = s4_main_id
     ) %>%
-      mutate(id = as.character(id))
+      mutate(id = as.character(id_estudio))
   ) %>%
   left_join(
-    gt_emory_data %>%
+    gt_emory_data_arm1 %>%
       filter(redcap_event_name == "elegibilidad_arm_1", !is.na(m17_ga)) %>%
       select(
         screening_id = id,
@@ -107,7 +107,7 @@ inscritas <- gt_emory_data %>%
   filter(!is.na(value)) %>%
   separate(variable, into = c("visit", "variable"), sep = "[.]") %>%
   mutate(
-    visit = factor(visit, levels = levels(gt_emory_data$visit))
+    visit = factor(visit, levels = levels(gt_emory_data_arm1$visit))
   ) %>%
   spread(variable, value) %>%
   select(

@@ -1,0 +1,499 @@
+---
+title: "QC en visitas de 36 meses"
+author: "AIR"
+#date: "22/7/2022"
+output: 
+    bookdown::html_document2:
+    toc: true
+    fig_caption: true
+    css: styles.css
+    template: flatly
+#html_document
+---
+
+```{r setup, include=FALSE}
+
+library("tidyverse")
+library(kableExtra)
+library(scales)
+
+knitr::opts_chunk$set(echo = FALSE)
+# Emory RedCap export data ----
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+
+# Participant information (z10) ----
+source(file = "scripts/0_get_participants.R", encoding = "UTF-8")
+
+# Participant information (z10) ----
+source(file = "scripts/0_get_salidas.R", encoding = "UTF-8")
+# Participant information (z10) -----
+source(file = "scripts/0_get_e3.R", encoding = "UTF-8")
+
+fecha_corte="2022-09-09"
+
+# sacar fechas de S4
+s4_crf<-gt_hapin_II_data %>% filter(!is.na(s4_date) & redcap_event_name=="year_3_q1_36m_arm_1") %>% select(
+  id, s4_date, s4_by, s4_consent_c
+) %>% transmute(id, fecha_s4=s4_date, iniciales_s4=s4_by, consintio=recode(s4_consent_c,"1"="Si", "0"="No")
+                )
+#errores en fecha m10
+m10_issue<-s4_crf%>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(m10_date ) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+    id, m10_date, m10_by, crf="M10"
+  )
+) %>% mutate(
+  dias_m10_s4=as.Date(m10_date) - as.Date(fecha_s4),
+  issue=if_else(dias_m10_s4!="0", paste0("M10 con ", dias_m10_s4, " de diferencia con S4"), NA_character_)
+) %>% filter(consintio=="Si") %>% filter(!is.na(issue)) %>% select(id, fecha_s4, iniciales_s4, fecha_crf=m10_date, iniciales_crf=m10_by, crf, issue )
+
+m11_issue<-s4_crf %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(m11_date) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+    id, m11_date, m11_by, crf="M11"
+  )
+) %>% mutate(
+  dias_m11_s4=as.Date(m11_date) - as.Date(fecha_s4),
+  issue=if_else(dias_m11_s4!="0", paste0("M11 con ", dias_m11_s4, " de diferencia con S4"), NA_character_)
+) %>% filter(consintio=="Si") %>% filter(!is.na(issue)) %>% select(id, fecha_s4, iniciales_s4,
+                                                                   fecha_crf=m11_date, iniciales_crf=m11_by, crf, issue)
+
+#m14a
+m19_issue<-s4_crf %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(m19_date) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+    id, m19_date, m19_by, crf="M19"
+  )
+) %>% mutate(
+  dias_m19_s4=as.Date(m19_date) - as.Date(fecha_s4),
+  issue=if_else(dias_m19_s4!="0",paste0("M19 con ", dias_m19_s4, " de diferencia con S4"), NA_character_)
+) %>% filter(consintio=="Si") %>% filter(!is.na(issue)) %>% select(id, fecha_s4, iniciales_s4, 
+            fecha_crf=m19_date, iniciales_crf=m19_by,  crf, issue)
+
+#c31
+c31_issue<-s4_crf %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(c31_date_2) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+    id, c31_date_2, c31_by_2, crf="C31"
+  )
+) %>% mutate(
+  dias_c31_s4=as.Date(c31_date_2) - as.Date(fecha_s4),
+  issue=if_else(dias_c31_s4!="0",paste0("C31 con ", dias_c31_s4, " de diferencia con S4"), NA_character_)
+) %>% filter(consintio=="Si") %>% filter(!is.na(issue)) %>% select(id, fecha_s4, iniciales_s4, 
+            fecha_crf=c31_date_2, iniciales_crf=c31_by_2,  crf, issue)
+
+#c32
+c32_issue<-s4_crf %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(c32_date_2) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+    id, c32_date_2, c32_by_2, crf="C32"
+  )
+) %>% mutate(
+  dias_c32_s4=as.Date(c32_date_2) - as.Date(fecha_s4),
+  issue=if_else(dias_c32_s4!="0",paste0("C32 con ", dias_c32_s4, " de diferencia con S4"), NA_character_)
+) %>% filter(consintio=="Si") %>% filter(!is.na(issue)) %>% select(id, fecha_s4, iniciales_s4, 
+            fecha_crf=c32_date_2, iniciales_crf=c32_by_2,  crf, issue)
+
+#c35
+c35_issue<-s4_crf %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(c35_date_2) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+    id, c35_date_2, c35_by_2, crf="C32"
+  )
+) %>% mutate(
+  dias_c35_s4=as.Date(c35_date_2) - as.Date(fecha_s4),
+  issue=if_else(dias_c35_s4!="0",paste0("C35 con ", dias_c35_s4, " de diferencia con S4"), NA_character_)
+) %>% filter(consintio=="Si") %>% filter(!is.na(issue)) %>% select(id, fecha_s4, iniciales_s4, 
+            fecha_crf=c35_date_2, iniciales_crf=c35_by_2,  crf, issue)
+
+#h57
+h57_issue<-s4_crf %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(h57_date_2) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+    id, h57_date_2, h57_by_2, crf="H57"
+  )
+) %>% mutate(
+  dias_h57_s4=as.Date(h57_date_2) - as.Date(fecha_s4),
+  issue=if_else(dias_h57_s4!="0",paste0("H57 con ", dias_h57_s4, " de diferencia con S4"), NA_character_)
+) %>% filter(consintio=="Si") %>% filter(!is.na(issue)) %>% select(id, fecha_s4, iniciales_s4, 
+            fecha_crf=h57_date_2, iniciales_crf=h57_by_2,  crf, issue)
+
+#m14a
+# s4_crf %>% left_join(
+#   gt_hapin_II_data %>% filter(!is.na(m14a_date) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+#     id, m14a_date, m14a_by, crf="M14a"
+#   )
+# ) %>% mutate(
+#   dias_m14a_s4=as.Date(m14a_date) - as.Date(fecha_s4),
+#   issue=if_else(dias_m14a_s4!="0",paste0("M14a con ", dias_m14a_s4, " de diferencia con S4"), NA_character_)
+# ) %>% filter(consintio=="Si") %>% filter(!is.na(issue)) %>% select(id, fecha_s4, iniciales_s4, 
+#                                                                    fecha_crf=m14a_date, iniciales_crf=m14a_by,
+#                                                                    crf, issue)
+
+
+#integrar tabla de issues
+issue_fechas_crf_clinica<-m10_issue %>% bind_rows(
+  list(
+    m11_issue,
+    m19_issue,
+    c31_issue,
+    c32_issue,
+    c35_issue,
+    h57_issue
+    
+  )
+)
+
+#revisión de Fechas grupo Exposure
+#H41
+h41_crf<- gt_hapin_II_data %>% filter(!is.na(h41_date_v2) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+    id, fecha_h41=h41_date_v2, iniciales_h41=h41_by_v2
+)
+
+#m14a
+m14a_issue<- h41_crf %>% left_join(
+   gt_hapin_II_data %>% filter(!is.na(m14a_date) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+     id, m14a_date, m14a_by, crf="M14a"
+   )
+ ) %>% mutate(
+   dias_m14a_h41=as.Date(m14a_date) - as.Date(fecha_h41),
+   issue=if_else(dias_m14a_h41!="0",paste0("M14a con ", dias_m14a_h41, " de diferencia con H41"), NA_character_)
+ ) %>% filter(!is.na(issue)) %>% select(id, fecha_h41, iniciales_h41,                                                                 fecha_crf=m14a_date, iniciales_crf=m14a_by, crf, issue
+                                                                  )
+
+#m14a
+m14a_issue<- h41_crf %>% left_join(
+   gt_hapin_II_data %>% filter(!is.na(m14a_date) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+     id, m14a_date, m14a_by, crf="M14a"
+   )
+ ) %>% mutate(
+   dias_m14a_h41=as.Date(m14a_date) - as.Date(fecha_h41),
+   issue=if_else(dias_m14a_h41!="0",paste0("M14a con ", dias_m14a_h41, " de diferencia con H41"), NA_character_)
+ ) %>% filter(!is.na(issue)) %>% select(id, fecha_h41, iniciales_h41,                                                                 fecha_crf=m14a_date, iniciales_crf=m14a_by, crf, issue
+                                                                  )
+#m14b
+m14b_issue<- h41_crf %>% left_join(
+   gt_hapin_II_data %>% filter(!is.na(m14b_date) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+     id, m14b_date, m14b_by, crf="M14b"
+   )
+ ) %>% mutate(
+   dias_m14b_h41=as.Date(m14b_date) - as.Date(fecha_h41),
+   issue=if_else(dias_m14b_h41!="1",paste0("M14b con ", dias_m14b_h41, " de diferencia con H41"), NA_character_)
+ ) %>% filter(!is.na(issue)) %>% select(id, fecha_h41, iniciales_h41,                                                                 fecha_crf=m14b_date, iniciales_crf=m14b_by, crf, issue
+                                                                  )
+
+#c33
+c33_issue<- h41_crf %>% left_join(
+   gt_hapin_II_data %>% filter(!is.na(c33_date_2) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+     id, c33_date_2, c33_by_2, crf="C33"
+   )
+ ) %>% mutate(
+   dias_c33_h41=as.Date(c33_date_2) - as.Date(fecha_h41),
+   issue=if_else(dias_c33_h41!="0",paste0("C33 con ", dias_c33_h41, " de diferencia con H41"), NA_character_)
+ ) %>% filter(!is.na(issue)) %>% select(id, fecha_h41, iniciales_h41,                                                                 fecha_crf=c33_date_2, iniciales_crf=c33_by_2, crf, issue
+                                                                  )
+
+#c86
+c86_issue1<- h41_crf %>%  left_join(
+   gt_hapin_II_data %>% filter(!is.na(c86_date) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+     id, c86_date, c86_by, crf="C86"
+   )
+ ) %>%filter(as.Date(c86_date)< "2022-04-25") %>%   mutate(
+   dias_c86_h41=as.Date(c86_date) - as.Date(fecha_h41),
+   issue=if_else(dias_c86_h41!="0",paste0("C86 con ", dias_c86_h41, " de diferencia con H41"), NA_character_)
+ ) %>% filter(!is.na(issue)) %>% select(id, fecha_h41, iniciales_h41,                                                                 fecha_crf=c86_date, iniciales_crf=c86_by, crf, issue
+                                                                  )
+c86_issue2<- h41_crf %>%  left_join(
+   gt_hapin_II_data %>% filter(!is.na(c86_date) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+     id, c86_date, c86_by, crf="C86"
+   )
+ ) %>%filter(as.Date(c86_date)>= "2022-04-25") %>%   mutate(
+   dias_c86_h41=as.Date(c86_date) - as.Date(fecha_h41),
+   issue=if_else(dias_c86_h41!="1",paste0("C86 con ", dias_c86_h41, " de diferencia con H41"), NA_character_)
+ ) %>% filter(!is.na(issue)) %>% select(id, fecha_h41, iniciales_h41,                                                                 fecha_crf=c86_date, iniciales_crf=c86_by, crf, issue
+                                                                  )
+#h42
+h42_issue2<- h41_crf %>%  left_join(
+   gt_hapin_II_data %>% filter(!is.na(h42_date_2) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+     id, h42_date_2, h42_by_2, crf="H42"
+   )
+ ) %>%   mutate(
+   dias_h42_h41=as.Date(h42_date_2) - as.Date(fecha_h41),
+   issue=if_else(dias_h42_h41!="1",paste0("H42 con ", dias_h42_h41, " de diferencia con H41"), NA_character_)
+ ) %>% filter(!is.na(issue)) %>% select(id, fecha_h41, iniciales_h41,                                                                 fecha_crf=h42_date_2, iniciales_crf=h42_by_2, crf, issue
+                                                                  )
+
+#h43
+h43_issue2<- h41_crf %>%  left_join(
+   gt_hapin_II_data %>% filter(!is.na(h43_date_2) & redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+     id, h43_date_2, h43_by_2, crf="H43"
+   )
+ ) %>%   mutate(
+   dias_h43_h41=as.Date(h43_date_2) - as.Date(fecha_h41),
+   issue=if_else(dias_h43_h41!="0",paste0("H43 con ", dias_h43_h41, " de diferencia con H41"), NA_character_)
+ ) %>% filter(!is.na(issue)) %>% select(id, fecha_h41, iniciales_h41,                                                                 fecha_crf=h43_date_2, iniciales_crf=h43_by_2, crf, issue
+                                                                  )
+
+
+#integrar tabla de issues de Exposure
+issue_fechas_crf_exposure<-m14a_issue %>% bind_rows(
+  list(
+    m14b_issue,
+     c33_issue,
+     c86_issue1,
+     c86_issue2,
+     h42_issue2,
+     h43_issue2
+    
+  )
+)
+
+
+# identificar CRF's missing en visita reclutamiento ----
+## m10 ----
+crf_missing_m10<-gt_hapin_II_data %>% filter(s4_consent_c=="1") %>% filter(visit=="b6") %>% select(id, s4_date) %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(m10_date)) %>% transmute(id, m10="Si")
+) %>% filter(is.na(m10))
+
+## m10 ----
+crf_missing_m11<-gt_hapin_II_data %>% filter(s4_consent_c=="1") %>% filter(visit=="b6") %>% select(id, s4_date) %>% left_join(
+  gt_hapin_II_data %>% filter(visit=="b6") %>% filter(!is.na(m11_date)) %>%  transmute(id, m11="Si")
+) %>% filter(is.na(m11))
+
+## m11 ----
+crf_missing_m19<-gt_hapin_II_data %>% filter(s4_consent_c=="1") %>% filter(visit=="b6") %>% select(id, s4_date, s4_by) %>% left_join(
+  gt_hapin_II_data %>% filter(visit=="b6") %>% filter(!is.na(m19_date)) %>%  transmute(id, m19="Si")
+) %>% filter(is.na(m19))
+
+## m11 ----
+crf_missing_c32<-gt_hapin_II_data %>% filter(s4_consent_c=="1") %>% filter(visit=="b6") %>% select(id, s4_date, s4_by) %>% left_join(
+  gt_hapin_II_data %>% filter(visit=="b6") %>% filter(!is.na(c32_date_2)) %>%  transmute(id, c32="Si")
+) %>% filter(is.na(c32))
+
+# identificar CRF's missing en visita de exposición
+#m14a
+crf_missing_m14a<-h41_crf %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(m14a_date)) %>% filter(visit=="b6") %>% transmute(id,m14a="Si" )
+) %>% filter(is.na(m14a))
+
+#m14b
+crf_missing_m14b<-h41_crf %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(m14b_date)) %>% filter(visit=="b6") %>% transmute(id,m14b="Si" )
+) %>% filter(is.na(m14b))
+
+
+```
+#### Reporte realizado al `r as.Date(fecha_corte)`
+## Resumen de los Reclutamientos realizados en Visitas de 36 meses
+### Estas visitas iniciaron el 22 de febrero del 2022
+
+```{r s4,  echo=FALSE, message=FALSE, warning=FALSE}
+#consentidos
+s4_consentidos<-s4_crf %>% filter(consintio=="Si") %>% mutate( Mes=format(fecha_s4, "%B")) %>%  group_by(
+  Anio=lubridate::year(fecha_s4),
+  mes=lubridate::month(fecha_s4),
+  Mes
+) %>% count() %>% ungroup() %>% select(Anio, Mes, Consentidos=n) 
+
+#rechazados
+s4_rechazados<-s4_crf %>% filter(consintio=="No") %>% mutate( Mes=format(fecha_s4, "%B")) %>%  group_by(
+  Anio=lubridate::year(fecha_s4),
+  mes=lubridate::month(fecha_s4),
+  Mes
+) %>% count() %>% ungroup() %>% select(Anio, Mes, Rechazados=n) 
+
+#tabla S4
+dt_esperados<-gt_emory_data_arm2 %>% filter(!is.na(c30_dob)) %>% select(id, c30_dob) %>% mutate(
+  ventana=as.Date(c30_dob) + lubridate::days(330),
+  un_anio=as.Date(c30_dob) + lubridate::days(365)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_c)) %>% select(id, e3_date_exit_c, e3_reason_c)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit)) %>% select(id, e3_date_exit, e3_reason)
+) %>% mutate(
+  descartar=case_when(
+    # is.na(e3_date_exit_c) ~ "No",
+    # as.Date(e3_date_exit_c)< as.Date(ventana) ~ "Si",
+    e3_reason=="8"  ~  "Si",
+    TRUE ~ "No"
+  )
+) %>% filter(descartar=="No") %>% select(id, fecha_nacimiento=c30_dob) %>% mutate(
+  `12_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*12)),
+  `24_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*24)),
+  `36_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*36)),
+  `48_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*48)),
+  `60_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*60))
+) %>% select(id, fecha_nacimiento, fecha_b6=`36_meses` ) %>% filter(
+  as.Date(fecha_b6)<=as.Date(fecha_corte)
+) %>%  mutate( Mes=format(fecha_b6, "%B")) %>%  group_by(
+  Anio=lubridate::year(fecha_b6),
+  mes=lubridate::month(fecha_b6),
+  Mes
+) %>% count() %>% ungroup() %>% transmute(Anio, Mes, Esperados=n) 
+
+#esperados y realizados
+dt_resumen_esperados_realizados<-dt_esperados %>% left_join(
+  s4_consentidos
+) %>% left_join(s4_rechazados) %>% mutate(
+  Esperados=if_else(is.na(Esperados), 0,as.numeric(Esperados)),
+  Consentidos= if_else(is.na(Consentidos), 0,as.numeric(Consentidos)),
+  Rechazados= if_else(is.na(Rechazados), 0, as.numeric(Rechazados))
+) %>% transmute(`Año`=as.character(Anio), Mes, Esperados=as.numeric(Esperados), Consentidos=as.numeric(Consentidos), Rechazados=as.numeric(Rechazados))
+#%>% 
+#   mutate(
+#   proporcion_realizados= percent( as.numeric(Rechazados) / as.numeric(Consentidos) )
+#   
+# ) %>% 
+dt_resumen_esperados_realizados<-dt_resumen_esperados_realizados %>% mutate(
+  Esperados_Acumulados=cumsum(Esperados)
+) %>% select(
+  Año, Mes, Esperados, Esperados_Acumulados, Consentidos, Rechazados
+)
+
+# dt_resumen_esperados_realizados
+# 
+# apply(X= dt_resumen_esperados_realizados %>% transmute(Consentidos=as.numeric(Consentidos), Rechazados=as.numeric(Rechazados)), MARGIN=1, FUN= sum) 
+
+tabla_avances<-dt_resumen_esperados_realizados  
+tabla_avances_tmp<- tabla_avances %>% mutate(
+  Acumulado_consentidos=cumsum(Consentidos),
+  Acumulado_rechazados=cumsum(Rechazados),
+   Año=if_else(is.na(Año), "..",Año),
+   Mes=if_else(is.na(Mes), "Total", Mes)
+ ) 
+tabla_avances<-tabla_avances_tmp %>% transmute(`Año`, Mes, Esperados, Consentidos, Rechazados, Esperados_Acumulados, Realizados_acumulado=Acumulado_consentidos + Acumulado_rechazados )
+
+total_avances_s4<- tabla_avances%>% 
+  bind_rows(
+  apply(X= dt_resumen_esperados_realizados %>% transmute(Esperados=as.numeric(Esperados), Consentidos=as.numeric(Consentidos), Rechazados=as.numeric(Rechazados)), MARGIN=2, FUN= sum) 
+) %>% mutate(
+  Mes=case_when(
+    is.na(Mes) ~ "Total",
+    !is.na(Mes) ~ Mes
+  ),
+  `Año`=case_when(
+  is.na(`Año`) ~ "----",
+  !is.na(`Año`) ~ `Año`
+) 
+) 
+total_avances_s4 %>% 
+  kable(caption = "Reclutamientos realizados (S4 de 36 meses) por mes") %>% kable_classic(
+  full_width=F, html_font = "Cambria"
+)
+
+
+
+```
+
+~~~~
+La proporción de Reclutamientos Realizados (Consentidos y Rechazados) es de : `r percent(total_avances_s4 %>% filter(Mes=="Total") %>% select(Consentidos, Rechazados) %>% sum() / total_avances_s4 %>% filter(Mes=="Total") %>% select(Esperados) %>% sum())`
+~~~~
+
+## Problemas con fechas de CRFs en visita de Reclutamiento
+#### Se tomó como fecha base la del S4 para identificar diferencia de fechas con otros crfs
+
+```{r issue_date, echo=FALSE, message=FALSE, warning=FALSE}
+issue_fechas_crf_clinica %>%  kable(caption = "Crfs con diferencia de fecha en comparación con S4 en visitas de reclutamiento en  36 Meses")  %>% kable_classic(
+  full_width=F, html_font = "Cambria"
+)
+
+#hacer QC excel
+dt_qc_r<-issue_fechas_crf_clinica %>% mutate(
+  CRF=paste0(crf,"Hapin II"),
+  HHID=id, 
+  timepoint="36 meses",
+  Field=paste0(crf,"_date"),
+  QueryType="Diferencia de fechas en crfs de visita de reclutamiento",
+  QueryDescription=paste0("Fecha_s4:", fecha_s4, " fecha_",crf,": ", fecha_crf, " ; ",issue),
+  ResponseDate=NA_character_,
+  ResponseFrom=NA_character_,
+  ResponseType=NA_character_,
+  FinalResolutionDate=NA_character_,
+  Observations=NA_character_
+  
+) %>% select(
+  CRF, HHID, timepoint, Field, QueryType, QueryDescription, ResponseDate, ResponseFrom,
+  ResponseType, FinalResolutionDate, Observations
+) 
+
+
+```
+
+
+## Problemas con fechas de CRFs en visita de Exposición
+#### Se tomó como fecha base la del H41  para identificar diferencia de fechas con otros crfs
+##### Para C86 se hicieron dos sets para validar, set 1: todos los c86 antes del 25 de abril del 2022 deben tener la misma fecha que H41; set 2: todos los c86 del 25 de abril en adelante deben tener la fecha del h41 mas 1 dia (se realiza fot en dia 2 de exposición)
+
+```{r issue_date_exposure, echo=FALSE, message=FALSE, warning=FALSE}
+#tabla inconsistencias fechas exposición
+issue_fechas_crf_exposure %>%  kable(caption = "CRFs con diferencia de fecha en comparación con H41 en visitas Exposure de  36 Meses") %>% kable_classic(full_width=F, html_font = "Cambria")
+
+#hacer QC integrado reclutamiento y exposición
+# dt_qc<- dt_qc_r %>% bind_rows( 
+#   list(issue_fechas_crf_exposure %>% mutate(
+#   CRF=paste0(crf,"Hapin II"),
+#   HHID=id, 
+#   timepoint="36 meses",
+#   Field=paste0(crf,"_date"),
+#   QueryType="Diferencia de fechas en crfs de visita Exposure",
+#   QueryDescription=paste0("Fecha_h41: ", fecha_h41, " fecha_",crf,": ", fecha_crf, " ; ",issue),
+#   ResponseDate=NA_character_,
+#   ResponseFrom=NA_character_,
+#   ResponseType=NA_character_,
+#   FinalResolutionDate=NA_character_,
+#   Observations=NA_character_
+#   
+# ) %>% select(
+#   CRF, HHID, timepoint, Field, QueryType, QueryDescription, ResponseDate, ResponseFrom,
+#   ResponseType, FinalResolutionDate, Observations
+# ),
+# crf_missing_m19 %>% mutate(
+#   CRF=paste0(crf,"Hapin II"),
+#   HHID=id, 
+#   timepoint="36 meses",
+#   Field=paste0("M19_date, S4_date"),
+#   QueryType="CRF Missing de Reclutamiento",
+#   QueryDescription=paste0("Fecha reclutamiento: ", s4_date, "CRF M19 Missing en visita de Reclutamiento"),
+#   ResponseDate=NA_character_,
+#   ResponseFrom=NA_character_,
+#   ResponseType=NA_character_,
+#   FinalResolutionDate=NA_character_,
+#   Observations=NA_character_
+#   
+# ) %>% select(
+#   CRF, HHID, timepoint, Field, QueryType, QueryDescription, ResponseDate, ResponseFrom,
+#   ResponseType, FinalResolutionDate, Observations
+# )
+# )
+# 
+# )
+
+#dt_qc %>% arrange(HHID)%>% writexl::write_xlsx(paste0("output/QC_36m_al_",Sys.Date(),".xlsx"))
+```
+
+
+## Identificación de CRF's faltantes en Visita de Reclutamiento
+
+### Se toma como base aquellos consentidos en s4 que no tienen un crf correspondiente a la visita de reclutamiento
+```{r crf_missing_reclutamiento, echo=FALSE, message=FALSE, warning=FALSE}
+crf_missing_m19 %>% transmute(
+  id, fecha_reclutamiento=s4_date, iniciales=s4_by, crf="M19", issue="CRF M19 Missing en visita de Reclutamiento"
+) %>% bind_rows(
+  crf_missing_c32 %>% transmute(
+  id, fecha_reclutamiento=s4_date, iniciales=s4_by, crf="C32", issue="CRF C32 Missing en visita de Reclutamiento"
+)
+) %>% 
+  kable(caption = "CRFs Missingen visita de reclutamiento en 36 Meses") %>% kable_classic(full_width=F, html_font = "Cambria")
+
+```
+
+## Identificación de CRF's faltantes en Visita de Exposición
+
+### Se toma como base aquellos consentidos en s4 que ya se les hizo un H41 pero les falta algún crf correspondiente a la visita de Exposición
+```{r crf_missing_expsicion, echo=FALSE, message=FALSE, warning=FALSE}
+crf_missing_m14a %>% transmute(
+  id, fecha_exposicion=fecha_h41, iniciales_h41, crf="M14a", issue="CRF M14a Missing en visita de Exposición"
+) %>%  bind_rows(
+  crf_missing_m14b %>% transmute(
+  id, fecha_exposicion=fecha_h41, iniciales_h41, crf="M14b", issue="CRF M14b Missing en visita de Exposición"
+)
+) %>% arrange(id) %>% 
+  kable(caption = "CRFs Missingen visita de Exposición en 36 Meses") %>% kable_classic(full_width=F, html_font = "Cambria")
+
+
+```
+Se ha generado un archivo de [Control de calidad en Google drive]:  https://drive.google.com/drive/folders/1Rj79QfFA4VCB1j2u2e-ioxgXc8pD9KqY?usp=sharing , para trabajar las correciones o anotaciones respectivas para cada caso.
+

@@ -1,0 +1,1084 @@
+---
+title: "6_ecm_results"
+author: "wenlu ye and ricardo piedrahita"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+    self_contained: yes
+    code_folding: hide
+---
+
+# Overview
+
+* This markdown must be run using the render function, using the run_ecm_markdown.R helper script
+
+* Methods: 
+** The basic 24h PM2.5 personal exposure assessment approach is described in Johnson et al., 2018.  ECMs were used to measure PM2.5 at baseline, and two pre-birth visits (p1, p2).  Gravimetric samples were collected in all samples, in addition to xx blanks in total, to perform by-IRC blank corrections.  Limit of detection was calculated separately for each country’s blanks as 3 times the standard deviations of the blank mass deposition distributions, after filtering for unrealistic blank values (outliers above 10µg and below -10µg deposition).  Values below the LoD were replaced with LoD/sqrt(2) (citation).  Data quality was assessed using field enumerator feedback on sample integrity (primarily notes on damage to the filter), pre- and post-sample flow calibration and verification, and analysis of the real-time data file produced by the ECM instrument, if available.  XX samples with lost ECM real-time data files were retained for analysis if pre- and post-sample flow checks were valid. The real-time data files were used to check for duration, flow, and inlet pressure adherence to pre-set thresholds.  
+** For cases in which the gravimetric sample was invalidated, either due to a missing filter, damaged filter, or flow fault, the nephelometer data from the instrument was used to estimate the personal exposure.  To generate nephelometer-based PM2.5 estimates, the nephelometer data was first baseline adjusted by setting the 1st percentile of data to 10µg/m3, representative of a typical relatively clean ambient concentration, in a procedure similar to Zhang et al. (2018). A subset of samples had zeroing periods at the start and end of the deployments, but we found that adjustment to that zero baseline resulted in a substantial number of negative values in the nephelometric data, calling into question the performance at the low end of the concentration range.  The minute-averaged nephelometric data were then analyzed for data quality using automated checking for files with greater than %10 of values above the saturation limit of 9000µg/m3 (led to xx exclusions), or any values smaller than -20 existed (led to xx exclusions), which would be indicative of a malfunctioning nephelometer.  Using the retained data (including all samples with valid gravimetric data and neph data that passed the above tests), we then performed linear regressions for each instrument between the log(10) transformed baseline-adjusted nephelometer values that were categorized as valid, and the valid log(10) transformed gravimetric averages.  For ECM instruments with regression  R^2 values greater than 0.7, with valid sample pairs greater than 3, and with slope within the range of 1 and 2, the linear regression was then applied to the baseline-adjusted nephelometer 24-h average, thus giving a field-calibrated nephelometric value.  
+** BC data was calculated as per Garland et al., 20xx, and additional flagging steps were conducted to ensure data quality.  In addition to all the criteria needed to validate gravimetric samples, for BC there was also an outlier detection flag based on pre-set threshold, in addition to a secondary damage flag.  
+** To identify gravimetric outliers, we used the following procedure: Assuming all the other flags in the data determined it was a valid sample, if filters had depositions less than -10µg, they were flagged.  If they had depositions greater than 500µg and no BC, they were flagged.  If they had depositions greater than 500µg (equivalent to approx 1250µg/m3 at a typical flow rate) and the BC deposition was greater than 10µg (approx equivalent to 25µg/m3), they were flagged. .  BC must be above 10µg deposition  in order to be considered valid in those cases.  Depositions greater than 500-600µg are extremely high per Ryan Chartier, but possible.  Above that, it is likely the ECM will fail.  We can also add a manual observation criteria to remove outliers if deemed visually/physically unreasonable.
+** Daytime compliance was also calculated from the ECM files.  Two ECMs were deployed on a  subset of deployments to assess data quality.
+
+```{r setup, include=TRUE,echo=TRUE}
+knitr::opts_chunk$set(message = FALSE, warning = FALSE, fig.width = 12, fig.height = 4)
+
+code_version = "1.0"
+RC_export_date = list.files("~/OneDrive - Emory University/Exposure Assessment Core/rc-exports/") %>% 
+  grep("tar.bz", x = ., ignore.case = TRUE, value = TRUE, invert  = TRUE)
+print(paste0("REDCap version: ",RC_export_date))
+
+huge_positive_threshold_mg = 1# Was 2 for Ex-0 data.
+source('https://raw.githubusercontent.com/hapin-trial/thresholds/master/ecm_thresholds.R')
+# source(file = "../scripts/0a-get-onedrive-paths.R", encoding = "UTF-8")
+# source(file = "../scripts/0b-list-onedrive-files.R", encoding = "UTF-8")
+
+valid_daterange = as.POSIXct(c("1/1/2017","1/1/2024"), format="%d/%m/%Y")
+
+#Duration flag sensitivity analysis.  Uncomment the one you want to use.  Or leave both commented to use the master file from Github.
+# sample_duration_thresholds = c(1296,1584) # This is the default in 2019.
+# sample_duration_thresholds = c(1200,1680) #This is the default as of 2020.
+
+#Flow rate sensitivity analysis. Uncomment the one you want to use. Or leave both commented to use the master file from Github.
+# flow_thresholds = flow_thresholds*1000
+# flow_thresholds = c(200,400) # This is the default
+flow_thresholds_ml
+
+#Include only desired data based on automated flagging.  
+flags_filter <- 'pres|flow|dur' 
+flags_filter_rwanda <- 'pres|dur' #Include only desired data based on automated flagging
+# Full set of flags: "dur","flow", "bl", "neph", "pres", 'temp', 'rh',"compliance"
+
+```
+
+# Import data from 5_markdown (Weights+REDCap+H48 Flows+ECM QAQC) and BC concentrations.
+Merge them on filter ID and IRC.
+
+```{r import, echo=TRUE}
+
+#Import concentration data
+ecm_summary_files = list()
+for(ii in 1:4){
+  ecm_summary <- list.files(
+    path = '../output/5_merged_ecm_data',
+    full.names = TRUE
+  ) %>%
+    grep(paste0("ecm_merged_",irc_names[[ii]]), x = ., ignore.case = TRUE, value = TRUE)
+  ecm_summary_files[ii] <- ecm_summary[which.max(file.mtime(ecm_summary))]
+}
+
+
+#Import bc deposition data
+bc_summary = list.files(
+  path = '../output/sootscan_data',
+  full.names = TRUE
+) %>%
+  grep("BC_depositions", x = ., ignore.case = TRUE, value = TRUE)
+
+bc_deposition = readRDS(bc_summary[which.max(file.mtime(bc_summary))]) %>% 
+  # dplyr::select(c(1,4,16,17)) %>% 
+  dplyr::filter(!is.na(BC_deposition_adj)) %>% 
+  dplyr::mutate(bc_deposition_negative_flag = ifelse(BC_deposition_adj<0,1,0)) %>% 
+  dplyr::select(-location)
+
+#Import modeled neph data.  Merge in at the end of the pm_bc_all preparation
+neph_list = list.files(
+  path = '../output/6_final_ecm_data/',
+  full.names = TRUE
+) %>%
+  grep("pm_bc_all_neph_modeled", x = ., ignore.case = TRUE, value = TRUE)
+
+#Import lascar data.  Merge in at the end of the pm_bc_all preparation
+lascar_list = list.files(
+  path = '../output/6_final_lascar_data/',
+  full.names = TRUE
+) %>%
+  grep("co_lascar_reduced", x = ., ignore.case = TRUE, value = TRUE) %>%
+  grep("csv", x = ., ignore.case = TRUE, value = TRUE,invert = TRUE)
+
+#Merge pm and bc data
+#Use means of valid duplicates, but don't filter them out so that we have them for posterity.
+#Adding the final exclusion judgement explicitly as a flag to the pm_bc_all variable so it can be removed later.
+pm_bc_all = merge(bc_deposition, 
+                  rbind(ldply(ecm_summary_files,readRDS) %>% 
+                          dplyr::mutate(neph_mean = as.integer(neph_mean),
+                                        neph_sd = as.integer(neph_sd),
+                                        neph_min = as.integer(neph_min))),
+                  by = c('filter', 'irc'), all.x = F, all.y = T) %>%
+  dplyr::distinct(id,location,filter,visit,irc,.keep_all = TRUE) %>% 
+  dplyr::mutate(flags = gsub("dur", "", flags), #Wipe out initial flow/duration flags so we can redo them.
+                dur_flag = case_when(dur %between% sample_duration_thresholds ~ 0,
+                                     is.na(dur)~1, 
+                                     TRUE ~ 1), # Can be pdated for sensitivity analysis 
+                flags = ifelse(dur_flag != 0, paste0("dur,", flags),flags) ,#Bad duration flags can be 1 or 2.  0 is the only good one.
+                mass_deposition_negative_flag = ifelse(mass_deposition<0,1,0),
+                mass_deposition_large_negative_flag = ifelse(mass_deposition<large_negative_threshold_mg,1,0),
+                mass_deposition_large_positive_flag = case_when(mass_deposition>large_positive_threshold_mg &
+                                                                  is.na(BC_deposition_adj) ~ 0, #Allow it if we don't have BC available
+                                                                mass_deposition > large_positive_threshold_mg &
+                                                                  BC_deposition_adj < bc_outlier_threshold_µg ~ 1,
+                                                                mass_deposition > huge_positive_threshold_mg ~ 1, #Added to handle one strange datapoint in India.
+                                                                TRUE ~ 0),
+                flow_flag = 
+                  case_when(flow %between% flow_thresholds_ml & irc %in% "rwanda" ~ 0, #For Rwanda, just compare flow with the thresholds
+                            flow_flag == 1 & !irc %in% "rwanda" ~ 1, #For other IRCs, if flow flag is 1, keep that the case
+                            !flow %between% flow_thresholds_ml & flow_flag == 0 & !irc %in% "rwanda" ~ 1, #For other IRCs, if flag is zero, but flow outside thresh, set to 1.
+                            flow %between% flow_thresholds_ml & flow_flag == 0 & !irc %in% "rwanda" ~ 0,  #For other IRCs, if flag is zero, and flow within limit, set to 0.
+                            is.na(flow) ~ 1, #Does nothing.
+                            TRUE ~ 1), #Should just leave Rwanda flows outside thresholds
+                damage_flag = ifelse(damage == 1,1,0) ,
+                # damage_flag = ifelse(damage == 1 | bc_damage_flag_post == 1 ,1,0) ,
+                ecm_date_flag = case_when(as.POSIXct(datetime_start) %between% valid_daterange ~ 0,
+                                          TRUE ~ 1),
+                datetime_start = case_when(ecm_date_flag == 1 ~ as.character(rc_start),
+                                           TRUE ~ datetime_start),
+                bc_conc = BC_deposition_adj/ecm_air_volume_m3,
+                bc_large_positive_threshold_µg_flag = case_when(BC_deposition_adj > bc_large_positive_threshold_µg ~ 1,
+                                                                TRUE ~0),
+                valid_bc = 
+                  case_when(bc_deposition_negative_flag == 1 ~ 0,
+                            bc_large_positive_threshold_µg_flag == 1 ~ 0,
+                            
+                            flow_flag == 1 ~ 0,
+                            mass_deposition_negative_flag == 1 ~ 0,
+                            mass_deposition_large_negative_flag == 1 ~ 0,
+                            mass_deposition_large_positive_flag == 1 ~ 0,
+                            damage_flag == 1 ~ 0,        
+                            bc_damage_flag_pre == 1 ~ 0,
+                            bc_damage_flag_post == 1 ~ 0,
+                            (flags %like% flags_filter) & irc != "rwanda"  ~ 0, #includes flow, pressure, dur
+                            (flags %like% flags_filter_rwanda) & irc == "rwanda"  ~ 0,
+                            is.nan(bc_conc) ~ 0,
+                            is.na(bc_conc) ~ 0,
+                            TRUE ~ 1),
+                valid_grav = 
+                  case_when(mass_deposition_negative_flag == 1 ~ 0,
+                            mass_deposition_large_negative_flag == 1 ~ 0,
+                            mass_deposition_large_positive_flag == 1 ~ 0,
+                            flow_flag == 1 ~ 0,
+                            damage_flag == 1 ~ 0,
+                            (flags %like% flags_filter) & irc != "rwanda"  ~ 0, #includes flow, pressure, dur
+                            (flags %like% flags_filter_rwanda) & irc == "rwanda"  ~ 0,
+                            is.na(ecm_mass_conc) ~0,
+                            is.nan(ecm_mass_conc) ~ 0,
+                            TRUE ~ 1),
+                valid_pm = valid_grav, 
+                ecm_mass_conc_method = "gravimetric", #Place holder for neph data being incorporated later
+                valid_neph = 0, #Place holder for neph data being incorporated later
+                fraction_compliant_daytime = NA,
+                fraction_compliant_24h = compliance_fraction,
+                neph_correction_factor = NA,
+                RC_export_date = RC_export_date,
+                code_version = code_version,
+                filter_damage = damage,
+                duty_cycle = sampling_mode,
+                sample_duration = dur,
+                mass_deposition_blank_adj = adj_mass_dep,
+                flow_rate_type = ifelse(is.na(missing_crf_flow),"PrePost","RealTime"))  %>%
+  dplyr::group_by(irc, visit,location,id) %>%
+  dplyr::arrange(-valid_grav,-valid_bc) %>%
+  dplyr::mutate(ecm_mass_conc_duplicate = ecm_mass_conc, #Duplicate has the original values, before any averaging.
+                bc_conc_duplicate = bc_conc,
+                fraction_compliant_24h_duplicate = fraction_compliant_24h,
+                ecm_mass_conc = mean(ecm_mass_conc[valid_grav == 1],na.rm = TRUE), #Average of duplicates, as long as valid!
+                ecm_mass_conc = case_when(valid_grav == 0 ~ ecm_mass_conc_duplicate, #For non-valids, use the duplicate/original values
+                                          TRUE ~ ecm_mass_conc),
+                ecm_grav_neph_conc = ecm_mass_conc,
+                bc_conc = mean(bc_conc[valid_bc == 1],na.rm = TRUE),
+                bc_conc =  case_when(valid_bc == 0 ~ bc_conc_duplicate,
+                                     TRUE ~ bc_conc),
+                fraction_compliant_24h = mean(fraction_compliant_24h[valid_grav == 1],na.rm = TRUE),
+                fraction_compliant_24h =  case_when(valid_grav == 0 ~ fraction_compliant_24h_duplicate,
+                                                    TRUE ~ fraction_compliant_24h),
+                N = n(),
+                rownum = 1:n(),
+                duplicate = case_when(N>1 ~ 1,TRUE ~0),
+                duplicate_use =  case_when(N>1 &  sum(valid_grav) > 1 & rownum == 1 ~ 1, #If part of duplicate pair, and both are valid, then go with the first
+                                           N>1 &  sum(valid_grav) == 1 & rownum == 1 ~ 1, #If one of them is valid, go with it.  This works because we sorted by valid_grav.
+                                           TRUE ~0), #If neither are valid, set to zero
+                # duplicate_use =  case_when(rownum == 1 & sum(valid_grav) >1 ~ 1,TRUE ~0),
+                phase = case_when(visit %like% "baseline" ~ "baseline",
+                                  visit %in% c("p1","p2") ~ "post baseline",
+                                  TRUE ~ 'Update Phases')
+  ) %>% 
+  dplyr::ungroup() %>% 
+  dplyr::arrange(-N,-duplicate,irc, visit,location,id) %>% 
+  dplyr::select(c("file","irc","id","visit","location","filter",
+                  "datetime_start","datetime_end","sample_duration","ecm_date_flag","serial",
+                  "duty_cycle","duplicate","duplicate_use",
+                  "fraction_compliant_daytime","fraction_compliant_24h",
+                  "damage_flag","mass_deposition_negative_flag","mass_deposition_large_negative_flag",
+                  "mass_deposition_large_positive_flag","flow_flag","dur_flag","inlet_pres_flag",
+                  "neph_flag","lod_replacement","BC_deposition_adj","bc_pre_missing_replacement_flag",
+                  "bc_LoD_flag","bc_damage_flag_pre","bc_damage_flag_post",
+                  "bc_large_positive_threshold_µg_flag","bc_deposition_negative_flag",
+                  "valid_grav","valid_neph","valid_pm","ecm_mass_conc_duplicate","mass_deposition",
+                  "mass_deposition_blank_adj","ecm_mass_conc","ecm_grav_neph_conc","ecm_mass_conc_method",
+                  "bc_conc","bc_conc_duplicate","valid_bc",
+                  "ecm_air_volume_m3","flow", "flow_rate_type",
+                  "neph_mean","sample_num",
+                  "RC_export_date","code_version","phase")) %>% 
+  dplyr::left_join(readRDS(lascar_list[which.max(file.mtime(lascar_list))]) %>% 
+                     dplyr::rename(file_co = file,
+                                   instrument_id_co = instrument_id),
+                   by = c("id","location","visit","irc")) %>%
+  dplyr::distinct()
+
+
+#PM_bc_all should remain unchanged.  The neph modeled data should add new columns, giving modeled data, and combined data. 
+
+# View(pm_bc_all %>% dplyr::filter(serial %like% "ECM00113",id %like% "53018"))
+# View(pm_bc_all_neph_cor %>% dplyr::filter(serial %like% "ECM00113",id %like% "53018"))
+# View(pm_bc_all_neph_modeled %>% dplyr::filter(visit %like% "b1",id %like% "53018"))
+# View(pm_bc_all_neph_modeled %>% dplyr::filter(id %like% "53018"))
+
+#If there is neph modeled data, incorporate it. pm_bc_all_neph_modeled is a subset of pm_bc_all data with valid mass conc data, and with modeled 24h neph mean data and neph fit data, and an indicator variable showing the type of exposure mass concentration estimate (grav. vs. modeled neph)
+if(!identical(neph_list, character(0)) & include_nephelometric!=FALSE){
+  
+  pm_bc_all_neph_modeled = readRDS(neph_list[which.max(file.mtime(neph_list))]) %>%
+    dplyr::select(c("id","location","visit","irc","filter","neph_correction_factor","neph_correction_factor_modeled",#"valid_grav",
+                    "ecm_neph_conc","valid_neph","fraction_compliant_daytime","fraction_compliant_24h",
+                    "slope_regression","r.squared")) %>% 
+    dplyr::arrange(desc(fraction_compliant_daytime)) %>% 
+    dplyr::distinct(irc,id,visit,location,filter,ecm_neph_conc,.keep_all = TRUE)
+  
+  
+  #Integrate neph data.  Neph data is not included in duplicate pair data (we don't use the average of a duplicate and grav combo).  
+  pm_bc_all <- pm_bc_all %>% 
+    dplyr::select(-valid_neph,-ecm_mass_conc_method,-fraction_compliant_daytime,-fraction_compliant_24h) %>% #Variables I want updated by the neph modeled data set.
+    dplyr::left_join(pm_bc_all_neph_modeled ,
+                     by = c("id","location","filter","visit","irc")) %>%
+    dplyr::distinct() %>% 
+    dplyr::mutate(valid_neph = case_when(is.na(valid_neph) | valid_neph == 0 ~ 0,
+                                         r.squared < rsquared_threshold ~0,
+                                         !slope_regression %between% slope_range~ 0, #Filter based on slope and R^squared
+                                         TRUE ~1),
+                  valid_pm = ifelse(valid_grav == 1 | valid_neph == 1 ,1,0),
+                  ecm_grav_neph_conc = case_when(valid_grav == 1 ~ ecm_mass_conc,
+                                                 valid_neph == 1 & valid_grav == 0 ~ ecm_neph_conc,
+                                                 TRUE ~ ecm_mass_conc),
+                  ecm_mass_conc_method = case_when(valid_grav == 1 ~ "gravimetric",
+                                                   valid_neph == 1 & valid_grav == 0 ~ "modeled nephelometric",
+                                                   TRUE ~ "gravimetric")) %>% 
+    dplyr::distinct(file,irc,id,visit,location,filter,datetime_start,datetime_end,sample_duration,serial,
+                    duty_cycle,duplicate,duplicate_use,.keep_all = TRUE) 
+  
+}
+
+# View(pm_bc_all %>% dplyr::select(duplicate,duplicate_use,filter,irc,location,visit,id,valid_pm) %>% arrange(id,visit) %>% filter(duplicate ==1))
+```
+
+# Check visit dates
+* Some date formats from ECM realtime data are incorrect.  Check that the visits are sequential, and print those that are not.  
+* Fixes to misformatted ones (generally the problem is that the day and month is switched) are manually fixed here, and also fixed in the 1-ecm_neph_grav script to fix the realtime data.
+
+```{r check_visit_dates, echo=FALSE}
+
+
+#Fix a few funky date formats.  Info provided by Lisa Elon.  Info also generated in 6_markdown in the "Check visit dates" section.
+pm_bc_all <- pm_bc_all %>% 
+  dplyr::left_join(ecm_time_formats,by = c("visit","location","id")) %>% 
+  dplyr::mutate(datetime_end = case_when(!is.na(dateformat) ~ as.character(ydm_hms(datetime_end)),
+                                         TRUE ~ datetime_end),
+                datetime_start = case_when(!is.na(dateformat) ~ as.character(ydm_hms(datetime_start)),
+                                           TRUE ~ datetime_start)) %>% 
+  dplyr::select(-dateformat) %>% 
+  dplyr::filter(visit %in% visit_filter,
+                location %in% location_filter)
+
+
+bad_visit_dates = pm_bc_all %>% 
+  dplyr::select(irc,location,visit,id,datetime_start,file) %>% 
+  dplyr::distinct() %>% 
+  dplyr::group_by(irc,location,id,visit) %>% 
+  dplyr::filter(1 == row_number()) %>% 
+  dplyr::ungroup() %>% 
+  pivot_wider(id_cols = c(irc,location,id), names_from = visit,values_from = c(datetime_start)) %>% 
+  dplyr::mutate(p1 = as.POSIXct(p1),
+                p2 = as.POSIXct(p2),
+                baseline = as.POSIXct(baseline),
+                bl_date_problem = ifelse(baseline>p1 & p2>p1,1,0),
+                p1_date_problem = ifelse(p1>p2,1,0),
+                # p2_date_problem = ifelse(p1>p2,1,0),
+                datecheck = ifelse(bl_date_problem == 1 | p1_date_problem == 1,
+                                   1,0)) %>% 
+  dplyr::filter(datecheck == 1)
+
+DT::datatable(bad_visit_dates, caption = "List of files that have mis-ordered visits.  Must resolve these in 5_ecm_markdown")
+
+
+```
+
+# 1. Apply filtering based on selected flags and rounds
+Not applying flow flag to Rwanda because of corrupted ECM files that do not necessarily mean bad flows.  
+Retaining data with good pre/post flows, and without pressure and duration flags.
+Uses means of duplicate measures.
+```{r filter, echo=FALSE}
+
+#Keep valid samples, keep first row of duplicate pairs.
+pm_bc_filtered <- pm_bc_all  %>%
+  dplyr::filter(valid_pm == 1) %>% 
+  dplyr::group_by(irc, visit,location,id) %>%
+  dplyr::filter(row_number() == 1) %>% #Just keep first row, don't care which of the duplicates is 'first' or 'second' really.
+  dplyr::ungroup() %>%
+  as.data.table()
+
+#The analog of pm_bc_filtered's valid samples
+pm_bc_filtered_invalid <- pm_bc_all  %>%
+  dplyr::filter(valid_pm != 1) %>% 
+  dplyr::group_by(irc, visit,location,id) %>%
+  dplyr::filter(row_number() == 1) %>% #Just keep first row, don't care which of the duplicates is 'first' or 'second' really.
+  dplyr::ungroup() 
+
+message("Visits that appear more than once in the data (Fix if there are any entries greater than 1! Had to implement at this step because duplicate organization was carried out just prior to this)")
+kable(pm_bc_filtered %>% 
+        group_by(irc, visit,id,location) %>%
+        dplyr::summarise(N = n()) %>%
+        pivot_wider(names_from=visit,values_from = N) %>% 
+        dplyr::filter(baseline>1 | p1>1 | p2>1),"pipe")
+
+write_csv(pm_bc_filtered,paste0("../output/6_final_ecm_data/pm_bc_filtered_",format(Sys.Date(), "%Y-%m-%d"),".csv"))
+saveRDS(pm_bc_filtered,paste0("../output/6_final_ecm_data/pm_bc_filtered_",format(Sys.Date(), "%Y-%m-%d"),".rds"))
+
+
+write_csv(pm_bc_all,paste0("../output/6_final_ecm_data/pm_bc_all_",format(Sys.Date(), "%Y-%m-%d"),".csv"))
+saveRDS(pm_bc_all,paste0("../output/6_final_ecm_data/pm_bc_all_",format(Sys.Date(), "%Y-%m-%d"),".rds"))
+
+
+write_csv(pm_bc_all %>% 
+            dplyr::filter(!(duplicate==1 & duplicate_use==0)) %>% #Get rid of the non-used duplicates to leave one row per sample.
+            dplyr::select(c("irc","id","visit","location","filter","datetime_start","datetime_end",
+                            "fraction_compliant_daytime","fraction_compliant_24h","valid_pm",
+                            "ecm_grav_neph_conc","ecm_mass_conc_method","bc_conc","valid_bc",
+                            "RC_export_date","code_version")),
+          paste0("../output/6_final_ecm_data/pm_bc_reduced_",format(Sys.Date(), "%Y-%m-%d"),".csv"))
+saveRDS(pm_bc_all %>% 
+          dplyr::filter(!(duplicate==1 & duplicate_use==0)) %>% #Get rid of the non-used duplicates to leave one row per sample.
+          dplyr::select(c("irc","id","visit","location","filter","datetime_start","datetime_end",
+                          "fraction_compliant_daytime","fraction_compliant_24h","valid_pm",
+                          "ecm_grav_neph_conc","ecm_mass_conc_method","bc_conc","valid_bc",
+                          "RC_export_date","code_version")),
+        paste0("../output/6_final_ecm_data/pm_bc_reduced_",format(Sys.Date(), "%Y-%m-%d"),".rds"))
+
+
+write_csv(pm_bc_all %>% 
+            dplyr::filter(!(duplicate==1 & duplicate_use==0)) %>% #Get rid of the non-used duplicates to leave one row per sample.
+            dplyr::select(c("irc","id","visit","location","filter","datetime_start","datetime_end",
+                            "fraction_compliant_daytime","fraction_compliant_24h","valid_pm",
+                            "ecm_grav_neph_conc","ecm_mass_conc_method","bc_conc","valid_bc",
+                            "avgCOppm","valid_co","sample_duration_co","RC_export_date","code_version")),
+          paste0("../output/6_final_ecm_data/pm_bc_co_reduced_",format(Sys.Date(), "%Y-%m-%d"),".csv"))
+saveRDS(pm_bc_all %>% 
+          dplyr::filter(!(duplicate==1 & duplicate_use==0)) %>% #Get rid of the non-used duplicates to leave one row per sample.
+          dplyr::select(c("irc","id","visit","location","filter","datetime_start","datetime_end",
+                          "fraction_compliant_daytime","fraction_compliant_24h","valid_pm",
+                          "ecm_grav_neph_conc","ecm_mass_conc_method","bc_conc","valid_bc",
+                          "avgCOppm","valid_co","sample_duration_co","RC_export_date","code_version")),
+        paste0("../output/6_final_ecm_data/pm_bc_co_reduced_",format(Sys.Date(), "%Y-%m-%d"),".rds"))
+# sapply(pm_bc_all, typeof)
+
+
+```
+
+
+# 2. REDCap H41 deployment summary
+All REDCap H41 primary visits. H41b is not used in these calculations/tables.  The duplicate measurement data is, however.
+```{r redcap_h41, echo=FALSE}
+
+#Filter REDCap data to just ecm samples for desired locations + visits and without duplicates
+ecm_rc <- as.data.table(raw_rc_all_instruments)[
+  location %in% location_filter & 
+    instrument == 'ecm' &  
+    visit %in% visit_filter &
+    copy == 'first'][, 
+                     c('bgi', 'hpem', 'skc', 'randomized', 'h41_by', 'instrument') := NULL]
+
+
+#Summary of the filtered redcap data
+ecm_rc %>% 
+  group_by(irc, visit, location) %>%
+  dplyr::summarise(N = n()) %>%
+  pivot_wider(names_from=visit,values_from = N) %>%
+  dplyr::arrange(irc,location) %>%
+  knitr::kable(., digits = 1, caption = "REDcap H41 mother and OAW ECM deployments","pipe") #%>% kableExtra::kable_styling()
+
+#Keep only non-duplicated filter IDs from the REDCap data to create this summary and for later calculations such as in summary_pm_visit_loc.  Don't want to risk double counting a filter. 
+total_run_rc_locvisit <- ecm_rc %>% 
+  dplyr::filter(!duplicated(filter)) %>%
+  group_by(location, visit) %>%
+  dplyr::summarise(total = n())
+
+total_run_rc_locvisitirc <- ecm_rc %>% 
+  dplyr::filter(!duplicated(filter)) %>%
+  group_by(location, visit,irc) %>%
+  dplyr::summarise(total = n())
+
+total_run_rc_irc <- ecm_rc %>% 
+  dplyr::filter(!duplicated(filter)) %>%
+  group_by(irc) %>%
+  dplyr::summarise(total = n())
+
+```
+
+
+# 3. Gravimetric summary
+Includes all data that passes flagging criteria (pressure, flow, duration).
+Total possible available data is determined from REDCap H41 logs which provide data from the field regarding every sample of different types whose collection was attempted.
+```{r PM descriptive, echo=FALSE}
+
+####Create summary table by irc, visit, location
+
+
+
+summary_pm_irc_visit_loc <- pm_bc_filtered %>%  #Good data (filtered and without duplicates)
+  group_by(irc, visit, location) %>%
+  dplyr::summarise(N_valid = n(),   
+                   N_valid_grav =sum(!ecm_mass_conc_method %like% "nephelometric"),
+                   N_valid_neph =sum(ecm_mass_conc_method %like% "nephelometric"),
+                   Mean = mean(ecm_grav_neph_conc), 
+                   Median = median(ecm_grav_neph_conc),SD = sd(ecm_grav_neph_conc),
+                   Min = min(ecm_grav_neph_conc),Max = max(ecm_grav_neph_conc),
+                   N_lod_retained = sum(lod_replacement,na.rm = TRUE)) %>%
+  dplyr::arrange(irc,location,visit)
+
+#Analyze the invalid PM samples, summarize them
+summary_invalid <- pm_bc_filtered_invalid %>% 
+  dplyr::group_by(irc, visit, location) %>%
+  dplyr::summarise(N_invalid = n(),
+                   N_neg_dep_flag = sum(mass_deposition_negative_flag,na.rm = T),
+                   N_neg_outlier_flag = sum(mass_deposition_large_negative_flag,na.rm = T),
+                   N_pos_outlier_flag = sum(mass_deposition_large_positive_flag,na.rm = T),
+                   N_flow_flag = sum(flow_flag),
+                   N_pres_flag = sum(inlet_pres_flag),
+                   N_duration_flag = sum(dur_flag),
+                   N_damage_flag = sum(damage_flag),
+                   N_bc_premiss_flag = sum(bc_pre_missing_replacement_flag,na.rm = T),
+                   N_bc_LoD_flag = sum(bc_LoD_flag,na.rm = T),
+                   N_bc_damage_flag = sum(bc_damage_flag_post,na.rm = T)) 
+# 
+# #Analyze the invalid grav samples, summarize them
+# summary_invalid <- pm_bc_all %>% 
+#   dplyr::filter(!filter %in% pm_bc_filtered$filter, #keep the bad
+#                 duplicate_use != 1) %>%  #Keep the non-duplicates
+#   dplyr::group_by(irc, visit, location) %>%
+#   dplyr::summarise(N_invalid = n(),
+#                    N_neg_dep_flag = sum(mass_deposition_negative_flag),
+#                    N_neg_outlier_flag = sum(mass_deposition_large_negative_flag),
+#                    N_pos_outlier_flag = sum(mass_deposition_large_positive_flag),
+#                    N_flow_flag = sum(flow_flag),
+#                    N_pres_flag = sum(inlet_pres_flag),
+#                    N_duration_flag = sum(dur_flag),
+#                    N_damage_flag = sum(damage_flag),
+#                    N_bc_premiss_flag = sum(bc_pre_missing_replacement_flag,na.rm = T),
+#                    N_bc_LoD_flag = sum(bc_LoD_flag,na.rm = T),
+#                    N_bc_damage_flag = sum(bc_damage_flag_post,na.rm = T)
+#   ) 
+
+summary_pm_irc_visit_loc <- summary_pm_irc_visit_loc %>%
+  left_join(summary_invalid,
+            by=c('irc','visit','location'),all.x = TRUE) %>%
+  left_join(total_run_rc_locvisitirc,  #Join with RC data for denominator
+            by = c('location', 'visit','irc'), all.x = TRUE,all.y=TRUE) %>%
+  dplyr::arrange(irc,location,visit) %>%
+  dplyr::mutate(overall_good = paste0(round(N_valid/total, 2)*100,'%'),
+                N_lod_good = paste0(round(N_lod_retained/total, 2)*100,'%')) 
+
+knitr::kable(summary_pm_irc_visit_loc, digits = 1, caption = "PM2.5 gravimetric concentration","pipe") 
+
+#####PM Summary by irc, phase (bl vs. after), and location
+summary_b_p <- pm_bc_filtered %>% 
+  group_by(irc, phase, location) %>%
+  dplyr::summarise(N_valid = n(),
+                   N_valid_grav =sum(!ecm_mass_conc_method %like% "nephelometric"),
+                   N_valid_neph =sum(ecm_mass_conc_method %like% "nephelometric"),
+                   Mean = mean(ecm_grav_neph_conc),  Median = median(ecm_grav_neph_conc),
+                   SD = sd(ecm_grav_neph_conc),  Min = min(ecm_grav_neph_conc),Max = max(ecm_grav_neph_conc)) %>%
+  dplyr::arrange(irc,location,phase)
+knitr::kable(summary_b_p, digits = 1, caption = "PM2.5 gravimetric concentration","pipe" )
+
+#PM Summary by visit and location (grouping IRCs) 
+
+summary_pm_visit_loc <- pm_bc_filtered %>%  #Good data (filtered and without duplicates)
+  group_by(visit, location) %>%
+  dplyr::summarise(N_valid = n(),  
+                   N_valid_grav =sum(!ecm_mass_conc_method %like% "nephelometric"),
+                   N_valid_neph =sum(ecm_mass_conc_method %like% "nephelometric"),
+                   Mean = mean(ecm_grav_neph_conc), Median = median(ecm_grav_neph_conc),
+                   SD = sd(ecm_grav_neph_conc), Min = min(ecm_grav_neph_conc),Max = max(ecm_grav_neph_conc), 
+                   N_lod_retained = sum(lod_replacement)) %>%
+  dplyr::arrange(location,visit)
+
+
+#Analyze the invalid samples, summarize them
+summary_invalid_visit_loc <- pm_bc_filtered_invalid %>% 
+  dplyr::group_by(visit, location) %>%
+  dplyr::summarise(N_invalid = n(),
+                   N_outliers = sum(mass_deposition_negative_flag,na.rm = T)+
+                     sum(mass_deposition_large_negative_flag,na.rm = T)+sum(mass_deposition_large_positive_flag,na.rm = T),
+                   N_flow_flag = sum(flow_flag),
+                   N_pres_flag = sum(inlet_pres_flag),
+                   N_duration_flag = sum(dur_flag),
+                   N_damage_flag = sum(damage_flag)) 
+
+summary_pm_visit_loc2 <- summary_pm_visit_loc %>%
+  left_join(summary_invalid_visit_loc,
+            by=c('visit','location'),all.x = TRUE) %>%
+  left_join(total_run_rc_locvisit,  #Join with RC data for denominator
+            by = c('location', 'visit'), all.x = TRUE,all.y=TRUE) %>%
+  dplyr::arrange(location,visit) %>%
+  dplyr::mutate(overall_good = paste0(round(N_valid/total, 2)*100,'%'),
+                N_lod_good = paste0(round(N_lod_retained/total, 2)*100,'%')) 
+
+knitr::kable(summary_pm_visit_loc2, digits = 1, caption = "PM2.5 gravimetric concentration: all IRCs","pipe")
+
+
+summary_pm_irc <- pm_bc_filtered %>%  #Good data (filtered and without duplicates)
+  group_by(irc) %>%
+  dplyr::summarise(N_valid = n(),
+                   N_valid_grav =sum(!ecm_mass_conc_method %like% "nephelometric"),
+                   N_valid_neph =sum(ecm_mass_conc_method %like% "nephelometric"),
+                   Mean = mean(ecm_grav_neph_conc), Median = median(ecm_grav_neph_conc),
+                   SD = sd(ecm_grav_neph_conc), Min = min(ecm_grav_neph_conc),Max = max(ecm_grav_neph_conc),
+                   N_lod_retained = sum(lod_replacement,na.rm = TRUE)) 
+
+#Analyze the invalid samples, summarize them
+summary_invalid_irc <- pm_bc_filtered_invalid %>% 
+  dplyr::group_by(irc) %>%
+  dplyr::summarise(N_invalid = n(),
+                   N_outliers = sum(mass_deposition_negative_flagna.rm = T)+
+                     sum(mass_deposition_large_negative_flag,na.rm = T)+sum(mass_deposition_large_positive_flag,na.rm = T),
+                   N_flow_flag = sum(flow_flag),
+                   N_pres_flag = sum(inlet_pres_flag),
+                   N_duration_flag = sum(dur_flag),
+                   N_damage_flag = sum(damage_flag)) 
+
+summary_pm_irc2 <- summary_pm_irc %>%
+  left_join(total_run_rc_irc,  #Join with RC data for denominator
+            by = c('irc'), all.x = TRUE,all.y=TRUE) %>%
+  dplyr::mutate(overall_good = paste0(round(N_valid/total, 2)*100,'%'),
+                N_lod_good = paste0(round(N_lod_retained/total, 2)*100,'%')) %>% 
+  left_join(summary_invalid_irc,
+            by=c('irc'),all.x = TRUE) 
+
+knitr::kable(summary_pm_irc2, digits = 1, caption = "PM2.5 gravimetric concentration by IRC, abridged","pipe")
+
+summary_pm_irc <- summary_pm_irc %>%
+  left_join(summary_invalid_irc,
+            by=c('irc'),all.x = TRUE) 
+
+knitr::kable(summary_pm_irc, digits = 1, caption = "PM2.5 gravimetric concentration by IRC","pipe")
+
+
+
+#PM Summary by phase (bl vs. after) and location (grouping IRCs) 
+summary_b_p1 <- pm_bc_filtered %>% 
+  group_by(phase, location) %>%
+  dplyr::summarise(N = n(), 
+                   N_valid_grav =sum(!ecm_mass_conc_method %like% "nephelometric"),
+                   N_valid_neph =sum(ecm_mass_conc_method %like% "nephelometric"),
+                   Mean = mean(ecm_grav_neph_conc), Median = median(ecm_grav_neph_conc), 
+                   SD = sd(ecm_grav_neph_conc),  Min = min(ecm_grav_neph_conc),Max = max(ecm_grav_neph_conc)) %>%
+  dplyr::arrange(location, phase)
+
+knitr::kable(summary_b_p1, digits = 1, caption = "PM2.5 gravimetric concentration: all IRCs","pipe")
+
+
+
+```
+
+
+# 4. BC Summary
+BC calculated using sigma value derived from field work conducted in household energy settings (Garland et al. )
+```{r BC descriptive, echo=FALSE}
+pm_bc_filtered = as.data.table(pm_bc_filtered)
+
+
+summary_bc_irc_visit_loc <- pm_bc_all  %>%
+  dplyr::filter(valid_bc == 1) %>% 
+  dplyr::group_by(irc, visit,location,id) %>%
+  dplyr::filter(row_number() == 1) %>% #Just keep first row, don't care which of the duplicates is 'first' or 'second' really.
+  dplyr::ungroup() %>%
+  group_by(irc) %>%
+  dplyr::summarise(N_valid_bc = n(),   
+                   Mean = mean(bc_conc), 
+                   Median = median(bc_conc),SD = sd(bc_conc),
+                   Min = min(bc_conc),Max = max(bc_conc),
+                   N_lod_retained = sum(bc_LoD_flag == 0,na.rm = TRUE)) %>%
+  dplyr::arrange(irc)
+
+#Analyze the invalid samples, summarize them
+summary_invalid_bc <- pm_bc_all %>% 
+  dplyr::filter(valid_bc == 0, #keep the bad
+                duplicate_use != 1) %>%  #Keep the non-duplicates
+  dplyr::group_by(irc) %>%
+  dplyr::summarise(N_invalid = n(),
+                   N_neg_dep_flag = sum(bc_deposition_negative_flag,na.rm = T),
+                   N_neg_outlier_flag = sum(mass_deposition_large_negative_flag,na.rm = T),
+                   N_pos_outlier_flag = sum(bc_large_positive_threshold_µg_flag,na.rm = T),
+                   N_flow_flag = sum(flow_flag),
+                   N_pres_flag = sum(inlet_pres_flag),
+                   N_duration_flag = sum(dur_flag),
+                   N_damage_flag = sum(damage_flag),
+                   N_bc_LoD_flag = sum(bc_LoD_flag,na.rm = T),
+                   N_bc_damage_pre_flag = sum(bc_damage_flag_pre,na.rm = T),
+                   N_bc_damage_post_flag = sum(bc_damage_flag_post,na.rm = T),
+                   N_bc_premiss_flag = sum(bc_pre_missing_replacement_flag,na.rm = T)) 
+
+
+summary_bc_irc_visit_loc_output <- summary_bc_irc_visit_loc %>%
+  left_join(summary_invalid_bc,
+            by=c('irc'),all.x = TRUE) %>%
+  left_join(total_run_rc_irc,  #Join with RC data for denominator
+            by = c('irc'), all.x = TRUE,all.y=TRUE) %>%
+  dplyr::arrange(irc) %>%
+  dplyr::mutate(overall_good = paste0(round(N_valid_bc/total, 2)*100,'%'),
+                N_lod_good = paste0(round(N_lod_retained/total, 2)*100,'%')) 
+
+knitr::kable(summary_bc_irc_visit_loc_output, digits = 1, caption = "PM2.5 BC concentration","pipe") 
+# knitr::kable(summary_bc_irc_visit_loc_output %>% dplyr::select(),
+# digits = 1, caption = "PM2.5 BC concentration, abridged","pipe") 
+
+
+
+summary(pm_bc_filtered$bc_conc)
+bc_filtered_working = subset(pm_bc_filtered, !is.na(pm_bc_filtered$bc_conc) & valid_bc == 1)
+table(bc_filtered_working$visit)
+bc_filtered_working = subset(bc_filtered_working, visit %in% visit_filter)
+
+#BC Garland Summary by irc, by visit and by location 
+summary_bc_g <- bc_filtered_working %>% 
+  dplyr::group_by(irc, visit, location) %>%
+  dplyr::summarise(N = n(), Mean = mean(bc_conc),  Median = median(bc_conc),SD = sd(bc_conc),  Min = min(bc_conc),Max = max(bc_conc))%>%
+  dplyr::arrange(irc,location,visit)
+knitr::kable(summary_bc_g, digits = 1, caption = "BC concentration garland","pipe") 
+
+#BC Garland Summary by irc, phase and by location 
+summary_bc_phase <- bc_filtered_working %>% 
+  group_by(irc, phase, location) %>%
+  dplyr::summarise(N = n(), Mean = mean(bc_conc), Median = median(bc_conc), SD = sd(bc_conc),  Min = min(bc_conc), Max = max(bc_conc))%>%
+  dplyr::arrange(irc,location,phase)
+knitr::kable(summary_bc_phase, digits = 1, caption = "BC concentration garland: all IRC (Baseline vs Post Baseline)","pipe")
+
+#BC Garland Summary by visit and by location 
+summary_bc_g_all <- bc_filtered_working %>% 
+  group_by(visit, location) %>%
+  dplyr::summarise(N = n(),  Mean = mean(bc_conc),  Median = median(bc_conc),SD = sd(bc_conc), Min = min(bc_conc),Max = max(bc_conc))%>%
+  dplyr::arrange(visit,location)
+knitr::kable(summary_bc_g_all, digits = 1, caption = "BC concentration garland: all IRC","pipe")
+
+#BC Garland Summary by phase and by location 
+summary_bc_g_all1 <- bc_filtered_working %>% 
+  group_by(phase, location) %>%
+  dplyr::summarise(N = n(),  Mean = mean(bc_conc),  Median = median(bc_conc),SD = sd(bc_conc), Min = min(bc_conc),Max = max(bc_conc))%>%
+  dplyr::arrange(phase,location)
+knitr::kable(summary_bc_g_all1, digits = 1, caption = "BC concentration garland: all IRC (Baseline vs Post Baseline)","pipe")
+
+
+
+```
+
+# 5. PM and BC Correlation 
+
+```{r correlation-garland, echo=FALSE}
+
+pm_bc_filtered_working = subset(pm_bc_filtered,
+                                !is.na(pm_bc_filtered$bc_conc) & 
+                                  pm_bc_filtered$valid_bc == 1 & 
+                                  pm_bc_filtered$valid_grav == 1)
+table(pm_bc_filtered_working$visit)
+pm_bc_filtered_working = subset(pm_bc_filtered_working, visit %in% visit_filter)
+
+p = ggplot(pm_bc_filtered_working, aes(x = bc_conc, y = ecm_mass_conc, color = visit)) +
+  geom_point(alpha = 0.5, aes(size = visit)) + 
+  geom_smooth(method=lm, se=FALSE, fullrange=TRUE) +
+  # scale_shape_manual(values=c(3, 16, 17)) + 
+  # scale_color_manual(values=c('#999999','#E69F00', '#56B4E9')) +
+  # scale_size_manual(values=c(2,2,2)) +
+  theme(legend.position="right") + 
+  labs(x = expression(BC~concentration~garland~(µg/m^3)), y = expression(Filter~corrected~PM[2.5]~personal~exposure~(µg/m^3))) 
+plot1 = p + facet_grid(cols = vars(irc))
+plot1
+
+summary_corr_g <- pm_bc_filtered_working %>%
+  dplyr::group_by(irc, visit) %>%
+  summarise(Correlation = cor(bc_conc, ecm_mass_conc, method = 'spearman'))
+knitr::kable(summary_corr_g, digits = 1,"pipe") #%>% kableExtra::kable_styling()
+```
+
+
+# 6. Grav distributions/histograms by IRC and Visit (and outliers)
+```{r density-pm, echo=FALSE, fig.height = 4, fig.width = 7}
+
+#Helper functions for plotting
+give.mean <- function(x){return(c(y =mean(x)+10, label = round(mean(x),digits=1)))}
+give.quantiles <- function(x) {
+  r <- quantile(x, probs = c(0.05, 0.25, 0.5, 0.75, 0.95))
+  names(r) <- c("ymin", "lower", "middle", "upper", "ymax")
+  return(r) }
+give.n <- function(x){return(c(y = -100, label = length(x)))}
+give.negative <- function(x) {return(x < 0)}
+give.outliers <- function(x) {return(x > 1000)}
+give.outliers50 <- function(x) {return(x > 50)}
+
+mu <- plyr::ddply(pm_bc_all %>% filter(visit %in% visit_filter), "visit", summarise, grp.mean = mean(ecm_grav_neph_conc,na.rm=T))
+
+#Plot outliers grav vs. BC deposition
+p = pm_bc_all %>% 
+  filter(visit %in% visit_filter,
+         mass_deposition_blank_adj > large_positive_threshold_mg) %>% 
+  dplyr::mutate(valid_text = case_when(valid_pm == 0 ~ "Invalid",
+                                       valid_pm == 1 ~ "Valid",)) %>% 
+  ggplot(aes(y=mass_deposition_blank_adj*1000, x = BC_deposition_adj,shape = irc,size=ecm_air_volume_m3)) +
+  geom_point(alpha= .3, position="identity") + 
+  ggtitle("High deposition outliers, by valid = 0 or 1") +
+  labs(x = "BC deposition (µg)", y = "PM2.5 deposition (µg)") 
+plot3a = p +  facet_wrap(~valid_text,ncol = 2)
+plot3a
+
+#Plot outliers grav vs. BC concentration
+p = pm_bc_all %>% 
+  filter(visit %in% visit_filter,
+         mass_deposition_blank_adj > large_positive_threshold_mg) %>% 
+  dplyr::mutate(valid_text = case_when(valid_pm == 0 ~ "Invalid",
+                                       valid_pm == 1 ~ "Valid",)) %>% 
+  ggplot(aes(y=ecm_mass_conc, x = bc_conc,shape = irc,size=ecm_air_volume_m3)) +
+  geom_point(alpha= .3, position="identity") +
+  ggtitle("High concentration outliers, by valid = 0 or 1") +
+  # geom_vline(data = mu, aes(xintercept = grp.mean, color = visit), linetype = "dashed") + 
+  labs(x = "BC concentration (µg/m^3)", y = "PM2.5 concentration (µg/m^3)") 
+plot3aa = p +  facet_wrap(~valid_text,ncol = 2)
+plot3aa
+
+
+#Plot outliers grav vs. compliance
+p = pm_bc_all %>% 
+  filter(visit %in% visit_filter,
+         mass_deposition_blank_adj > large_positive_threshold_mg) %>% 
+  dplyr::mutate(valid_text = case_when(valid_pm == 0 ~ "Invalid",
+                                       valid_pm == 1 ~ "Valid",)) %>% 
+  ggplot(aes(y=ecm_mass_conc, x = fraction_compliant_daytime,shape = irc,size=ecm_air_volume_m3)) +
+  geom_point(alpha= .3, position="identity") +
+  ggtitle("High concentration outliers, by valid = 0 or 1") +
+  labs(x = "Daytime compliance fraction", y = "PM2.5 concentration (µg/m^3)") 
+plot3aaa = p +  facet_wrap(~valid_text,ncol = 2)
+plot3aaa
+
+#Outlier box plots for each IRC.
+p = pm_bc_all %>% filter(visit %in% visit_filter) %>%
+  dplyr::mutate(valid_text = case_when(valid_pm == 0 ~ "Invalid",
+                                       valid_pm == 1 ~ "Valid",)) %>% 
+  mutate(outlier = ifelse(give.outliers(ecm_mass_conc), filter, as.numeric(NA))) %>%
+  ggplot(aes(y = ecm_mass_conc, x = visit, color = visit)) +
+  geom_boxplot(alpha= .3,outlier.shape = NA) + 
+  ylim(-200,5000) +
+  stat_summary(fun.data = give.quantiles, geom="boxplot") +  
+  geom_text(aes(label = outlier), na.rm = TRUE,position = position_jitter(width = .15),alpha = 0.5) +
+  geom_jitter(position = position_jitter(width = .15),alpha = 0.1) +
+  stat_summary(fun.y=mean, colour="blue", geom="point", shape=18, size=4.5,alpha = 0.5)+
+  stat_summary(fun.data = give.mean, geom = "text",colour="blue") + 
+  stat_summary(fun.data = give.n, geom = "text",colour="black") + 
+  labs(y = expression(Filter~corrected~PM[2.5]~personal~exposure~(µg/m^3))) +
+  ggtitle("Outliers")
+plot3b = p + facet_wrap(irc~valid_text,ncol=4)
+plot3b
+
+#Outlier negative deposition box plots for each IRC.
+p = pm_bc_all %>% 
+  filter(visit %in% visit_filter,
+         mass_deposition_blank_adj < 0) %>%
+  ggplot(aes(y = mass_deposition_blank_adj*1000,x=visit)) +
+  geom_boxplot(alpha= .3) + 
+  ylim(-50,0) +
+  stat_summary(fun.data = give.quantiles, geom="boxplot") +
+  geom_jitter(position = position_jitter(width = .15),alpha = 0.1) +
+  stat_summary(fun.y=mean, colour="blue", geom="point", shape=18, size=4.5,alpha = 0.5)+
+  stat_summary(fun.data = give.mean, geom = "text",colour="blue") + 
+  stat_summary(fun.data = give.n, geom = "text",colour="black") + 
+  labs(y = "Deposition (µg)") +
+  ggtitle("Negative deposition values only")
+plot3c = p + facet_wrap(~irc,ncol=2)
+plot3c
+
+deposition_outliers = pm_bc_all %>% dplyr::filter(mass_deposition_blank_adj > large_positive_threshold_mg) %>% 
+  dplyr::select(ecm_air_volume_m3,filter,ecm_mass_conc,mass_deposition_blank_adj,bc_conc,BC_deposition_adj,valid_grav,mass_deposition_large_positive_flag,flow_flag,dur_flag)
+knitr::kable(deposition_outliers,digits = 2, caption = "ECM gravimetric depositions greater than 200µg","pipe") 
+
+#Grav vs. neph 
+p =  pm_bc_all %>% filter(visit %in% visit_filter) %>% 
+  dplyr::mutate(valid_text = case_when(valid_grav == 0 ~ "Invalid",
+                                       valid_grav == 1 ~ "Valid",)) %>% 
+  ggplot(aes(y = ecm_mass_conc, x = neph_mean, color = visit)) +
+  geom_point(alpha = .3) + 
+  xlim(-200,3000) +
+  ylim(-20,3000) +
+  geom_abline(slope=1) +
+  labs(y = expression(Filter~corrected~PM[2.5]~personal~exposure~(µg/m^3))) 
+plot3d = p + facet_wrap(irc~valid_text,ncol=4)
+plot3d
+
+write_xlsx(pm_bc_all %>%
+             dplyr::filter(valid_pm == 1,valid_grav == 1,ecm_mass_conc>1000) %>% 
+             dplyr::select(id,irc,visit,location,valid_pm,valid_grav,valid_neph,mass_deposition_large_positive_flag,ecm_grav_neph_conc,ecm_neph_conc,ecm_mass_conc,mass_deposition,mass_deposition_blank_adj,bc_conc,BC_deposition_adj,valid_bc,ecm_air_volume_m3,serial),path = "large_concentrations_not_removed.xlsx")
+
+write_xlsx(pm_bc_all %>%
+             dplyr::filter(mass_deposition_large_positive_flag==1,ecm_mass_conc>1000) %>% 
+             dplyr::select(id,irc,visit,location,valid_pm,valid_grav,valid_neph,mass_deposition_large_positive_flag,ecm_grav_neph_conc,ecm_neph_conc,ecm_mass_conc,mass_deposition,mass_deposition_blank_adj,bc_conc,BC_deposition_adj,valid_bc,ecm_air_volume_m3,serial),path = "large_concentrations_removed.xlsx")
+
+
+```
+
+
+# 7. BC Density Plot by IRC and Visit
+
+```{r density-g, echo=FALSE, fig.height = 6, fig.width = 7}
+p = ggplot(bc_filtered_working, aes(bc_conc, fill = visit, color = visit)) +
+  geom_density(alpha= .5) + 
+  xlim(0, 50) + 
+  # scale_fill_manual(values = c('#999999','#E69F00', '#56B4E9')) +
+  # scale_color_manual(values = c('#999999','#E69F00', '#56B4E9')) +
+  theme(legend.position="right") + 
+  labs(x = expression(BC~concentration~garland~(µg/m^3)), y = "Density") +
+  geom_rug()
+plot4 = p + facet_wrap(~irc,ncol = 2)
+plot4
+
+
+#Box plots for each IRC.
+p = pm_bc_filtered[visit %in% visit_filter,] %>%
+  dplyr::filter(!is.na(bc_conc)) %>%
+  mutate(outlier = ifelse(give.outliers50(bc_conc), filter, as.numeric(NA))) %>%
+  ggplot(aes(y = bc_conc, x = visit, color = visit)) +
+  geom_boxplot(alpha= .3,outlier.shape = NA) + 
+  stat_summary(fun.data = give.quantiles, geom="boxplot") +  
+  stat_summary(fun.y=mean, colour="blue", geom="point", shape=18, size=4.5,alpha = 0.5)+
+  stat_summary(fun.data = give.mean, geom = "text",colour="blue") + 
+  geom_text(aes(label = outlier), na.rm = TRUE,position = position_jitter(width = .1),alpha = 0.5) +
+  geom_jitter(position = position_jitter(width = .1),alpha = 0.1) +
+  labs(y = expression(BC~g~PM[2.5]~personal~exposure~(µg/m^3))) 
+plot4b = p + facet_wrap(~irc,ncol = 2)
+plot4b
+
+knitr::kable(pm_bc_filtered %>% dplyr::filter(bc_conc>50), digits = 2, caption = "BC concentrations greater than 50µg/m3","pipe") 
+
+
+```
+
+
+# 8) Flags vs. unfiltered concentrations
+```{r flags_concentrations, echo=FALSE, fig.height = 6, fig.width = 7}
+
+p_flags = ggplot(pm_bc_all, aes(ecm_mass_conc, fill = as.factor(flow_flag), color = as.factor(flow_flag))) +
+  geom_histogram(alpha= .5,binwidth = 250) + 
+  # ylim(0, 2000) + 
+  xlim(0, 3000) + 
+  scale_y_continuous(trans = "log10") +
+  # scale_fill_manual(values = c('#999999','#E69F00', '#56B4E9')) +
+  # scale_color_manual(values = c('#999999','#E69F00', '#56B4E9')) +
+  theme(legend.position="right") + 
+  labs(x = expression(Mass~concentration~(µg/m^3)), y = "Density")# +
+# facet_grid(irc~flow_flag)
+p_flags
+
+breaks <- seq(from = 0, to = 3000, by = 200)
+# specify interval/bin labels
+tags <- c("[0-200)","[200-400)", "[400-600)", "[600-800)", "[800-1000)", "[1000-1500)","[1500-2000)", "[>2000]")
+
+pm_bc_all <- pm_bc_all %>% 
+  dplyr::mutate(flow_flag_bin = case_when(
+    ecm_mass_conc < 200 ~ tags[1],
+    ecm_mass_conc >= 200 & ecm_mass_conc < 400 ~ tags[2],
+    ecm_mass_conc >= 400 & ecm_mass_conc < 600 ~ tags[3],
+    ecm_mass_conc >= 600 & ecm_mass_conc < 800 ~ tags[4],
+    ecm_mass_conc >= 800& ecm_mass_conc < 1000 ~ tags[5],
+    ecm_mass_conc >= 1000 & ecm_mass_conc < 1500 ~ tags[6],
+    ecm_mass_conc >= 1500 & ecm_mass_conc < 2000 ~ tags[7],
+    ecm_mass_conc >= 2000~ tags[8]
+  )) %>%
+  dplyr::mutate(flow_flag_bin = factor(flow_flag_bin,c("[0-200)","[200-400)", "[400-600)", "[600-800)", "[800-1000)", "[1000-1500)","[1500-2000)", "[>2000]")))
+# df <- mtcars %>% mutate(cyl = factor(cyl, levels = c(4, 6, 8)))
+
+
+flow_flag_table <- pm_bc_all %>% 
+  group_by(flow_flag_bin, flow_flag) %>%
+  dplyr::summarise(N = n()) %>%
+  pivot_wider(names_from=flow_flag,values_from = N) %>%
+  dplyr::mutate(fraction_bad = `1`/(`0`+`1`))
+knitr::kable(flow_flag_table, digits = 2, caption = "Flagged ECM flows, binned by concentration measured.  ALL data used.","pipe") #%>% kableExtra::kable_styling()
+
+
+flow_flag_table_irc <- pm_bc_all %>% 
+  group_by(flow_flag_bin, flow_flag,irc) %>%
+  dplyr::summarise(N = n()) %>%
+  pivot_wider(names_from=flow_flag,values_from = N) %>%
+  dplyr::mutate(fraction_bad = `1`/(`0`+`1`)) %>%
+  dplyr::arrange(irc) %>%
+  pivot_wider(names_from=irc,values_from = c(fraction_bad,`0`,`1`)) 
+
+
+knitr::kable(flow_flag_table_irc, digits = 2, caption = "Flagged ECM flows, binned by concentration measured.  ALL data used.","pipe") 
+
+```
+
+
+# 9) Duplicate analysis
+1) Gravimetric
+```{r grav-duplicates, echo=FALSE, fig.height = 6, fig.width = 7}
+
+#Neph data not included here.
+pm_bc_filtered_withdupes_wide <- pm_bc_all  %>%
+  dplyr::filter(valid_grav == 1) %>% 
+  dplyr::select(sample_num,irc, id,visit, location,ecm_mass_conc_duplicate,bc_conc_duplicate) %>%
+  pivot_wider(names_from=sample_num,values_from = c("ecm_mass_conc_duplicate","bc_conc_duplicate")) %>%
+  tidyr::unnest()
+
+give.n <- function(x){return(c(y = 0, x=50, label = length(x)))}
+give.n <- function(x){return(c(y = 0, x=50, label = paste0(n = length(x))))}
+
+p = pm_bc_filtered_withdupes_wide %>% 
+  ggplot(aes(x = ecm_mass_conc_duplicate_second, y = ecm_mass_conc_duplicate_first)) +
+  geom_point(alpha = 0.5) + 
+  geom_smooth(method=lm, se=FALSE, fullrange=FALSE,alpha = 0.5) +
+  stat_summary(fun.data = give.n, geom = "text") + 
+  # scale_shape_manual(values=c(3, 16, 17)) +
+  # scale_color_manual(values=c('#999999','#E69F00', '#56B4E9')) +
+  # scale_size_manual(values=c(2,2,2)) +
+  theme(legend.position="right") + 
+  ylim(c(0,1000)) + xlim(c(0,1000)) +
+  geom_abline(intercept = 0,col="blue",linetype = "dashed") +
+  labs(x = expression(Duplicate~A~PM[2.5]~personal~exposure~(µg/m^3)), 
+       y = expression(Duplicate~B~PM[2.5]~personal~exposure~(µg/m^3))) 
+plot1 = p + facet_wrap(~irc)
+plot1
+
+summary_corr_dupes_grav <- pm_bc_filtered_withdupes_wide  %>%
+  tidyr::nest(-irc) %>% 
+  dplyr::mutate(fit = map(data, ~ lm(ecm_mass_conc_duplicate_second ~ ecm_mass_conc_duplicate_first, data = .,na.action=na.exclude)),
+                results = map(fit, glance)) %>% 
+  tidyr::unnest(results) %>% 
+  dplyr::mutate(slope_regression = sapply(fit, function(x) coefficients(x)[2]),
+                rmse = sapply(fit, function(fit) sqrt(mean(fit$residuals^2,na.rm=T))),
+                n = sapply(fit, function(fit) length(fit$residuals))) %>% 
+  dplyr::select(irc,r.squared,slope_regression,rmse,n)
+
+knitr::kable(summary_corr_dupes_grav, digits = 2,"pipe",caption = "Duplicate gravimetric performance summary") #%>% kableExtra::kable_styling()d(cols = vars(irc))
+```
+
+
+2) BC duplicate analysis
+```{r bc-duplicates, echo=FALSE, fig.height = 6, fig.width = 7}
+
+p = pm_bc_filtered_withdupes_wide %>%
+  ggplot(aes(x = bc_conc_duplicate_second, y = bc_conc_duplicate_first)) +
+  geom_point(alpha = 0.5) + 
+  geom_smooth(method=lm, se=FALSE, fullrange=FALSE,alpha = 0.5) +
+  # scale_shape_manual(values=c(3, 16, 17)) +
+  # scale_color_manual(values=c('#999999','#E69F00', '#56B4E9')) +
+  # scale_size_manual(values=c(2,2,2)) +
+  theme(legend.position="right") + 
+  ylim(c(0,60)) + xlim(c(0,60)) +
+  geom_abline(intercept = 0,col="blue",linetype = "dashed") +
+  labs(x = expression(Duplicate~A~BC~PM[2.5]~personal~exposure~(µg/m^3)), y = expression(Duplicate~B~BC~PM[2.5]~personal~exposure~(µg/m^3))) 
+plot5 = p + facet_wrap(~irc)
+plot5
+
+summary_corr_dupes_bc_b <- pm_bc_filtered_withdupes_wide %>%
+  dplyr::group_by(irc) %>%
+  summarise(Correlation = cor(bc_conc_duplicate_second, bc_conc_duplicate_first, method = 'spearman',use = "pairwise.complete.obs"))
+knitr::kable(summary_corr_dupes_bc_b, digits = 2,"pipe") #%>% kableExtra::kable_styling()d(cols = vars(irc))
+
+summary_corr_dupes_bc_b <- pm_bc_filtered_withdupes_wide  %>%
+  dplyr::filter(!is.na(bc_conc_duplicate_second)) %>% 
+  tidyr::nest(-irc) %>% 
+  dplyr::mutate(fit = map(data, ~ lm(bc_conc_duplicate_second ~ bc_conc_duplicate_first, data = .,na.action=na.exclude)),
+                results = map(fit, glance)) %>% 
+  tidyr::unnest(results) %>% 
+  dplyr::mutate(slope_regression = sapply(fit, function(x) coefficients(x)[2]),
+                rmse = sapply(fit, function(fit) sqrt(mean(fit$residuals^2,na.rm=T)) ),
+                n = sapply(fit, function(fit) length(fit$residuals))) %>% 
+  dplyr::select(irc,r.squared,slope_regression,rmse,n)
+
+knitr::kable(summary_corr_dupes_bc_b, digits = 2,"pipe",caption = "Duplicate BC performance summary")
+
+```
+
+
+# 10) Compliance (daytime hours are 5am-9pm)
+1) ECM grav/neph
+```{r grav-compliance, echo=FALSE, fig.height = 6, fig.width = 7}
+
+compplot = pm_bc_all %>% 
+  dplyr::filter(valid_pm == 1) %>%
+  dplyr::group_by(irc, visit,location,id) %>%
+  dplyr::filter(row_number() == 1) %>% #Just keep first row, don't care which of the duplicates is 'first' or 'second' really.
+  dplyr::ungroup() %>%
+  ggplot(aes(x=fraction_compliant_24h,y=fraction_compliant_daytime)) +
+  geom_point() +
+  facet_wrap(~irc) +
+  labs(x = "24hr compliance fraction", y = "Daytime compliance fraction") 
+compplot
+
+compboxplot = pm_bc_all %>% 
+  dplyr::filter(valid_pm == 1) %>%
+  dplyr::group_by(irc, visit,location,id) %>%
+  dplyr::filter(row_number() == 1) %>% #Just keep first row, don't care which of the duplicates is 'first' or 'second' really.
+  dplyr::ungroup() %>%
+  ggplot(aes(y=fraction_compliant_daytime)) +
+  geom_histogram() +
+  facet_wrap(~irc) +
+  labs(y = "Daytime compliance fraction (5am-9pm)", x= "Occurrences") + 
+  coord_flip()
+compboxplot
+
+p = pm_bc_all  %>%
+  dplyr::filter(valid_pm == 1) %>%
+  dplyr::group_by(irc, visit,location,id) %>%
+  dplyr::filter(row_number() == 1) %>% #Just keep first row, don't care which of the duplicates is 'first' or 'second' really.
+  dplyr::ungroup() %>%
+  ggplot(aes(x = ecm_grav_neph_conc, y = fraction_compliant_daytime, color = visit)) +
+  geom_point(alpha = 0.5) + 
+  geom_smooth(method=loess) +
+  # scale_shape_manual(values=c(3, 16, 17)) +
+  # scale_color_manual(values=c('#999999','#E69F00', '#56B4E9')) +
+  # scale_size_manual(values=c(2,2,2)) +
+  theme(legend.position="right") + 
+  ylim(c(0,1)) + xlim(c(0,1000)) +
+  geom_abline(intercept = 0,col="blue",linetype = "dashed") +
+  labs(x = expression(PM[2.5]~personal~exposure~(µg/m^3)), y = "Daytime compliance fraction") 
+plot6 = p + facet_wrap(~irc)
+plot6
+
+
+compliance_summary_by_location <- pm_bc_all  %>%
+  dplyr::filter(valid_pm == 1) %>%
+  dplyr::group_by(irc,location,visit,id) %>% 
+  dplyr::filter(row_number() == 1) %>% #Just keep first row, don't care which of the duplicates is 'first' or 'second' really.
+  dplyr::ungroup() %>%
+  dplyr::group_by(irc, location) %>%
+  dplyr::summarise(N = n(),   
+                   Mean = mean(fraction_compliant_daytime,na.rm=T), 
+                   Median = median(fraction_compliant_daytime,na.rm=T),
+                   SD = sd(fraction_compliant_daytime,na.rm=T), 
+                   Min = min(fraction_compliant_daytime,na.rm=T),
+                   Max = max(fraction_compliant_daytime,na.rm=T)) %>%
+  dplyr::arrange(irc,location)
+
+knitr::kable(compliance_summary_by_location, digits = 2,"pipe",caption = "Summary of daytime compliance for valid PM2.5 samples (5am-9pm)") #%>% kableExtra::kable_styling()d(cols = vars(irc))
+
+
+
+#Save summary tables to excel
+writexl::write_xlsx(list(bad_visit_dates=bad_visit_dates,
+                         compliance_summary_by_location=compliance_summary_by_location,
+                         total_run_rc_locvisitirc=total_run_rc_locvisitirc,
+                         total_run_rc_locvisit=total_run_rc_locvisit,
+                         summary_pm_irc_visit_loc=summary_pm_irc_visit_loc,
+                         summary_pm_visit_loc2=summary_pm_visit_loc2,
+                         summary_pm_irc2=summary_pm_irc2,
+                         summary_bc_irc_visit_loc_output=summary_bc_irc_visit_loc_output
+), 
+paste0("../output/6_final_ecm_data/ecm_summary_tables",format(Sys.Date(), "%Y-%m-%d"),".xlsx"))
+
+
+```

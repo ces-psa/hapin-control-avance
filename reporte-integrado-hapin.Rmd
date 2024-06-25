@@ -1,0 +1,4024 @@
+---
+title: "REPORTE DE AVANCES HAPIN"
+output: 
+ prettydoc: html_document
+ encoding: UTF-8
+---
+
+# Reporte separado en Pestañas {.tabset}
+
+```{r setup, include=FALSE }
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+# load use packages
+library(package = "tidyverse")
+library(package = "crosstalk")
+library(package= "kableExtra")
+library("formattable")
+library(gt)
+library(palmerpenguins)
+library(pivottabler)
+library(ggplot2)
+library(cowplot) 
+library("RColorBrewer")
+library(kableExtra)
+library(DT)
+library(knitr)
+library(tuneR)
+
+
+###CARGA DE DATOS EMORY Y UVG
+# Pre-screening information (s0)
+#source(file = "scripts/0_get_prescreening.R", encoding = "UTF-8")
+
+# Load helper functions
+#source(file = "scripts/zz_output.R")
+
+# Emory RedCap dictionary
+source(file = "scripts/0_get_emory_dictionary.R", encoding = "UTF-8")
+
+# Emory RedCap export data
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+
+# Emory RedCap export data entericas
+source(file = "scripts/0_get_entericas_data.R", encoding = "UTF-8")
+
+#salidas
+source(file = "scripts/0_get_salidas.R", encoding = "UTF-8")
+
+#datos de entregas de gas y cambios de cilindro
+source(file = "scripts/1_all_gas_action.R", encoding = "UTF-8")
+source(file = "scripts/0_get_cambio_cilindro.R", encoding = "UTF-8")
+
+#extraer datos de osm
+source("scripts/0_get_osm_uvg.R")
+
+#extraer datos de hapin plus
+source("scripts/0_get_hapin_plus.R")
+
+#cat pendientes de fot
+cat_pendientes_fot<-read_csv("C:/Documentos/Github/hapin-control-avance/data/dictionaries/cat_fot_pendientes.csv")
+
+#cat intensivos
+cat_intensivos<-read_csv("data/dictionaries/cat_intensivo_cohorte.csv", show_col_types = FALSE)
+# Emory HAPIN II  
+source(file = "scripts/0_get_hapinII.R", encoding = "UTF-8")
+
+cat_blancos<-read_csv("data/dictionaries/cat_blancos_48m.csv", show_col_types = FALSE)
+cat_blancos<- cat_blancos %>% mutate_all(as.character)
+
+#leer data de Feelix csv
+data_feelix<-read_csv("data/recording/data.csv", show_col_types = FALSE)
+data_feelix<-data_feelix%>% janitor::clean_names() %>% 
+  select(index, name, serial_number, time_received, session_id, s3wavefile_url, s3metafile_url) 
+data_feelix<-data_feelix %>% mutate(
+  record_id=substr(name, 1, 5),
+  date=as.Date(substr(name, 7, 14), format = "%Y%m%d")
+)
+
+data_feelix<-data_feelix %>%  mutate(measure = gsub(".*_(M[0-9]+)\\.wav", "\\1", s3wavefile_url),
+                        session = gsub("S([0-9]+)_.*", "S\\1", session_id),
+                        serial_number = gsub("Feelix_(P[0-9]+)", "\\1", serial_number))
+
+# Stops knitting if lpg delivery data is not up to date
+#source(file = "scripts/uso-estufas.R", encoding = "UTF-8")
+
+#fecha de la semana ----
+fecha1<-'2024-06-10'
+#fecha2<-'2022-04-10' ----
+fecha2<-'2024-06-21'
+f_week1<-'2024-06-10'
+f_week2<-'2024-06-21'
+
+```
+
+#### ***Semana del  "`r as.Date(fecha1) %>% format(.,"%A %d %B  %Y")`" al "`r as.Date(fecha2) %>% format(.,"%A %d %B  %Y")`" *** 
+#### *Reporte Generado el  "`r Sys.Date() %>% format(.,"%A %d %B  %Y")`"*
+
+## HAPIN ENSAYO CLINICO
+
+#### LISTADO DE: "PARTICIPACION"
+
+```{r inscritas, echo=FALSE}
+#acumulado inscritas
+inscritas<-gt_emory_data_arm1 %>% select("id_tamizaje"=id, id=s4_main_id,s4_date) %>% filter(!is.na(id)) %>%
+  left_join(gt_emory_data_arm1 %>% select(id_tamizaje=id,m17_date, m17_ga) %>% filter(!is.na(m17_date)))
+
+#inscritas acumulado y semana
+inscritas_acumulado<-inscritas %>% count()
+inscritas_semana <- inscritas %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+
+#embarazadas
+inscritas_embarazadas_acumulado<-inscritas %>% mutate(
+      type = if_else(
+        condition = grepl("^35", id),
+        true = "oaw",
+        false = "pw"
+      )
+      ) %>% filter(type=="pw") %>% count()
+
+inscritas_embarazadas_semana<-inscritas %>% mutate(
+      type = if_else(
+        condition = grepl("^35", id),
+        true = "oaw",
+        false = "pw"
+      )
+      ) %>% filter(type=="pw") %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+#adultas
+inscritas_adultas_acumulado<-inscritas %>% mutate(
+      type = if_else(
+        condition = grepl("^35", id),
+        true = "oaw",
+        false = "pw"
+      )
+      ) %>% filter(type=="oaw") %>%
+  count()
+
+inscritas_adultas_semana<-inscritas %>% mutate(
+      type = if_else(
+        condition = grepl("^35", id),
+        true = "oaw",
+        false = "pw"
+      )
+      ) %>% filter(type=="oaw") %>% 
+  filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+
+#adultas
+inscritas_solo_adultas_acumulado<-inscritas %>% mutate(
+      type = if_else(
+        condition = grepl("^35", id),
+        true = "oaw",
+        false = "pw"
+      )
+      ) %>% filter(type=="oaw") %>% 
+  count()
+
+inscritas_solo_adultas_semana<-inscritas %>% mutate(
+      type = if_else(
+        condition = grepl("^35", id),
+        true = "oaw",
+        false = "pw"
+      )
+      ) %>% filter(type=="oaw") %>%
+  filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+
+
+
+#rechazos en S4
+s4_rechazo_acumulado<- gt_emory_data_arm1 %>% filter(!is.na(s4_date)) %>% filter(s4_consent=="0") %>% count()
+s4_rechazo_semana<- gt_emory_data_arm1 %>% filter(!is.na(s4_date)) %>% filter(s4_consent=="0") %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+
+
+#conteos de s6 por semana y totales
+s6<-gt_emory_data_arm2 %>% select(id,s6_date) %>% filter(!is.na(s6_date))
+s6_acumulado<-s6 %>% count()
+s6_semana<-s6 %>% select(id,s6_date) %>% filter(s6_date >=fecha1 & s6_date<=fecha2) %>% count()
+
+salida_after_s6 <- s6 %>% left_join(salidas) %>%left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date)) %>% select(id, e3_date)
+) %>% 
+  mutate(
+    dias_s6_e3=e3_date-s6_date
+    ) %>% filter(sale==1) %>% count()
+#salidas acumulado y semana
+salidas_acumulado<-salidas %>% count()
+#salidas con e3_reason acumulado
+salidas_razon_acumulado<-salidas %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date)) %>% select(id, e3_date, e3_reason) %>% 
+    mutate(razon= 
+             recode(
+                    e3_reason, "1"="Finalizacion del estudio",
+                    "2"="No elegible",
+                    "3"="Retiro voluntario de la participante",
+                    "4"="Retirada por el equipo del estudio",
+                    "5"="Se mudo del area de estudio",
+                    "6"="Fallecio",
+                    "7"="Perdido durante el seguimiento",
+                    "8"="Madre:Aborto/Aborto espontaneo, mortinato, muerte del nino",
+                    "555"="Otro"
+                    )
+           ) 
+) %>% select(id, razon)
+
+
+
+
+#salidas con e3_reason semanal
+salidas_razon_semanal<-salidas %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit)) %>% select(id, e3_date_exit, e3_reason) %>% 
+    mutate(razon= 
+             recode(
+                    e3_reason, 
+                    "1"="Finalizacion del estudio",
+                    "2"="No elegible",
+                    "3"="Retiro voluntario de la participante",
+                    "4"="Retirada por el equipo del estudio",
+                    "5"="Se mudo del area de estudio",
+                    "6"="Fallecio",
+                    "7"="Perdido durante el seguimiento",
+                    "8"="Madre:Aborto/Aborto espontaneo, mortinato, muerte del nino",
+                    "555"="Otro"
+                    )
+    )
+) %>%  filter(e3_date_exit>=fecha1 & e3_date_exit<=fecha2) %>%  select(id, razon)
+
+salidas_semana<-salidas %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit)) %>% select(id, e3_date_exit)
+) %>%  filter(e3_date_exit >=fecha1 & e3_date_exit<=fecha2) %>% count()
+
+
+#activas embarazadas y Adultas
+activas<-inscritas %>% anti_join(
+  salidas %>% select(id)
+) 
+
+activas_acumulado<-activas %>% count()
+activas_semana<-activas %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+
+activas_embarazadas_acumulado<-activas %>% mutate(
+    type = if_else(
+      condition = grepl("^35", id),
+      true = "oaw",
+      false = "pw"
+    )
+  ) %>% filter(type=="pw") %>% count()
+  
+activas_embarazadas_semana<-activas %>% mutate(
+    type = if_else(
+      condition = grepl("^35", id),
+      true = "oaw",
+      false = "pw"
+    )
+  ) %>% filter(type=="pw") %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+  
+activas_adultas_acumulado<-activas %>% mutate(
+    type = if_else(
+      condition = grepl("^35", id),
+      true = "oaw",
+      false = "pw"
+    )
+  ) %>% filter(type=="oaw") %>%
+  count()
+  
+activas_adultas_semana<-activas %>% mutate(
+    type = if_else(
+      condition = grepl("^35", id),
+      true = "oaw",
+      false = "pw"
+    )
+  ) %>% filter(type=="oaw") %>% filter(s4_date >=fecha1 & s4_date<=fecha2) %>% count()
+
+#make table inscritas
+actividad_inscritas<-c("Inscritas en este periodo", "--Embarazadas", "--Embarazada + Adulta Mayor", "Hogares elegibles que no aceptaron participar", "Hogares que se retiraron del Estudio", 
+                       "--Finalizacion del estudio",
+                       "--No elegible",
+                       "--Retiro voluntario de la participante",
+                       "--Se mudo del area de estudio",
+                       "--Fallecio",
+                       "--Perdido durante el seguimiento",
+                       "--Madre:Aborto/Aborto espontaneo, mortinato, muerte del nino",
+                       "--Otro",
+                       "Hogares participando en el estudio",
+                       "--Embarazadas participando", "--Embarazadas + Adulta participando")
+reporte_inscritas<-data.frame(actividad_inscritas)
+reporte_inscritas %>% mutate(
+  semana = case_when(
+    actividad_inscritas=="Inscritas en este periodo" ~ inscritas_semana$n,
+    actividad_inscritas=="--Embarazadas" ~ inscritas_embarazadas_semana$n,
+    actividad_inscritas=="--Embarazada + Adulta Mayor" ~ inscritas_adultas_semana$n,
+    actividad_inscritas=="Hogares elegibles que no aceptaron participar" ~ s4_rechazo_semana$n,
+    actividad_inscritas=="Hogares que se retiraron del Estudio" ~ salidas_semana$n,
+    actividad_inscritas=="--Finalizacion del estudio" ~ salidas_razon_semanal %>% filter(razon=="Finalizacion del estudio") %>% count() %>% .$n,
+    actividad_inscritas=="--No elegible" ~ salidas_razon_semanal %>% filter(razon=="No elegible") %>% count() %>% .$n,
+    actividad_inscritas=="--Retiro voluntario de la participante" ~ salidas_razon_semanal %>% filter(razon=="Retiro voluntario de la participante") %>% count() %>% .$n,
+    actividad_inscritas=="--Se mudo del area de estudio" ~ salidas_razon_semanal %>% filter(razon=="Se mudo del area de estudio") %>% count() %>% .$n,
+    actividad_inscritas=="--Fallecio" ~ salidas_razon_semanal %>% filter(razon=="Fallecio") %>% count() %>% .$n,
+    actividad_inscritas=="--Perdido durante el seguimiento" ~ salidas_razon_semanal %>% filter(razon=="Perdido durante el seguimiento") %>% count() %>% .$n,
+    actividad_inscritas=="--Madre:Aborto/Aborto espontaneo, mortinato, muerte del nino" ~ salidas_razon_semanal %>% filter(razon=="Madre:Aborto/Aborto espontaneo, mortinato, muerte del nino") %>% count() %>% .$n,
+    actividad_inscritas=="--Otro" ~ salidas_razon_semanal %>% filter(razon=="Otro") %>% count() %>% .$n,
+     actividad_inscritas=="Hogares participando en el estudio" ~ activas_semana$n,
+     actividad_inscritas=="--Embarazadas participando" ~ activas_embarazadas_semana$n,
+     actividad_inscritas=="--Embarazadas + Adulta participando" ~ activas_adultas_semana$n,
+    TRUE ~ NA_integer_
+  )
+) %>%mutate(
+  acumulado = case_when(
+    actividad_inscritas=="Inscritas en este periodo" ~ inscritas_acumulado$n,
+    actividad_inscritas=="--Embarazadas" ~ inscritas_embarazadas_acumulado$n,
+    actividad_inscritas=="--Embarazada + Adulta Mayor" ~ inscritas_adultas_acumulado$n,
+    actividad_inscritas=="Hogares elegibles que no aceptaron participar" ~ s4_rechazo_acumulado$n,
+    actividad_inscritas=="Hogares que se retiraron del Estudio" ~ salidas_acumulado$n,
+    actividad_inscritas=="--Finalizacion del estudio" ~ salidas_razon_acumulado %>% filter(razon=="Finalizacion del estudio") %>% count() %>% .$n,
+    actividad_inscritas=="--No elegible" ~ salidas_razon_acumulado %>% filter(razon=="No elegible") %>% count() %>% .$n,
+    actividad_inscritas=="--Retiro voluntario de la participante" ~ salidas_razon_acumulado %>% filter(razon=="Retiro voluntario de la participante") %>% count() %>% .$n,
+    actividad_inscritas=="--Se mudo del area de estudio" ~ salidas_razon_acumulado %>% filter(razon=="Se mudo del area de estudio") %>% count() %>% .$n,
+    actividad_inscritas=="--Fallecio" ~ salidas_razon_acumulado %>% filter(razon=="Fallecio") %>% count() %>% .$n,
+    actividad_inscritas=="--Perdido durante el seguimiento" ~ salidas_razon_acumulado %>% filter(razon=="Perdido durante el seguimiento") %>% count() %>% .$n,
+    actividad_inscritas=="--Madre:Aborto/Aborto espontaneo, mortinato, muerte del nino" ~ salidas_razon_acumulado %>% filter(razon=="Madre:Aborto/Aborto espontaneo, mortinato, muerte del nino") %>% count() %>% .$n,
+    actividad_inscritas=="--Otro" ~ salidas_razon_acumulado %>% filter(razon=="Otro") %>% count() %>% .$n,
+    actividad_inscritas=="Hogares participando en el estudio" ~ activas_acumulado$n,
+     actividad_inscritas=="--Embarazadas participando" ~ activas_embarazadas_acumulado$n,
+     actividad_inscritas=="--Embarazadas + Adulta participando" ~ activas_adultas_acumulado$n,
+    TRUE ~ NA_integer_
+  )
+) %>% select("Actividad"=actividad_inscritas, "Quincenal     " = semana, "Acumulado     "=acumulado) %>% 
+   
+  mutate(Actividad=cell_spec(Actividad,"html", color = "blue",align = "c", bold = T),
+                                     `En la quincena`= select(., contains("Quincenal")) %>% rowSums(., na.rm = TRUE),
+                                             `En la quincena`= cell_spec(`En la quincena`, "html", color = "blue", bold=T)
+ ) %>% 
+  kable(caption = paste(""),
+        escape = F,
+        format = "html"
+  ) %>% 
+    kable_styling("hover", full_width = F) %>% 
+  column_spec(2, width = "5cm") %>% 
+  add_header_above(c(" ", "INSCRITAS Y RETIROS"=2, "Total"=1))
+  
+
+```
+
+#### REPORTE AVANCES: "CONTEO DE ADULTAS BL HASTA B5"
+##### Reporte incluye datos de hapin 1 y hapin 1.5
+
+```{r CONTEO_OWAS, echo=FALSE}
+#datos para historia clinica
+historia_clinica<-gt_emory_data_arm2  %>% filter(!is.na(a23_visit)) %>% select(id, a23_visit, visit) %>% group_by(visit, a23_visit) %>% count() %>% bind_rows(
+gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(a23_meds)) %>% transmute(id, a23_visit="2", visit="b5") %>% group_by(visit,a23_visit) %>% count()
+)
+#datos para presion arterial
+presion_arterial<-gt_emory_data_arm2 %>% filter(!is.na(a24_sbp1)) %>% select(id, a24_sbp1, visit) %>% group_by(visit) %>% count() %>% bind_rows(
+gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(a24_sbp1)) %>% transmute(id, a24_sbp1, visit="b5") %>% group_by(visit) %>% count()
+)
+
+#sangre seca b10_to_spots
+sangre_seca<-gt_emory_data_arm2 %>% filter(!is.na(b10_to_spots) | !is.na(b10_to_spots_2)) %>% filter(
+  b10_to_spots=="1" | b10_to_spots_2=="1"
+) %>%  select(id, visit) %>% group_by(visit) %>% count() %>% bind_rows(
+gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(b10_to_spots)) %>% filter(
+  b10_to_spots=="1"
+) %>%  transmute(id, visit="b5") %>% group_by(visit) %>% count()
+)
+
+#cimt
+cimt<-gt_emory_data_arm2 %>% filter(!is.na(a26_image)) %>% select(id, visit) %>%
+ group_by(visit) %>% count() %>% bind_rows(
+gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(a26_image)) %>% transmute(id, visit="b5") %>% group_by(visit) %>% count()
+)
+
+
+tipos_salida<-gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit_o)) %>% arrange(e3_last_visit_o) %>% transmute(id, visit=recode(e3_last_visit_o, "0"="  elegibilidad", "1"=" baseline",
+                                                                                     "2"=" p1", "3"=" p2", "5"="b1", "6"="b2", "7"="b3", "8"="b4"
+)                                                                                  ) %>% group_by(visit) %>% count()
+
+#armar tabla para reportar datos de adultas
+Visita<-c("Elegibilidad", "Baseline", "P1", "P2","B1","B2","B3","B4","B5")
+reporte_adultas<-data.frame(Visita)
+reporte_adultas %>% left_join(
+  historia_clinica %>% ungroup %>% transmute(Visita=recode(visit,
+   "baseline"="Baseline" , "p1"="P1","p2"="P2","b1"="B1","b2"="B2",
+   "b3"="B3","b4"="B4","b5"="B5"
+  ),
+                                 `Historia clinica a23 (a23_vit)`=n) %>% select(Visita,`Historia clinica a23 (a23_vit)`)
+) %>% left_join(
+  presion_arterial %>% ungroup %>% transmute(Visita=recode(visit,
+   "baseline"="Baseline" , "p1"="P1","p2"="P2","b1"="B1","b2"="B2",
+   "b3"="B3","b4"="B4","b5"="B5"
+  ), `Presion arterial a24b (a24_sbp1)`=n
+) %>% select(Visita,`Presion arterial a24b (a24_sbp1)`)
+) %>% left_join(
+  sangre_seca %>% ungroup %>% transmute(Visita=recode(visit,
+   "baseline"="Baseline" , "p1"="P1","p2"="P2","b1"="B1","b2"="B2",
+   "b3"="B3","b4"="B4","b5"="B5"
+  ), `Sangre seca b10 ó b10oaw (b10_to_spots)`=n
+) %>% select(Visita,`Sangre seca b10 ó b10oaw (b10_to_spots)`)
+) %>% left_join(
+  cimt %>% ungroup %>% transmute(Visita=recode(visit,
+   "baseline"="Baseline" , "p1"="P1","p2"="P2","b1"="B1","b2"="B2",
+   "b3"="B3","b4"="B4","b5"="B5"
+  ), `Cimt (a26_image)`=n
+) %>% select(Visita,`Cimt (a26_image)`)
+) %>% left_join(
+  tipos_salida %>%  ungroup %>% transmute(Visita=recode(visit,"  elegibilidad"="Elegibilidad",
+   " baseline"="Baseline" , " p1"="P1"," p2"="P2","b1"="B1","b2"="B2",
+   "b3"="B3","b4"="B4","b5"="B5"
+  ), `Salidas  ultima visita E3(e3_last_visit_o)`=n
+) %>% select(Visita,`Salidas  ultima visita E3(e3_last_visit_o)`)
+) %>% mutate(Visita=cell_spec(Visita,"html", color = "blue",align = "c", bold = T)) %>%  kable(caption = paste("  "), escape = F, format = "html") %>%  kable_styling("hover", full_width = F) %>%
+  column_spec(1, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c("  ", "CONTEO DE DATOS DE OWAS"=5))
+
+```
+
+
+## HAPIN COHORTE {.tabset}
+### 2 AÑOS (24 MESES)
+#### CONTEOS: "HAPIN-II  2 AÑOS"
+##### Inicio de actividad: 16 de marzo del 2021
+
+```{r consentimientos_hapinII, echo=FALSE, warning = FALSE, message = FALSE}
+
+##SACAR LISTADO DE CANDIDATOS HAPIN 24m
+#Niños
+candidatos_ninos<-gt_emory_data_arm2 %>% filter(!is.na(c30_dob)) %>% select(id, c30_dob) %>% mutate(
+  ventana=as.Date(c30_dob) + lubridate::days(330),
+  un_anio=as.Date(c30_dob) + lubridate::days(365)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_c)) %>% select(id, e3_date_exit_c, e3_reason_c) 
+  
+) %>% anti_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date)) %>% select(id, e3_reason) %>% filter(
+    e3_reason=="8"
+  )
+) %>%  
+   mutate(
+   completo_b4=case_when(
+    e3_reason_c=="1" ~ "Si",
+    TRUE ~ NA_character_
+   )
+ ) %>% 
+ select(id, fecha_nacimiento=c30_dob, completo_b4) %>% mutate(
+  `12_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*12)),
+  `24_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*24)),
+  `36_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*36)),
+  `48_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*48)),
+  `60_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*60))
+)
+
+#Adultas
+candidatos_adultas<-gt_emory_data_arm2 %>% filter(!is.na(s6_arm)) %>% select(id) %>% mutate(
+  type=if_else(
+    grepl("^35",id),
+    "owa",
+    "pwg" )
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_o)) %>% select(id, e3_reason_o) %>%  
+   mutate(
+   completo_b4=case_when(
+    e3_reason_o=="1" ~ "Si",
+    TRUE ~ NA_character_
+   )
+ )
+) %>% filter(type=="owa") 
+  
+
+#consentimientos
+#Niños
+consentimientos_madre<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>% mutate(
+  type=if_else(
+    grepl("^35",id), "owa","pwg"
+  )
+) %>% filter(s4_consent=="1") %>%  left_join(
+  candidatos_ninos %>% select(id, completo_b4)
+) %>% filter(completo_b4=="Si")
+
+#Adultas
+consentimientos_owa<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>%  mutate(
+  type=if_else(grepl("^35",id), "owa","pwg")
+) %>% filter(!is.na(s4_ocon_date)) %>% left_join(
+  candidatos_adultas %>% select(id, completo_b4)
+) %>% filter(!is.na(completo_b4))
+
+
+#RECHAZOS
+#NIÑOS
+rechazos_33<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>%  mutate(
+  type=if_else(grepl("^35",id), "owa","pwg")
+) %>% filter(type=="pwg") %>% left_join(
+  candidatos_ninos %>% select(id, completo_b4)
+) %>%  filter(s4_consent=="0" & !is.na(completo_b4))
+
+rechazos_35<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>%  mutate(
+  type=if_else(grepl("^35",id), "owa","pwg")
+) %>% filter(type=="owa") %>% left_join(
+  candidatos_ninos %>% select(id, completo_b4)
+) %>%  filter(s4_consent=="0" & !is.na(completo_b4))
+
+#Rechazo Adultas completaron b4
+
+rechazos_adultas_completo_b4 <-  gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>%  mutate(
+  type=if_else(grepl("^35",id), "owa","pwg")
+) %>% filter(type=="owa") %>% left_join(
+  candidatos_adultas %>% select(id, completo_b4)
+) %>% filter(!is.na(completo_b4)) %>% filter(is.na(s4_ocon_date))
+
+#consentimientos y rechazos de los que no completaron B4
+  #Niños denominador 6
+  #consentidos 33
+ninos_consentidos_33_nocompleto_b4<-candidatos_ninos %>% filter(is.na(completo_b4)) %>% select(id, completo_b4) %>% left_join(
+   gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>%  mutate(
+  type=if_else(grepl("^35",id), "owa","pwg")
+)
+) %>% filter(type=="pwg") %>% filter(s4_consent=="1")
+  
+#consentidos 35
+ninos_consentidos_35_nocompleto_b4<-candidatos_ninos %>% filter(is.na(completo_b4)) %>% select(id, completo_b4) %>% left_join(
+   gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>%  mutate(
+  type=if_else(grepl("^35",id), "owa","pwg")
+)
+) %>% filter(type=="owa") %>% filter(s4_consent=="1")
+#Adultas consentidas que no completaron b4 denominador 26
+adultas_consentidos_no_b4<- candidatos_adultas %>% select(id, completo_b4) %>% filter(is.na(completo_b4)) %>% 
+  left_join(
+    gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>%  mutate(
+  type=if_else(grepl("^35",id), "owa","pwg")
+) 
+) %>% filter(!is.na(s4_ocon_date))
+
+#Rechazos no completaron B4 denominador 6
+#Niños
+rechazos_ninos_no_b4<-candidatos_ninos %>% select(id, completo_b4) %>% filter(is.na(completo_b4)) %>% select(id, completo_b4) %>% left_join(
+   gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>%  mutate(
+  type=if_else(grepl("^35",id), "owa","pwg")
+)
+) %>% filter(type=="pwg") %>% filter(s4_consent=="0") 
+
+#Niños
+rechazos_ninos_no_b4_33<-candidatos_ninos %>% select(id, completo_b4) %>% filter(is.na(completo_b4)) %>% select(id, completo_b4) %>% left_join(
+   gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>%  mutate(
+  type=if_else(grepl("^35",id), "owa","pwg")
+)
+) %>% filter(type=="pwg") %>% filter(s4_consent=="0") 
+
+rechazos_ninos_no_b4_35<-candidatos_ninos %>% select(id, completo_b4) %>% filter(is.na(completo_b4)) %>% select(id, completo_b4) %>% left_join(
+   gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>%  mutate(
+  type=if_else(grepl("^35",id), "owa","pwg")
+)
+) %>% filter(type=="owa") %>% filter(s4_consent=="0") 
+
+#Adultas no b4 denominador 26, 2 no se visitaron
+rechazos_adultas_no_b4<-candidatos_adultas %>% filter(is.na(completo_b4)) %>% select(id, completo_b4) %>% 
+  left_join(
+    gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>%  mutate(
+  type=if_else(grepl("^35",id), "owa","pwg")
+) 
+) %>% filter(!is.na(s4_date)) %>% filter(is.na(s4_ocon_date))
+
+#No completaron B4 y no se visitaron
+#Niños
+novisitamos_ninos_no_b4<-candidatos_ninos %>% filter(is.na(completo_b4)) %>% select(id, completo_b4) %>%  left_join(
+    gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date)
+) %>% filter(is.na(s4_date))
+
+#adultas
+novisitamos_adultas_no_b4<-candidatos_adultas %>% filter(is.na(completo_b4)) %>% select(id, completo_b4) %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date) %>%  mutate(
+  type=if_else(grepl("^35",id), "owa","pwg")
+) 
+) %>% filter(is.na(s4_date))
+
+
+#consentimientos sangre seca
+#conteso de sangre en mujer madre en b4
+dt_sangre_seca<- gt_emory_data_arm2 %>% filter(!is.na(b10_date)) %>% filter(visit=="b4") %>% select(
+  id,
+  b10_date,
+  b10_by,
+  b10_tm_spots
+) %>% arrange(desc(b10_date)) %>% filter(b10_tm_spots=="1") %>% left_join(
+  gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(s4_date)) %>% select(id, s4_date)
+  ) %>% filter(!is.na(s4_date))
+
+dt_sangre_seca<-dt_sangre_seca %>% mutate(
+  type=if_else(grepl("^35",id),"owa","pwg")
+)
+
+consentimientos_sangre_seca<-dt_sangre_seca %>% left_join(
+  gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(s4_date)) %>% select(id,s4_date, s4_consent, s4_consent_c, s4_owa)
+)
+
+
+#tabla adultas consentidos hapin 24m
+
+
+#consentimientos_sangre_seca %>% group_by(type) %>% count()
+
+#GENERAR TABLA CON SEMANAL ACUMULADO DE CONSENTIMIENTOS
+#make table CONSENTIMIENTOS HAPIN II
+actividad_consentimientos<-c("Hogares consentidos HAPIN II",
+                             "--Hogares 33", "--Hogares 35",
+                             "Hogares que rechazaron HAPIN II",
+                       "--Rechazos Hogares 33",
+                       "--Rechazos Hogares 35"
+                       #"Hogares consentidos Sangre seca en B4"
+                        )
+reporte_consentimientos<-data.frame(actividad_consentimientos)
+reporte_consentimientos %>% mutate(
+  semana = case_when(
+    actividad_consentimientos=="Hogares consentidos HAPIN II" ~ consentimientos_madre %>% filter(s4_date>=fecha1 & s4_date<=fecha2)   %>%  count() %>% .$n,
+     actividad_consentimientos=="--Hogares 33" ~ consentimientos_madre %>% filter(s4_date>=fecha1 & s4_date<=fecha2)  %>%  filter(type=="pwg") %>% count() %>%  .$n,
+
+    actividad_consentimientos=="--Hogares 35" ~ consentimientos_madre %>% filter(s4_date>=fecha1 & s4_date<=fecha2)  %>%  filter(type=="owa") %>% count() %>%  .$n,
+
+     actividad_consentimientos=="Hogares que rechazaron HAPIN II" ~  rechazos_33 %>% filter(s4_date>=fecha1 & s4_date<=fecha2) %>%  count() %>% .$n + rechazos_35 %>% filter(s4_date>=fecha1 & s4_date<=fecha2) %>%  count() %>% .$n ,
+    actividad_consentimientos=="--Rechazos Hogares 33" ~ rechazos_33 %>% filter(s4_date>=fecha1 & s4_date<=fecha2) %>%  count() %>% .$n,
+     actividad_consentimientos=="--Rechazos Hogares 35" ~ rechazos_35 %>% filter(s4_date>=fecha1 & s4_date<=fecha2) %>%  count() %>% .$n,
+
+     actividad_consentimientos=="Hogares consentidos Sangre seca en B4" ~ consentimientos_sangre_seca %>% filter(s4_date>=fecha1 & s4_date<=fecha2) %>% filter(s4_consent=="1") %>%  count() %>% .$n,
+
+    TRUE ~ NA_integer_
+  )
+) %>%mutate(
+  acumulado = case_when(
+
+     actividad_consentimientos=="Hogares consentidos HAPIN II" ~ consentimientos_madre %>%  count() %>% .$n,
+     actividad_consentimientos=="--Hogares 33" ~ consentimientos_madre %>%  filter(type=="pwg") %>% count() %>%  .$n,
+    actividad_consentimientos=="--Hogares 35" ~ consentimientos_madre %>%  filter(type=="owa") %>% count() %>%  .$n,
+    actividad_consentimientos=="Hogares que rechazaron HAPIN II" ~  rechazos_33 %>%  count() %>% .$n + rechazos_35 %>%  count() %>% .$n ,
+    actividad_consentimientos=="--Rechazos Hogares 33" ~ rechazos_33 %>%  count() %>% .$n,
+     actividad_consentimientos=="--Rechazos Hogares 35" ~ rechazos_35 %>%  count() %>% .$n,
+
+     actividad_consentimientos=="Hogares consentidos Sangre seca en B4" ~ consentimientos_sangre_seca %>% filter(s4_consent=="1") %>%  count() %>% .$n,
+
+    TRUE ~ NA_integer_
+  )
+) %>% select("Actividad"=actividad_consentimientos, "Quincenal     " = semana, "Acumulado     "=acumulado) %>%
+
+   mutate(Actividad=cell_spec(Actividad,"html", color = "blue",align = "c", bold = T)) %>%
+  #                                    `En la quincena`= select(., contains("Quincenal")) %>% rowSums(., na.rm = TRUE),
+  #                                            `En la quincena`= cell_spec(`En la quincena`, "html", color = "blue", bold=T)
+  #                                            ) %>%
+  kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c(" ", "REPORTE CONSENTIMIENTOS NIÑOS B5 HAPIN II (Denominador 744 niños finalizaron hapin1)"=2))
+
+#TABLA CONSENTIMIENTOS ADULTAS 24m
+# consentimientos_adultas<-gt_emory_data_arm2 %>% filter(!is.na(s6_arm)) %>% select(id) %>% mutate(
+#     type=if_else(grepl("^35",id),"owa","pwg")
+# ) %>% filter(type=="owa") %>% left_join(
+#   candidatos %>% transmute(id, candidato_24m="si")
+# ) %>% left_join(
+#   gt_hapin_II_data %>%filter(redcap_event_name=="24_month_arm_1") %>%   filter(!is.na(s4_date)) %>% select(id, s4_date, s4_consent, s4_consent_c, s4_owa, s4_ocon_date)
+# )
+
+actividad_consentimientos_owa<-c("Adultas consentidas HAPIN II",
+                                 "Adultas que rechazaron HAPIN II"
+                                #"Hogares consentidos Sangre seca en B4"
+                        )
+actividad_consentimientos_owa<-data.frame(actividad_consentimientos_owa)
+actividad_consentimientos_owa %>% mutate(
+  semana = case_when(
+    actividad_consentimientos_owa=="Adultas consentidas HAPIN II" ~ consentimientos_owa %>% filter(s4_date>=fecha1 & s4_date<=fecha2)   %>%  count() %>% .$n,
+    actividad_consentimientos_owa=="Adultas que rechazaron HAPIN II" ~ rechazos_adultas_completo_b4 %>% filter(s4_date>=fecha1 & s4_date<=fecha2) %>%   count() %>% .$n,
+  )
+) %>% mutate(
+  acumulado = case_when(
+     actividad_consentimientos_owa=="Adultas consentidas HAPIN II" ~ consentimientos_owa %>%  count() %>% .$n,
+     actividad_consentimientos_owa=="Adultas que rechazaron HAPIN II" ~ rechazos_adultas_completo_b4  %>%   count() %>% .$n,
+  )
+) %>% select("Actividad"=actividad_consentimientos_owa, "Quincenal     " = semana, "Acumulado     "=acumulado) %>%
+
+   mutate(Actividad=cell_spec(Actividad,"html", color = "blue",align = "c", bold = T)) %>%
+  kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c(" ", "REPORTE CONSENTIMIENTOS ADULTAS B5 HAPIN II, (Denominador 116 Adultas que completaron B4)"=2))
+
+##tabla adultas que no terminaron b4
+actividad_consentimientos_owa_nob4<-c("Adultas consentidas HAPIN II",
+                                 "Adultas que rechazaron HAPIN II",
+                                 "Adultas que No se visitaron HAPIN II"
+                                #"Hogares consentidos Sangre seca en B4"
+                        )
+actividad_consentimientos_owa_nob4<-data.frame(actividad_consentimientos_owa_nob4)
+actividad_consentimientos_owa_nob4 %>% mutate(
+  semana = case_when(
+    actividad_consentimientos_owa_nob4=="Adultas consentidas HAPIN II" ~ "NA",
+    actividad_consentimientos_owa_nob4=="Adultas que rechazaron HAPIN II" ~ "NA",
+    actividad_consentimientos_owa_nob4=="Adultas que No se visitaron HAPIN II" ~ "NA",
+  )
+) %>% mutate(
+  acumulado = case_when(
+     actividad_consentimientos_owa_nob4=="Adultas consentidas HAPIN II" ~ adultas_consentidos_no_b4 %>%  count() %>% .$n,
+     actividad_consentimientos_owa_nob4=="Adultas que rechazaron HAPIN II" ~ rechazos_adultas_no_b4  %>%   count() %>% .$n,
+     actividad_consentimientos_owa_nob4=="Adultas que No se visitaron HAPIN II" ~ novisitamos_adultas_no_b4  %>%   count() %>% .$n,
+  )
+) %>% select("Actividad"=actividad_consentimientos_owa_nob4, "Quincenal     " = semana, "Acumulado     "=acumulado) %>%
+
+   mutate(Actividad=cell_spec(Actividad,"html", color = "blue",align = "c", bold = T)) %>%
+  kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c(" ", "REPORTE CONSENTIMIENTOS ADULTAS B5 HAPIN II, (Denominador 26 Adultas que No completaron B4)"=2))
+
+
+```
+
+#### REPORTE AVANCES: "2 AÑOS RECLUTAMIENTO/CLINICA"
+##### Se inició esta actividad el 16 de marzo del 2021
+
+```{r B5_CLINICA, echo=FALSE}
+#m11 en B5
+m11_acumulado_b5<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(m11_date)) %>% transmute(id, m11_date, evento="b5")
+#group_by(evento) %>% summarize(acumulado=n()) %>% spread(key=evento, value = acumulado)
+#a23 en B5
+a23_acumulado_b5<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  )  %>% filter(!is.na(a23_date)) %>% transmute(id, a23_date, evento="b5")
+#group_by(evento) %>% summarize(acumulado=n()) %>% spread(key=evento, value = acumulado)
+#c31 en B5
+c31_acumulado_b5<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(c31_date)) %>% transmute(id, c31_date, evento="b5")
+#c33 en B5
+c33_acumulado_b5<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  )  %>% filter(!is.na(c33_date)) %>% transmute(id, c33_date, evento="b5")
+#c35 en B5
+c35_acumulado_b5<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(c35_date)) %>% transmute(id, c35_date, evento="b5")
+#a24a en B5
+a24a_acumulado_b5<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(a24a_date)) %>% transmute(id, a24a_date, evento="b5")
+#a26 en B5
+a26a_acumulado_b5<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(a26_date)) %>% transmute(id, a26_date, evento="b5")
+
+crf<-c("M11", "C31", "C33","C35", "A23", "A24a","A26a")
+reporte_b5_clinica<-data.frame(crf)
+reporte_b5_clinica %>% mutate(
+  quincenal=case_when(
+    crf=="M11" ~ m11_acumulado_b5 %>% filter(m11_date>=fecha1 & m11_date<=fecha2) %>% count() %>% .$n,
+    crf=="C31" ~ c31_acumulado_b5 %>% filter(c31_date>=fecha1 & c31_date<=fecha2) %>% count() %>% .$n,
+    crf=="C33" ~ c33_acumulado_b5 %>% filter(c33_date>=fecha1 & c33_date<=fecha2) %>% count() %>% .$n,
+    crf=="C35" ~ c35_acumulado_b5 %>% filter(c35_date>=fecha1 & c35_date<=fecha2) %>% count() %>% .$n,
+    crf=="A23" ~ a23_acumulado_b5 %>% filter(a23_date>=fecha1 & a23_date<=fecha2) %>% count() %>% .$n,
+    crf=="A24a" ~ a24a_acumulado_b5 %>% filter(a24a_date>=fecha1 & a24a_date<=fecha2) %>% count() %>% .$n,
+    crf=="A26a" ~ a26a_acumulado_b5 %>% filter(a26_date>=fecha1 & a26_date<=fecha2) %>% count() %>% .$n,
+    TRUE ~ NA_integer_
+  ) ,
+  acumulado = case_when(
+     crf=="M11" ~ m11_acumulado_b5 %>%  count() %>% .$n,
+    crf=="C31" ~ c31_acumulado_b5 %>%  count() %>% .$n,
+    crf=="C33" ~ c33_acumulado_b5 %>%  count() %>% .$n,
+    crf=="C35" ~ c35_acumulado_b5 %>%  count() %>% .$n,
+    crf=="A23" ~ a23_acumulado_b5 %>%  count() %>% .$n,
+    crf=="A24a" ~ a24a_acumulado_b5 %>%  count() %>% .$n,
+    crf=="A26a" ~ a26a_acumulado_b5 %>%  count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+
+)%>%  mutate(crf=case_when(
+                                     crf=="M11" ~ "M11 (estilos de vida embarazada)",
+                                     crf=="C31" ~ "C31 (estado salud bebé)",
+                                     crf=="C33" ~ "C33 (antropometria)",
+                                     crf=="C35" ~ "C35 (Estres materno)",
+                                     crf=="A23" ~ "A23 (historia médica adulta)",
+                                     crf=="A24a" ~ "A24a (Ma Anthropometria)",
+                                     crf=="A26a" ~ "A26a (CIMT)",
+                                     TRUE ~ NA_character_
+                                   )) %>%
+  select("CRF"=crf, "Quincenal     " = quincenal, "Acumulado     "=acumulado) %>%
+
+   mutate(CRF=cell_spec(CRF,"html", color = "blue",align = "c", bold = T)) %>%
+  #                                    `En la quincena`= select(., contains("Quincenal")) %>% rowSums(., na.rm = TRUE),
+  #                                            `En la quincena`= cell_spec(`En la quincena`, "html", color = "blue", bold=T)
+  #                                            ) %>%
+  kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c("  ", "REPORTE AVANCES CLINICA B5"=2))
+
+```
+
+
+#### REPORTE AVANCES: "2 AÑOS MEDIDAS/EXPOSICION"
+##### Se inició esta actividad el 16 de marzo del 2021
+~~~
+Hay 33 hogares que no se les hizo exposición por tener fecha de visita anterior al 15 de enero del 2021
+~~~
+
+```{r B5_EXPOSICION, echo=FALSE}
+candidatos_24m<-consentimientos_madre 
+
+#h41 en B5
+h41_acumulado_b5<-candidatos_24m %>% select(id, s4_date, s4_consent) %>% left_join( gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(h41_date)) %>% transmute(id, h41_date, evento="b5")
+) %>% filter(!is.na(h41_date)) 
+
+#DBS en b5 b10_acumulado_b5
+dbs<- candidatos_24m %>% select(id) %>% left_join( gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(b10_tc_spots=="1") %>%  transmute(id, b10_date,b10_tc_spots, evento="b5")
+) %>% filter(b10_tc_spots=="1")
+# Orina en b5 b10_acumulado_b5
+orina<- candidatos_24m %>% select(id) %>% left_join(gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  )  %>% filter(b10_tc_urine=="1") %>%  transmute(id, b10_date,b10_tc_spots,b10_tc_urine, evento="b5")
+) %>% filter(b10_tc_urine=="1") 
+
+#medidas directas, indirectas y mixtas  h41_c_beacon_id1  h41_c_ecm_id
+medida_mixta<-candidatos_24m %>% select(id) %>% left_join( gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(h41_c_beacon_id1) & h41_c_beacon_id1!="888" & !is.na(h41_c_ecm_id) & h41_c_ecm_id!="888") %>% transmute(id, h41_date, h41_c_beacon_id1,h41_c_ecm_id, evento="b5")
+) %>% filter(!is.na(h41_date))
+
+medida_indirecta<-candidatos_24m %>% select(id) %>% left_join( gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1" 
+  ) %>% filter(!is.na(h41_c_beacon_id1) & h41_c_beacon_id1!="888" & (is.na(h41_c_ecm_id) | h41_c_ecm_id=="888")) %>% transmute(id, h41_date,h41_c_beacon_id1,h41_c_ecm_id, evento="b5")
+) %>% filter(!is.na(h41_date))
+
+medida_directa<- candidatos_24m %>% select(id) %>% left_join(  gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(h41_c_ecm_id) & h41_c_ecm_id!="888" & (is.na(h41_c_beacon_id1) | h41_c_beacon_id1=="888")) %>% transmute(id, h41_date,h41_c_beacon_id1,h41_c_ecm_id, evento="b5")
+) %>% filter(!is.na(h41_date)) 
+
+
+#h57 en B5
+h57_acumulado_b5<- candidatos_24m %>% left_join(
+  bind_rows(
+    rechazos_33,
+    rechazos_35
+  )
+  
+) %>% left_join( gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(h57_date)) %>% transmute(id, h57_date, evento="b5")
+) %>% filter(!is.na(h57_date))
+
+#b10 en b5
+a24b_acumulado_b5<- gt_hapin_II_data %>% filter(
+    redcap_event_name=="24_month_arm_1"
+  ) %>% filter(!is.na(a24b_date)) %>% transmute(id, a24b_date, evento="b5")
+
+crf<-c("H41","--DBS","--ORINA", "--MEDIDA DIRECTA","--MEDIDA INDIRECTA","--MEDIDA MIXTA", "A24b", "H57")
+reporte_b5_exposicion<-data.frame(crf)
+reporte_b5_exposicion %>% mutate(
+  quincenal=case_when(
+
+    crf=="H41" ~ h41_acumulado_b5 %>% filter(h41_date>=fecha1 & h41_date<=fecha2) %>% count() %>% .$n,
+     crf=="--DBS" ~ dbs %>% filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count() %>% .$n,
+    crf=="--ORINA" ~ orina %>% filter(b10_date>=fecha1 & b10_date<=fecha2) %>% count() %>% .$n,
+    crf=="--MEDIDA DIRECTA" ~ medida_directa %>% filter(h41_date>=fecha1 & h41_date<=fecha2) %>% count() %>% .$n,
+    crf=="--MEDIDA INDIRECTA" ~ medida_indirecta %>% filter(h41_date>=fecha1 & h41_date<=fecha2) %>% count() %>% .$n,
+    crf=="--MEDIDA MIXTA" ~ medida_mixta %>% filter(h41_date>=fecha1 & h41_date<=fecha2) %>% count() %>% .$n,
+    crf=="A24b" ~ a24b_acumulado_b5 %>% filter(a24b_date>=fecha1 & a24b_date<=fecha2) %>% count() %>% .$n,
+    crf=="H57" ~ h57_acumulado_b5 %>% filter(h57_date>=fecha1 & h57_date<=fecha2) %>% count() %>% .$n,
+    TRUE ~ NA_integer_
+  ),
+  acumulado=case_when(
+    crf=="H41" ~ h41_acumulado_b5  %>% count() %>% .$n,
+    crf=="--DBS" ~ dbs %>%  count() %>% .$n,
+    crf=="--ORINA" ~ orina %>%  count() %>% .$n,
+    crf=="--MEDIDA DIRECTA" ~ medida_directa %>%  count() %>% .$n,
+    crf=="--MEDIDA INDIRECTA" ~ medida_indirecta %>%  count() %>% .$n,
+    crf=="--MEDIDA MIXTA" ~ medida_mixta %>%  count() %>% .$n,
+    crf=="A24b" ~ a24b_acumulado_b5  %>% count() %>% .$n,
+    crf=="H57" ~ h57_acumulado_b5  %>% count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+) %>% mutate(crf=case_when(
+
+                                     crf=="H41" ~ "H41 (Equipo De Exposicion)",
+                                     crf=="--DBS" ~ "--DBS",
+                                     crf=="--ORINA" ~ "--ORINA",
+                               crf=="--MEDIDA DIRECTA" ~ "--MEDIDA DIRECTA (ECM)",
+                               crf=="--MEDIDA INDIRECTA" ~ "--MEDIDA INDIRECTA (Beacon)",
+                               crf=="--MEDIDA MIXTA" ~ "--MEDIDA MIXTA (ECM y Beacon)",
+                                     crf=="A24b" ~ "A24b (Ma Presion Arterial)",
+                                     crf=="H57" ~ "H57 (Encuesta Inicial)",
+                                     TRUE ~ NA_character_
+                                   )) %>%
+  select("CRF"=crf, "Quincenal     " = quincenal, "Acumulado     "=acumulado) %>%
+
+   mutate(CRF=cell_spec(CRF,"html", color = "blue",align = "c", bold = T)) %>%
+  #                                    `En la quincena`= select(., contains("Quincenal")) %>% rowSums(., na.rm = TRUE),
+  #                                            `En la quincena`= cell_spec(`En la quincena`, "html", color = "blue", bold=T)
+  #                                            ) %>%
+  kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c("  ", "REPORTE AVANCES EXPOSICION B5"=2))
+
+
+#revisión crfs faltantes
+
+
+```
+### 3 AÑOS (36 MESES) {.tabset}
+#### AVANCES
+##### CONTEOS: "HAPIN-II  3 AÑOS"
+###### Inicio de actividad: el 22 de febrero del 2022
+
+
+```{r consentimientos_hapinII_b6, echo=FALSE}
+# consentimientos_hapinII<-gt_hapin_II_data %>% group_by(id,s4_consent, s4_consent_c, s4_owa ) %>% count()
+
+#esperados en 36 meses a la fecha del reporte
+candidatos_36m<-gt_emory_data_arm2 %>% filter(!is.na(c30_dob)) %>% select(id, c30_dob) %>% mutate(
+  ventana=as.Date(c30_dob) + lubridate::days(330),
+  un_anio=as.Date(c30_dob) + lubridate::days(365)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_c)) %>% select(id, e3_date_exit_c, e3_reason_c)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit)) %>% select(id, e3_date_exit, e3_reason)
+) %>% mutate(
+  descartar=case_when(
+    e3_reason=="8"  ~  "Si",
+    TRUE ~ "No"
+  )
+) %>% filter(descartar=="No") %>% select(id, fecha_nacimiento=c30_dob) %>% mutate(
+  `12_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*12)),
+  `24_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*24)),
+  `36_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*36)),
+  `48_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*48)),
+  `60_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*60))
+) %>% select(id, fecha_36m=`36_meses`)
+
+candidatos_36m<-candidatos_36m %>% filter(as.Date(fecha_36m)<=fecha2)
+
+
+#conteo consentimientos hapin II 36 meses 
+#marcar los consentidos y rechazadas
+ consentimientos_36m<-   gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% select(
+     id, s4_date, s4_consent_c
+    ) %>% mutate(
+      consentidos=if_else(s4_consent_c=="1", "1", NA_character_),
+      rechazado=if_else(s4_consent_c=="0","1", NA_character_)
+    )
+
+ #E3 en B6
+e3_acumulado_b6<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year_3_q1_36m_arm_1"
+) %>% filter(!is.na(e3_date)) %>% transmute(id, e3_date, evento="b6") %>% left_join(
+  consentimientos_36m %>% filter(consentidos=="1") %>% select(id, consentidos)
+) %>% filter(!is.na(consentidos))
+
+    #armar la tabla de consentimientos 36m
+actividad_consentimientos<-c( "Esperados",
+                              "S4 realizados",
+                              "--Consentidos",
+                              "--Rechazados",
+                               "Salidas Anticipadas"
+                              
+                              
+                        ) 
+
+consentimientos_36m_15nal<-consentimientos_36m %>% filter(s4_date>=fecha1 & s4_date<=fecha2)
+
+reporte_consentimientos_36m<-data.frame(Actividad=actividad_consentimientos) 
+reporte_consentimientos_36m %>% mutate(
+  Quincenal = case_when(
+    Actividad =="Esperados" ~  candidatos_36m %>% filter(
+      as.Date(fecha_36m)>=fecha1 & as.Date(fecha_36m)<=fecha2 
+    ) %>%  count() %>% .$n,
+    Actividad =="--Consentidos" ~  consentimientos_36m_15nal %>% filter(consentidos=="1") %>%  count() %>% .$n,
+    Actividad=="--Rechazados" ~ consentimientos_36m_15nal %>% filter(rechazado == "1") %>% 
+      count() %>% .$n,
+    Actividad=="S4 realizados" ~ consentimientos_36m_15nal %>% filter(!is.na(s4_date)) %>% count() %>% .$n,
+    Actividad=="Salidas Anticipadas" ~ e3_acumulado_b6 %>% filter(e3_date>=fecha1 & e3_date<=fecha2) %>% count() %>% .$n,
+    TRUE ~ NA_integer_
+    
+  ),
+  Acumulado= case_when(
+    Actividad =="Esperados" ~  candidatos_36m %>% count() %>% .$n,
+     Actividad =="--Consentidos" ~  consentimientos_36m %>% filter(consentidos=="1") %>%  count() %>% .$n,
+    Actividad=="--Rechazados" ~ consentimientos_36m %>% filter(rechazado == "1") %>% 
+      count() %>% .$n,
+    Actividad=="S4 realizados" ~ consentimientos_36m %>% filter(!is.na(s4_date)) %>% count() %>% .$n,
+    Actividad=="Salidas Anticipadas" ~ e3_acumulado_b6 %>%  count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+) %>%   mutate(Actividad=cell_spec(Actividad,"html", color = "blue",align = "c", bold = T)) %>%
+ kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c(" ", "REPORTE VISITAS HAPIN II 36m"=2))
+
+var_candidatos<-candidatos_36m %>% count() %>% .$n
+var_realizados <-consentimientos_36m %>% filter(!is.na(s4_date)) %>% count() %>% .$n
+
+```
+~~~~
+Resumen:
+Visitas esperadas a la fecha: "`r candidatos_36m %>% count() %>% .$n `" (Segun cumple años)
+Visitas realizadas a la fecha: "`r consentimientos_36m %>% filter(!is.na(s4_date)) %>% count() %>% .$n `"
+Proporción de realizadas sobre esperadas: `r percent(var_realizados / var_candidatos)`
+
+
+~~~~
+
+
+##### RECLUTAMIENTO Y CUESTIONARIOS
+###### Inicio de actividad: el 22 de febrero del 2022
+
+```{r B6_CLINICA, echo=FALSE}
+#m10 en B6
+m10_acumulado_b6<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year_3_q1_36m_arm_1"
+) %>% filter(!is.na(m10_date)) %>% filter(id!='99999') %>% transmute(id, m10_date, evento="b6")
+#m11 en B6
+m11_acumulado_b6<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year_3_q1_36m_arm_1"
+  ) %>% filter(!is.na(m11_date)) %>% filter(id!='99999') %>% transmute(id, m11_date, evento="b6")
+#group_by(evento) %>% summarize(acumulado=n()) %>% spread(key=evento, value = acumulado)
+#m19 en B6
+m19_acumulado_b6<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year_3_q1_36m_arm_1"
+) %>% filter(!is.na(m19_date)) %>% filter(id!='99999') %>% transmute(id, m19_date, evento="b6")
+
+#c31 en B6
+c31_acumulado_b6<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year_3_q1_36m_arm_1"
+  ) %>% filter(!is.na(c31_date_2)) %>% transmute(id, c31_date_2, evento="b6")
+
+#c32 en B6
+c32_acumulado_b6<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year_3_q1_36m_arm_1"
+  ) %>% filter(!is.na(c32_date_2)) %>% transmute(id, c32_date_2, evento="b6")
+
+
+#c35 en B6
+c35_acumulado_b6<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year_3_q1_36m_arm_1"
+  ) %>% filter(!is.na(c35_date_2)) %>% transmute(id, c35_date_2, evento="b6")
+
+#c42 en B6
+c42_acumulado_b6<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year_3_q1_36m_arm_1"
+  ) %>% filter(!is.na(c42_date)) %>% transmute(id, c42_date, evento="b6")
+
+
+#H57 en B6
+h57_acumulado_b6<- gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>%  transmute(id, h57_date_2,evento="b6") %>% filter(
+  !is.na(h57_date_2)
+)
+
+#C85 Mdat
+c85_acumulado_b6<-gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+  id, c85_date, evento="b6"
+) %>% filter(
+  !is.na(c85_date)
+)
+
+#C85 Mdat secundario
+c85_2_acumulado_b6<-gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% transmute(
+  id, c85_date_2, evento="b6"
+) %>% filter(
+  !is.na(c85_date_2)
+)
+
+crf<-c("M10","M11", "M19", "C31", "C32","C35", "C42", "H57", "C85", "C852")
+reporte_b6_clinica<-data.frame(crf)
+reporte_b6_clinica %>% mutate(
+  quincenal=case_when(
+    crf=="M10" ~ m10_acumulado_b6 %>% filter(m10_date>=fecha1 & m10_date<=fecha2) %>% count() %>% .$n,
+    crf=="M11" ~ m11_acumulado_b6 %>% filter(m11_date>=fecha1 & m11_date<=fecha2) %>% count() %>% .$n,
+    crf=="M19" ~ m19_acumulado_b6 %>% filter(m19_date>=fecha1 & m19_date<=fecha2) %>% count() %>% .$n,
+    crf=="C31" ~ c31_acumulado_b6 %>% filter(c31_date_2>=fecha1 & c31_date_2<=fecha2) %>% count() %>% .$n,
+    crf=="C32" ~ c32_acumulado_b6 %>% filter(c32_date_2>=fecha1 & c32_date_2<=fecha2) %>% count() %>% .$n,
+    crf=="C35" ~ c35_acumulado_b6 %>% filter(c35_date_2>=fecha1 & c35_date_2<=fecha2) %>% count() %>% .$n,
+    crf=="C42" ~ c42_acumulado_b6 %>% filter(c42_date>=fecha1 & c42_date<=fecha2) %>% count() %>% .$n,
+    crf=="H57" ~ h57_acumulado_b6 %>% filter(h57_date_2>=fecha1 & h57_date_2<=fecha2) %>% count() %>% .$n,
+    crf=="C85" ~ c85_acumulado_b6 %>% filter(c85_date>=fecha1 & c85_date<=fecha2) %>% count() %>% .$n,
+    crf=="C852" ~ c85_2_acumulado_b6 %>% filter(c85_date_2>=fecha1 & c85_date_2<=fecha2) %>% count() %>% .$n,
+    TRUE ~ NA_integer_
+  ) ,
+  acumulado = case_when(
+    
+    crf=="M10" ~ m10_acumulado_b6 %>% count() %>% .$n,
+    crf=="M11" ~ m11_acumulado_b6 %>%  count() %>% .$n,
+    crf=="M19" ~ m19_acumulado_b6 %>%  count() %>% .$n,
+    crf=="C31" ~ c31_acumulado_b6 %>%  count() %>% .$n,
+    crf=="C32" ~ c32_acumulado_b6 %>%  count() %>% .$n,
+    crf=="C35" ~ c35_acumulado_b6 %>%  count() %>% .$n,
+    crf=="C42" ~ c42_acumulado_b6 %>%  count() %>% .$n,
+    crf=="H57" ~ h57_acumulado_b6 %>%  count() %>% .$n,
+    crf=="C85" ~ c85_acumulado_b6 %>%  count() %>% .$n,
+    crf=="C852" ~ c85_2_acumulado_b6 %>%  count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+
+)%>%  mutate(crf=case_when(
+  crf=="M10" ~ "M10 Demografico",                                   
+  crf=="M11" ~ "M11 Comportamiento sobre Estilo de Vida",
+  crf=="M19" ~ "M19 Costos e ingresos",
+                                     crf=="C31" ~ "C31 (estado salud bebé)",
+                                     crf=="C32" ~ "C32 Alimentación II",
+                                     crf=="C35" ~ "C35 Salud Mental II",
+   crf=="C42" ~ "C42 Vacunacion",
+   crf=="H57" ~ "H57 Encuesta inicial II",
+    crf=="C85" ~ "C85 MDAT",
+   crf=="C852" ~ "C85 MDAT Segunda Evaluacion",
+                                    
+                                     TRUE ~ NA_character_
+                                   )) %>%
+  select("CRF"=crf, "Quincenal     " = quincenal, "Acumulado     "=acumulado) %>%
+
+   mutate(CRF=cell_spec(CRF,"html", color = "blue",align = "c", bold = T)) %>%
+  #                                    `En la quincena`= select(., contains("Quincenal")) %>% rowSums(., na.rm = TRUE),
+  #                                            `En la quincena`= cell_spec(`En la quincena`, "html", color = "blue", bold=T)
+  #                                            ) %>%
+  kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c("  ", "REPORTE AVANCES CRF'S RECLUTAMIENTO 3 AÑOS"=2))
+
+
+
+```
+
+##### CUESTIONARIOS DE MEDICIONES
+###### Inicio de actividad: el 24 de febrero del 2022
+
+```{r B6_EXPOSICION, echo=FALSE}
+
+
+#-------------------
+# EXPOSICION B6
+CRF<-c("M14a", "M14b", "C33", "H41","H42", "H43", "C86")
+reporte_b6_exposicion<-data.frame(CRF)
+
+#m14a en B6
+m14a_acumulado_b6<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year_3_q1_36m_arm_1"
+) %>% filter(!is.na(m14a_date )) %>% filter(id!='99999') %>% transmute(id, m14a_date, evento="b6")
+
+#m14b en B6
+m14b_acumulado_b6<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year_3_q1_36m_arm_1"
+) %>% filter(!is.na(m14b_date )) %>% filter(id!='99999') %>% transmute(id, m14b_date, evento="b6")
+
+
+#c33 en B6
+c33_acumulado_b6<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year_3_q1_36m_arm_1"
+  )  %>% filter(!is.na(c33_date_2)) %>% transmute(id, c33_date_2, evento="b6")
+
+#h41
+H41_b6<-gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% select(id, h41_date_v2) %>% filter(
+  !is.na(h41_date_v2)
+)
+
+#h42
+H42<-gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% select(id, h42_date_2) %>% filter(
+  !is.na(h42_date_2)
+)
+
+#h43
+H43<-gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% select(id, h43_date_2) %>% filter(
+  !is.na(h43_date_2)
+)
+
+#C85 FOT
+C86<-gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% select(
+  id, c86_date
+) %>% filter(!is.na(c86_date))
+
+reporte_b6_exposicion %>% mutate(
+  Quincenal=case_when(
+    CRF=="M14a" ~ m14a_acumulado_b6 %>% filter(m14a_date>=fecha1 & m14a_date<=fecha2) %>% count() %>% .$n,
+    CRF=="M14b" ~ m14b_acumulado_b6 %>% filter(m14b_date>=fecha1 & m14b_date<=fecha2) %>% count() %>% .$n,
+    CRF=="C33" ~ c33_acumulado_b6 %>% filter(c33_date_2>=fecha1 & c33_date_2<=fecha2) %>% count() %>% .$n,
+    CRF=="H41" ~ H41_b6 %>% filter(h41_date_v2>=fecha1 & h41_date_v2<=fecha2) %>% count() %>% .$n,
+    CRF=="H42" ~ H42 %>% filter(h42_date_2>=fecha1 & h42_date_2<=fecha2) %>% count() %>% .$n,
+    CRF=="H43" ~ H43 %>% filter(h43_date_2>=fecha1 & h43_date_2<=fecha2) %>% count() %>% .$n,
+    CRF=="C86" ~ C86 %>% filter(c86_date>=fecha1 & c86_date<=fecha2) %>% count() %>% .$n,
+    TRUE ~ NA_integer_
+  ),
+   Acumulado=case_when(
+    CRF=="M14a" ~ m14a_acumulado_b6 %>% count() %>% .$n,
+    CRF=="M14b" ~ m14b_acumulado_b6 %>% count() %>% .$n,
+    CRF=="C33" ~ c33_acumulado_b6 %>% count() %>% .$n,
+    CRF=="H41" ~ H41_b6 %>%  count() %>% .$n,
+    CRF=="H42" ~ H42 %>%  count() %>% .$n,
+    CRF=="H43" ~ H43 %>%  count() %>% .$n,
+    CRF=="C86" ~ C86 %>%  count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+) %>%   mutate(CRF=case_when(
+                        CRF=="M14a" ~ "M14a Antropometria",                                   
+                        CRF=="M14b" ~ "M14b Presion Arterial",
+                        CRF=="C33" ~ "C33 Antropometria Infantil",
+                        CRF=="H41" ~ "H41 Equipo Exposición II",
+                        CRF=="H42" ~ "H42 Exposure Compliance II",
+                        CRF=="H43" ~ "H43 Linea Basal de Exposición II",
+                        CRF=="C86" ~ "C86 FOT",
+                                     TRUE ~ NA_character_
+                                   )) %>%
+  select("CRF"=CRF, "Quincenal     " = Quincenal, "Acumulado     "=Acumulado) %>%
+ mutate(CRF=cell_spec(CRF,"html", color = "blue",align = "c", bold = T)) %>%
+    kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c("  ", "REPORTE AVANCES CRF'S MEDIDAS EXPOSICION 3 AÑOS"=2)) 
+```
+
+
+~~~~
+ *Quincena del  "`r as.Date(f_week1) %>% format(.,"%A %d %B  %Y")`" al "`r as.Date(f_week2) %>% format(.,"%A %d %B  %Y")` "*
+~~~~
+
+
+#### INDICADORES
+##### HOGARES PROGRAMADOS POR MES: "HAPIN-II  3 AÑOS"
+```{r avance_anual_, echo=FALSE}
+
+#esperados en 36 meses a la fecha del reporte
+esperados_36meses<-gt_emory_data_arm2 %>% filter(!is.na(c30_dob)) %>% select(id, c30_dob) %>% mutate(
+  ventana=as.Date(c30_dob) + lubridate::days(330),
+  un_anio=as.Date(c30_dob) + lubridate::days(365)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_c)) %>% select(id, e3_date_exit_c, e3_reason_c)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit)) %>% select(id, e3_date_exit, e3_reason)
+) %>% mutate(
+  descartar=case_when(
+    e3_reason=="8"  ~  "Si",
+    TRUE ~ "No"
+  )
+) %>% filter(descartar=="No") %>% select(id, fecha_nacimiento=c30_dob) %>% mutate(
+  `12_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*12)),
+  `24_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*24)),
+  `36_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*36)),
+  `48_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*48)),
+  `60_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*60))
+) %>% select(id, fecha_36m=`36_meses`)
+
+dt_esperados_36m<-esperados_36meses %>%  mutate( Mes=format(fecha_36m, "%B")) %>% group_by(
+  Anio=lubridate::year(fecha_36m),
+  mes=lubridate::month(fecha_36m),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Esperados=n) 
+
+#agregar Junio para sumar los realizados durante Junio 2023
+obs<-data.frame(Anio="2023", Mes="junio", Esperados="0")
+obs2<-data.frame(Anio="2023", Mes="julio", Esperados="0")
+
+dt_esperados_36m<-dt_esperados_36m %>% bind_rows(
+  obs %>% transmute(Anio=as.double(Anio),Mes, Esperados=as.integer(Esperados))
+) %>% bind_rows(
+  obs2 %>% transmute(Anio=as.double(Anio),Mes, Esperados=as.integer(Esperados))
+)
+
+#realizados que tienen s4 por mes
+dt_realizados_36m<-consentimientos_36m %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Realizados=n)
+
+#Consentidos por mes
+dt_consentidos_36m<-consentimientos_36m %>% filter(!is.na(consentidos)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Consentidos=n)
+
+#rechazados por mes
+dt_rechazados_36m<-consentimientos_36m %>% filter(!is.na(rechazado)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, `No consintieron`=n)
+
+#migraciones
+dt_migraciones_36m<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(visit=="b6") %>%  select(id, s4_date, s4_reason_c) %>% filter(!is.na(s4_reason_c)) %>% mutate(
+  razon=toupper(s4_reason_c),
+  migracion=case_when(
+    grepl("FUERA DEL AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("FUERA DEL AREA DE ESTUDIO", razon) ~ "1",
+    grepl("AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("AREA DE ESTUDIO", razon) ~ "1",
+    grepl("MIGRO", razon) ~ "1",
+    grepl("MIGRÓ", razon) ~ "1",
+    grepl("SE MUDO", razon) ~ "1",
+    grepl("FUERA DEL ÁREA", razon) ~ "1",
+    grepl("FUERA DEL ESTUDIO", razon) ~ "1",
+    grepl("MIGRACIÓN", razon) ~ "1",
+    grepl("MIGRACION", razon) ~ "1",
+    grepl("MIGRARON", razon) ~ "1",
+    grepl("DE VIAJE", razon) ~ "1",
+     grepl("MUDARON", razon) ~ "1",
+    
+    TRUE ~ NA_character_
+  )
+) %>% filter(!is.na(migracion)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Migraciones=n)
+#codigo anterior a las modificaciones solicitadas por Anaite ----
+# dt_esperados_36m %>% left_join(
+#   dt_realizados_36m %>% mutate(
+#     acumulado_realizados = cumsum(as.numeric(Realizados))
+#     
+#   )
+# ) %>% mutate(
+#   acumulado_esperados=cumsum(as.numeric(Esperados))
+# ) %>% 
+#   mutate(
+#   p_realizados=percent(as.numeric(acumulado_realizados) / as.numeric(acumulado_esperados), 1)
+# ) %>% left_join(
+#   dt_consentidos_36m
+# ) %>% mutate(
+#   p_consentidos=percent(as.numeric(Consentidos) / as.numeric(Realizados), 1)
+# ) %>% left_join(
+#   dt_rechazados_36m
+# ) %>% mutate(
+#   p_noconsentidos=percent(as.numeric(`No consintieron`) / as.numeric(Realizados), 1)
+# ) %>% left_join(
+#   dt_migraciones_36m
+# ) %>% mutate(
+#   p_migraciones=percent(as.numeric( Migraciones) / as.numeric(`No consintieron`), 1)
+# ) %>% transmute(
+#   `Año`=Anio,
+#   Mes=toupper(Mes),
+#   `Programados por mes`=Esperados,
+#   `Realizados por mes`= if_else(is.na(Realizados), NA_character_, as.character(Realizados )),
+#   `Acumulado Realizado por mes(%)`= if_else(is.na(Realizados), NA_character_, paste0(as.character(acumulado_realizados)," (",as.character(p_realizados),")")
+#                                             ),
+#   `Consintieron(%)`=if_else(is.na(Consentidos), NA_character_, paste0(Consentidos," (", p_consentidos, ")")),
+#   `No consintieron(%)`= if_else(is.na(`No consintieron`), NA_character_, paste0(`No consintieron`," (",p_noconsentidos, ")")),
+#   `Migraciones(%)`=if_else(is.na(Migraciones), NA_character_, paste0(Migraciones," (",p_migraciones,")"))
+# ) %>% kable(caption = "<center>REPORTE MENSUAL <br>
+#                   DE AVANCES</center>", 
+#         align = "l") %>% 
+#     kable_classic(full_width=F, html_font = "Cambria")
+
+#integrar tabla programados por mes, con modificaciones ----
+dt_esperados_36m %>% left_join(
+  dt_realizados_36m %>% mutate(
+    acumulado_realizados = cumsum(as.numeric(Realizados))
+    
+  )
+) %>% mutate(
+  acumulado_esperados=cumsum(as.numeric(Esperados))
+) %>% 
+  mutate(
+  p_realizados=percent(as.numeric(acumulado_realizados) / as.numeric(acumulado_esperados), 1)
+) %>% left_join(
+  dt_consentidos_36m %>% mutate(
+    acumulado_consentidos=cumsum(as.numeric(Consentidos))
+  )
+) %>% mutate(
+  p_consentidos=percent(as.numeric(Consentidos) / as.numeric(Realizados), 1),
+) %>% transmute(
+  `Año`=Anio,
+  Mes=toupper(Mes),
+  `Programados`=Esperados,
+  `Acumulado Programados` = paste0(acumulado_esperados, " (", percent(acumulado_esperados/750,1),")"),
+  `Visitados`= if_else(is.na(Realizados), NA_character_, as.character(Realizados )),
+  `Acumulado Visitados(%)`= if_else(is.na(Realizados), NA_character_, paste0(as.character(acumulado_realizados)," (",as.character(p_realizados),")")
+                                            ),
+  `Consintieron(%)`=if_else(is.na(Consentidos), NA_character_, paste0(Consentidos," (", p_consentidos, ")")),
+  `Acumulados Consintieron(%)`=if_else(is.na(Consentidos), NA_character_, paste0(acumulado_consentidos, " (", percent(acumulado_consentidos/acumulado_realizados),")") )
+
+)%>% kable(caption = "<center>REPORTE MENSUAL <br>
+                  DE AVANCES</center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria")
+
+
+```
+
+
+##### RECLUTAMIENTOS Y MEDIDAS:
+
+```{r avance_cat_quincenal, echo=FALSE}
+dt_m10_h41_categorias<-gt_hapin_II_data %>% filter(!is.na(m10_date)) %>% filter(visit=="b6") %>%  select(id, m10_date) %>% left_join(
+  esperados_36meses
+) %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(h41_date_v2)) %>% filter(visit=="b6") %>%  select(id, h41_date_v2)
+) %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(c85_date)) %>% filter(visit=="b6") %>% select(id, c85_date)
+) %>% 
+  mutate(
+  dias_m10_esperado=as.numeric(as.Date(m10_date) - as.Date(fecha_36m)),
+  dias_h41_esperado=as.numeric(as.Date(h41_date_v2) - as.Date(fecha_36m)),
+  dias_c85_esperado=as.numeric(as.Date(c85_date) - as.Date(fecha_36m)),
+  Categoria_m10= case_when(
+    dias_m10_esperado<= 30 ~ "<=30",
+    dias_m10_esperado>30 & dias_m10_esperado<=90 ~ "31-90",
+    dias_m10_esperado>90 ~ ">90",
+  ),
+  Categoria_h41= case_when(
+    dias_h41_esperado<= 30 ~ "<=30",
+    dias_h41_esperado>30 & dias_h41_esperado<=90 ~ "31-90",
+    dias_h41_esperado>90 ~ ">90",
+  ),
+   Mes=toupper( format(m10_date, "%B") )
+
+) 
+
+
+
+cat_quincenal<-dt_m10_h41_categorias %>% filter(m10_date>=f_week1) %>% group_by(Categoria_m10) %>% count() %>% ungroup() %>% select(categoria=Categoria_m10, cantidad_m10=n) %>% full_join(
+  dt_m10_h41_categorias %>% filter(h41_date_v2>=f_week1) %>% group_by(Categoria_h41) %>% count() %>% ungroup() %>% select(categoria=Categoria_h41, cantidad_h41=n) 
+) %>% mutate_all(., ~replace(.,is.na(.),0)) 
+
+   
+
+dt_elaborados_quincenal<-c( "<=30",
+              "31 - 90",
+               "> 90"
+              ) %>% data.frame(Categorias=.) 
+
+#verifiar siempre el código para mayores a 90 dias c31 y h41
+# var_91_1<-cat_quincenal %>% filter(categoria==">90") %>% select(cantidad_c31) %>% .$cantidad_c31
+
+dt_avances_quincenal<-dt_elaborados_quincenal %>% mutate(
+  `Quincenal`=case_when(
+    Categorias=="<=30" ~ dt_m10_h41_categorias %>% filter(Categoria_m10=="<=30") %>% filter(m10_date>=f_week1) %>% group_by() %>% count() %>% .$n,
+      #cat_quincenal %>% filter(categoria=="<=30") %>% select(cantidad_m10) %>% .$cantidad_m10,
+     Categorias=="31 - 90" ~ dt_m10_h41_categorias %>% filter(Categoria_m10=="31-90") %>% filter(m10_date>=f_week1) %>% group_by() %>% count() %>% .$n
+ # Categorias=="> 90" ~  cat_quincenal %>% filter(categoria==">90") %>% select(cantidad_m10) %>% .$cantidad_m10
+),
+`Acumulado`=case_when(
+  Categorias=="<=30" ~ dt_m10_h41_categorias %>% filter(Categoria_m10=="<=30") %>%  group_by() %>% count() %>% .$n,
+   Categorias=="31 - 90" ~ dt_m10_h41_categorias %>% filter(Categoria_m10=="31-90") %>%  group_by() %>% count() %>% .$n,
+  Categorias=="> 90" ~ dt_m10_h41_categorias %>% filter(Categoria_m10==">90") %>%  group_by() %>% count() %>% .$n
+),
+` Quincenal `=case_when(
+    Categorias=="<=30" ~ dt_m10_h41_categorias %>% filter(Categoria_h41=="<=30") %>% filter(h41_date_v2>=f_week1) %>% group_by() %>% count() %>% .$n,
+      #cat_quincenal %>% filter(categoria=="<=30") %>% select(cantidad_h41) %>% .$cantidad_h41,
+     Categorias=="31 - 90" ~ dt_m10_h41_categorias %>% filter(Categoria_h41=="31-90") %>% filter(h41_date_v2>=f_week1) %>% group_by() %>% count() %>% .$n
+    # Categorias=="> 90" ~ cat_quincenal %>% filter(categoria==">90") %>% select(cantidad_h41) %>% .$cantidad_h41
+),
+` Acumulado `=case_when(
+  Categorias=="<=30" ~ dt_m10_h41_categorias %>% filter(Categoria_h41=="<=30") %>%  group_by() %>% count() %>% .$n,
+   Categorias=="31 - 90" ~ dt_m10_h41_categorias %>% filter(Categoria_h41=="31-90") %>%  group_by() %>% count() %>% .$n,
+  Categorias=="> 90" ~ dt_m10_h41_categorias %>% filter(Categoria_h41==">90") %>%  group_by() %>% count() %>% .$n
+)
+) 
+
+dt_avances_quincenal_total<-dt_avances_quincenal %>% bind_rows(
+ apply(X= dt_avances_quincenal %>% transmute(Acumulado=as.numeric(Acumulado), ` Acumulado `=as.numeric(` Acumulado `)), MARGIN=2, FUN= sum) 
+)
+
+dt_avances_quincenal_integrado<-dt_avances_quincenal_total %>% mutate(
+ Categorias= if_else(is.na(Categorias), "Total",Categorias)
+) 
+ totales<-dt_avances_quincenal_integrado %>% filter(Categorias=="Total") %>% select(Total_m10=Acumulado, Total_h41=` Acumulado `)
+
+ dt_avances_final<-dt_avances_quincenal_integrado %>% mutate(
+   p_m10=case_when(
+     Categorias!="Total" ~ percent(as.numeric(Acumulado) / totales$Total_m10)
+   ),
+   p_h41=case_when(
+     Categorias!="Total" ~ percent(as.numeric(` Acumulado `) / totales$Total_h41 )
+   )
+ ) %>% transmute(
+   Categorias, Quincenal, Acumulado= paste0(Acumulado, " (", p_m10,")"),
+   ` Quincenal `, 
+   ` Acumulado `=paste0(` Acumulado `," (", p_h41,")")
+ )
+
+dt_avances_final %>% mutate(
+  Acumulado=if_else(
+    Categorias=="Total", substr(Acumulado,1,3), Acumulado
+  ),
+   ` Acumulado `=if_else(
+    Categorias=="Total", substr(` Acumulado `,1,3), ` Acumulado `
+  )
+) %>% 
+kable(caption = "<center>REPORTE CONSENTIDOS Y MEDIDAS<br>
+                  QUINCENAL Y ACUMULADO </center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria") %>% column_spec(2, width = "2cm",  bold = T) %>% column_spec(3, width = "5cm",  bold = F)  %>% column_spec(4, width = "2cm",  bold = T)   %>% column_spec(5, width = "5cm",  bold = F)   %>% row_spec(1, bold=F, background = "#11e88d") %>% row_spec(2, bold=F, background = "#edcc46") %>% row_spec(3, bold=F, background =  "#df455c") %>% row_spec(4, bold=T) %>% 
+ add_header_above(c("    ", "CONSENTIDOS (m10) "=2, "MEDIDAS (H41) "=2 ))
+
+#dt_c31_h41_categorias %>% writexl::write_xlsx("output/revision_rojos.xlsx")
+
+```
+
+##### RECHAZOS POR MES: "3 AÑOS"
+
+```{r avance_rechazos, echo=FALSE}
+#Consentidos por mes
+dt_consentidos_36m<-consentimientos_36m %>% filter(!is.na(consentidos)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Consentidos=n)
+
+#rechazados por mes
+dt_rechazados_36m<-consentimientos_36m %>% filter(!is.na(rechazado)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, `No consintieron`=n)
+
+#migraciones
+dt_migraciones_36m<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(visit=="b6") %>%  select(id, s4_date, s4_reason_c) %>% filter(!is.na(s4_reason_c)) %>% mutate(
+  razon=toupper(s4_reason_c),
+  migracion=case_when(
+    grepl("FUERA DEL AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("FUERA DEL AREA DE ESTUDIO", razon) ~ "1",
+    grepl("AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("AREA DE ESTUDIO", razon) ~ "1",
+    grepl("MIGRO", razon) ~ "1",
+    grepl("MIGRÓ", razon) ~ "1",
+    grepl("SE MUDO", razon) ~ "1",
+    grepl("FUERA DEL ÁREA", razon) ~ "1",
+    grepl("FUERA DEL ESTUDIO", razon) ~ "1",
+    grepl("MIGRACIÓN", razon) ~ "1",
+    grepl("MIGRACION", razon) ~ "1",
+    grepl("MIGRARON", razon) ~ "1",
+    grepl("DE VIAJE", razon) ~ "1",
+     grepl("MUDARON", razon) ~ "1",
+  
+    
+    TRUE ~ "revisar contenido"
+  )
+) %>% filter(!is.na(migracion)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Migraciones=n)
+
+dt_rechazos_motivos<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(visit=="b6") %>% select(
+  id, s4_date, s4_consent_c, s4_reason_c
+) %>% filter(s4_consent_c=="0") %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e3_date)) %>% filter(visit=="b6") %>%  select(id, e3_reason)
+) %>% mutate(
+  motivo_rechazo=recode(e3_reason,
+                        "3"="Retiro voluntario",
+                        "4"="Retirada por el equipo de estudio",
+                        "5"="Se mudó del área de estudio",
+                        "6"="Muerte de la madre",
+                        "7"="Muerte Infantil",
+                        "8"="Fuera de la ventana",
+                        "555"="Otro")
+)  %>% mutate(
+  razon=toupper(s4_reason_c),
+  migracion=case_when(
+    grepl("FUERA DEL AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("FUERA DEL AREA DE ESTUDIO", razon) ~ "1",
+    grepl("AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("AREA DE ESTUDIO", razon) ~ "1",
+    grepl("MIGRO", razon) ~ "1",
+    grepl("MIGRÓ", razon) ~ "1",
+    grepl("SE MUDO", razon) ~ "1",
+    grepl("FUERA DEL ÁREA", razon) ~ "1",
+    grepl("FUERA DEL ESTUDIO", razon) ~ "1",
+    grepl("MIGRACIÓN", razon) ~ "1",
+    grepl("MIGRACION", razon) ~ "1",
+    grepl("MIGRARON", razon) ~ "1",
+    grepl("DE VIAJE", razon) ~ "1",
+     grepl("MUDARON", razon) ~ "1",
+    
+    TRUE ~ NA_character_
+  ),
+  no_autoriza_padre_familiar=case_when(
+   grepl("PADRE ", razon) ~ "1", 
+   grepl("PERMISO", razon) ~ "1", 
+   grepl("ESPOSO", razon) ~ "1", 
+    grepl("FAMILIARES NO", razon) ~ "1",
+    grepl("FAMILIARES QUE", razon) ~ "1",
+    grepl("FAMILIAR QUIEN", razon) ~ "1",
+    grepl("FAMILIAR NO ESTA", razon) ~ "1"
+  ),
+  falta_valor_al_estudio=case_when(
+   grepl("LOS CAMBIOS ", razon) ~ "1",
+   grepl("CAMBIOS EN EL PROYECTOS ", razon) ~ "1",
+   grepl("CAMBIOS EN EL PROYECTOS", razon) ~ "1",
+   grepl("NO LE INTERESA SEGUIR CON CAMBIOS EN EL PROYECTO", razon) ~ "1",
+   grepl("NO DESEA PARTICIPAR MAS", razon) ~ "1",
+  ),
+  no_tiene_tiempo=case_when(
+    grepl("NO TIENE TIEMPO", razon) ~ "1",
+    grepl("NO TENER TIEMPO", razon) ~ "1",
+  )
+)
+
+ 
+#aramar tabla de rechazos con sumas por columna
+tabla_rechazos_b6<-dt_consentidos_36m %>% left_join(
+  dt_rechazados_36m
+)%>% left_join(
+  dt_rechazos_motivos %>% filter(!is.na(migracion)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           Migraciones=n) 
+) %>% left_join(
+  dt_rechazos_motivos %>% filter(!is.na(no_autoriza_padre_familiar)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           no_autoriza_padre_familiar=n) 
+) %>% left_join(
+  dt_rechazos_motivos %>% filter(!is.na(falta_valor_al_estudio)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           falta_valor_al_estudio=n) 
+)%>% left_join(
+  dt_rechazos_motivos %>% filter(!is.na(no_tiene_tiempo)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           no_tiene_tiempo=n) 
+)
+
+#cambiar NA por cero para poder hace rla suma
+tabla_rechazos_b6<-tabla_rechazos_b6 %>%  mutate_all(., ~replace(.,is.na(.),0))
+
+#agregar sumas
+tabla_rechazos_b6_totales<-tabla_rechazos_b6 %>% 
+ bind_rows(
+ apply(X= tabla_rechazos_b6 %>% transmute(
+  Consentidos, `No consintieron`, Migraciones, no_autoriza_padre_familiar,
+  falta_valor_al_estudio, no_tiene_tiempo
+ ),  MARGIN=2, FUN= sum)
+)
+
+#agregar proporciones
+tabla_rechazos_b6_totales %>% 
+  mutate(
+    p_no_consintieron= percent(as.numeric(`No consintieron`)/ as.numeric(Consentidos),1),
+  p_migraciones=percent(as.numeric(Migraciones) / as.numeric(`No consintieron`),1),
+   p_no_autoriza_padre=percent(as.numeric(no_autoriza_padre_familiar) / as.numeric(`No consintieron`),1),
+  p_falta_valor_al_estudio=percent(as.numeric(falta_valor_al_estudio) / as.numeric(`No consintieron`),1),
+  p_no_tiene_tiempo=percent(as.numeric(no_tiene_tiempo) / as.numeric(`No consintieron`),1)
+)%>% transmute(
+  `Año`=if_else(is.na(Anio),"",as.character(Anio)),
+  Mes=if_else(is.na(Mes),"Total",Mes),
+  Consentidos,
+  `No consintieron(%)`=if_else(is.na(`No consintieron`), NA_character_, paste0(`No consintieron`,"(",p_no_consintieron,")")),
+   Migraciones=if_else(is.na(Migraciones), NA_character_, paste0(Migraciones,"(",p_migraciones,")")),
+  `No autoriza padre o familiar(%)`=if_else(is.na(no_autoriza_padre_familiar), NA_character_, paste0(no_autoriza_padre_familiar,"(",p_no_autoriza_padre,")")),
+   `Falta valor al estudio(%)`=if_else(is.na(falta_valor_al_estudio), NA_character_, paste0(falta_valor_al_estudio,"(",p_falta_valor_al_estudio,")")),
+  `No tiene tiempo`=if_else(is.na(no_tiene_tiempo), NA_character_, paste0(no_tiene_tiempo,"(",p_no_tiene_tiempo,")"))
+) %>% kable(caption = "<center>REPORTE MENSUAL <br>
+                  DE RECHAZOS</center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria") 
+#-------------------
+# dt_consentidos_36m %>% left_join(
+#   dt_rechazados_36m
+# ) %>% mutate(
+#     p_no_consintieron= percent(as.numeric(`No consintieron`)/ as.numeric(Consentidos),1)
+# )%>% left_join(
+#   dt_rechazos_motivos %>% filter(!is.na(migracion)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+#   Anio=lubridate::year(s4_date),
+#   mes=lubridate::month(s4_date),
+#   Mes
+# ) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+#                                            Migraciones=n) 
+# ) %>% mutate(
+#   p_migraciones=percent(as.numeric(Migraciones) / as.numeric(`No consintieron`),1)
+# ) %>% left_join(
+#   dt_rechazos_motivos %>% filter(!is.na(no_autoriza_padre_familiar)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+#   Anio=lubridate::year(s4_date),
+#   mes=lubridate::month(s4_date),
+#   Mes
+# ) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+#                                            no_autoriza_padre_familiar=n) 
+# ) %>% mutate(
+#   p_no_autoriza_padre=percent(as.numeric(no_autoriza_padre_familiar) / as.numeric(`No consintieron`),1)
+# ) %>% left_join(
+#   dt_rechazos_motivos %>% filter(!is.na(falta_valor_al_estudio)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+#   Anio=lubridate::year(s4_date),
+#   mes=lubridate::month(s4_date),
+#   Mes
+# ) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+#                                            falta_valor_al_estudio=n) 
+# ) %>% mutate(
+#   p_falta_valor_al_estudio=percent(as.numeric(falta_valor_al_estudio) / as.numeric(`No consintieron`),1)
+# )%>% left_join(
+#   dt_rechazos_motivos %>% filter(!is.na(no_tiene_tiempo)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+#   Anio=lubridate::year(s4_date),
+#   mes=lubridate::month(s4_date),
+#   Mes
+# ) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+#                                            no_tiene_tiempo=n) 
+# ) %>% mutate(
+#   p_no_tiene_tiempo=percent(as.numeric(no_tiene_tiempo) / as.numeric(`No consintieron`),1)
+# ) %>% transmute(
+#   `Año`=Anio,
+#   Mes,
+#   Consentidos,
+#   `No consintieron(%)`=if_else(is.na(`No consintieron`), NA_character_, paste0(`No consintieron`,"(",p_no_consintieron,")")),
+#    Migraciones=if_else(is.na(Migraciones), NA_character_, paste0(Migraciones,"(",p_migraciones,")")),
+#   `No autoriza padre o familiar(%)`=if_else(is.na(no_autoriza_padre_familiar), NA_character_, paste0(no_autoriza_padre_familiar,"(",p_no_autoriza_padre,")")),
+#    `Falta valor al estudio(%)`=if_else(is.na(falta_valor_al_estudio), NA_character_, paste0(falta_valor_al_estudio,"(",p_falta_valor_al_estudio,")")),
+#   `No tiene tiempo`=if_else(is.na(no_tiene_tiempo), NA_character_, paste0(no_tiene_tiempo,"(",p_no_tiene_tiempo,")"))
+# ) %>% kable(caption = "<center>REPORTE MENSUAL <br>
+#                   DE RECHAZOS</center>", 
+#         align = "l") %>% 
+#     kable_classic(full_width=F, html_font = "Cambria") 
+
+```
+~~~~
+ *Quincena del  "`r as.Date(f_week1) %>% format(.,"%A %d %B  %Y")`" al "`r as.Date(f_week2) %>% format(.,"%A %d %B  %Y")` "*
+~~~~
+### 4 AÑOS (48 MESES) {.tabset}
+#### AVANCES
+```{r}
+# consentimientos_hapinII<-gt_hapin_II_data %>% group_by(id,s4_consent, s4_consent_c, s4_owa ) %>% count()
+
+#esperados en 36 meses a la fecha del reporte
+candidatos_48m<-gt_emory_data_arm2 %>% filter(!is.na(c30_dob)) %>% select(id, c30_dob) %>% mutate(
+  ventana=as.Date(c30_dob) + lubridate::days(330),
+  un_anio=as.Date(c30_dob) + lubridate::days(365)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_c)) %>% select(id, e3_date_exit_c, e3_reason_c)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit)) %>% select(id, e3_date_exit, e3_reason)
+) %>% mutate(
+  descartar=case_when(
+    e3_reason=="8"  ~  "Si",
+    TRUE ~ "No"
+  )
+) %>% filter(descartar=="No") %>% select(id, fecha_nacimiento=c30_dob) %>% mutate(
+  `12_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*12)),
+  `24_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*24)),
+  `36_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*36)),
+  `48_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*48)),
+  `60_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*60))
+) %>% select(id, fecha_48m=`48_meses`)
+
+candidatos_48m<-candidatos_48m %>% filter(as.Date(fecha_48m)<=fecha2)
+
+
+#conteo consentimientos hapin II 36 meses 
+#marcar los consentidos y rechazadas
+ consentimientos_48m<- gt_hapin_II_data %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>% select(
+      id, s4_date, s4_consent_c
+    ) %>%left_join(
+   #identificar los no visitados por estar fuera de ventana
+    gt_hapin_II_data %>% filter(!is.na(s4_reason_c)) %>% select(id, s4_reason_c) %>% filter(grepl("FUERA DE VENTANA", s4_reason_c)==TRUE)
+    ) %>% 
+   mutate(
+      consentidos=if_else(s4_consent_c=="1", "1", NA_character_),
+      rechazado=if_else(s4_consent_c=="0" & is.na(s4_reason_c),"1", NA_character_ ),
+      novisitado=if_else(!is.na(s4_reason_c),"1", NA_character_ ),
+
+    )
+
+ #E3 en B6
+e3_acumulado_b7<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year4_q1_48m_arm_1"
+) %>% filter(!is.na(e3_date)) %>% transmute(id, e3_date, evento="b7") %>% left_join(
+  consentimientos_48m %>% filter(consentidos=="1") %>% select(id, consentidos)
+) %>% filter(!is.na(consentidos))
+
+    #armar la tabla de consentimientos 36m
+actividad_consentimientos<-c( "Esperados",
+                              "S4 realizados",
+                              "--Consentidos",
+                              "--Rechazados",
+                              #"--Fuera de Ventana (no visitados)",
+                               "Salidas Anticipadas"
+                        ) 
+
+consentimientos_48m_15nal<-consentimientos_48m %>% filter(s4_date>=fecha1 & s4_date<=fecha2)
+
+reporte_consentimientos_48m<-data.frame(Actividad=actividad_consentimientos) 
+reporte_consentimientos_48m %>% mutate(
+  Quincenal = case_when(
+    Actividad =="Esperados" ~  candidatos_48m %>% filter(
+      as.Date(fecha_48m)>=fecha1 & as.Date(fecha_48m)<=fecha2 
+    ) %>%  count() %>% .$n,
+    Actividad =="--Consentidos" ~  consentimientos_48m_15nal %>% filter(consentidos=="1") %>%  count() %>% .$n,
+    Actividad=="--Rechazados" ~ consentimientos_48m_15nal %>% filter(rechazado == "1") %>% 
+      count() %>% .$n,
+    #Actividad=="--Fuera de Ventana (no visitados)" ~ consentimientos_48m_15nal %>% filter(novisitado == "1") %>% 
+    #  count() %>% .$n,
+    Actividad=="S4 realizados" ~ consentimientos_48m_15nal %>% filter(!is.na(s4_date)) %>% count() %>% .$n,
+    Actividad=="Salidas Anticipadas" ~ e3_acumulado_b7 %>% filter(e3_date>=fecha1 & e3_date<=fecha2) %>% count() %>% .$n,
+    TRUE ~ NA_integer_
+    
+  ),
+  Acumulado= case_when(
+    Actividad =="Esperados" ~  candidatos_48m %>% count() %>% .$n,
+     Actividad =="--Consentidos" ~  consentimientos_48m %>% filter(consentidos=="1") %>%  count() %>% .$n,
+    Actividad=="--Rechazados" ~ consentimientos_48m %>% filter(rechazado == "1") %>% 
+      count() %>% .$n,
+   # Actividad=="--Fuera de Ventana (no visitados)" ~ consentimientos_48m %>% filter(novisitado == "1") %>% 
+     # count() %>% .$n,
+    Actividad=="S4 realizados" ~ consentimientos_48m %>% filter(!is.na(s4_date)) %>% count() %>% .$n,
+    Actividad=="Salidas Anticipadas" ~ e3_acumulado_b7 %>%  count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+) %>%   mutate(Actividad=cell_spec(Actividad,"html", color = "blue",align = "c", bold = T)) %>%
+ kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c(" ", "REPORTE VISITAS HAPIN II 48m"=2))
+
+var_candidatos<-candidatos_48m %>% count() %>% .$n
+var_realizados <-consentimientos_48m %>% filter(!is.na(s4_date)) %>% count() %>% .$n
+var_consentidas<-consentimientos_48m %>% filter(consentidos=="1") %>% count() %>% .$n
+var_rechazadas<-consentimientos_48m %>% filter(rechazado=="1") %>% count() %>% .$n
+
+```
+
+~~~~
+Resumen:
+Visitas esperadas a la fecha: "`r candidatos_48m %>% count() %>% .$n `" (Segun cumple años)
+Visitas realizadas a la fecha: "`r consentimientos_48m %>% filter(!is.na(s4_date)) %>% count() %>% .$n `"
+Proporción de realizadas sobre esperadas: `r percent(var_realizados / var_candidatos)`
+ - Proporción Consentidas: `r percent( var_consentidas / var_realizados)`
+ - Proporción Rechazadas: `r percent(var_rechazadas / var_realizados)`
+~~~~
+
+
+##### RECLUTAMIENTO Y CUESTIONARIOS
+###### Inicio de actividad: el 11 de abril del 2023
+```{r}
+#m10 en b7
+m10_acumulado_b7<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year4_q1_48m_arm_1"
+) %>% filter(!is.na(m10_date)) %>% filter(id!='99999') %>% transmute(id, m10_date, evento="b7")
+#m11 en b7
+m11_acumulado_b7<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year4_q1_48m_arm_1"
+  ) %>% filter(!is.na(m11_date)) %>% filter(id!='99999') %>% transmute(id, m11_date, evento="b7")
+#group_by(evento) %>% summarize(acumulado=n()) %>% spread(key=evento, value = acumulado)
+#m19 en b7
+m19_acumulado_b7<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year4_q1_48m_arm_1"
+) %>% filter(!is.na(m19_date)) %>% filter(id!='99999') %>% transmute(id, m19_date, evento="b7")
+
+#c31 en b7
+c31_acumulado_b7<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year4_q1_48m_arm_1"
+  ) %>% filter(!is.na(c31_date_2)) %>% transmute(id, c31_date_2, evento="b7")
+
+#c32 en b7
+c32_acumulado_b7<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year4_q1_48m_arm_1"
+  ) %>% filter(!is.na(c32_date_2)) %>% transmute(id, c32_date_2, evento="b7")
+
+
+#c35 en b7
+c35_acumulado_b7<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year4_q1_48m_arm_1"
+  ) %>% filter(!is.na(c35_date_2)) %>% transmute(id, c35_date_2, evento="b7")
+
+#c42 en b7
+c42_acumulado_b7<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year4_q1_48m_arm_1"
+  ) %>% filter(!is.na(c42_date)) %>% transmute(id, c42_date, evento="b7")
+
+
+#H57 en b7
+h57_acumulado_b7<- gt_hapin_II_data %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>%  transmute(id, h57_date_2,evento="b7") %>% filter(
+  !is.na(h57_date_2)
+)
+
+#C85 Mdat
+c85_acumulado_b7<-gt_hapin_II_data %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>% transmute(
+  id, c85_date, evento="b7"
+) %>% filter(
+  !is.na(c85_date)
+)
+
+#C85 Mdat secundario
+c85_2_acumulado_b7<-gt_hapin_II_data %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>% transmute(
+  id, c85_date_2, evento="b7"
+) %>% filter(
+  !is.na(c85_date_2)
+)
+
+crf<-c("M10","M11", "M19",  "C32","C35", "C42",  "C85", "C852")
+reporte_b7_clinica<-data.frame(crf)
+reporte_b7_clinica %>% mutate(
+  quincenal=case_when(
+    crf=="M10" ~ m10_acumulado_b7 %>% filter(m10_date>=fecha1 & m10_date<=fecha2) %>% count() %>% .$n,
+    crf=="M11" ~ m11_acumulado_b7 %>% filter(m11_date>=fecha1 & m11_date<=fecha2) %>% count() %>% .$n,
+    crf=="M19" ~ m19_acumulado_b7 %>% filter(m19_date>=fecha1 & m19_date<=fecha2) %>% count() %>% .$n,
+   # crf=="C31" ~ c31_acumulado_b7 %>% filter(c31_date_2>=fecha1 & c31_date_2<=fecha2) %>% count() %>% .$n,
+    crf=="C32" ~ c32_acumulado_b7 %>% filter(c32_date_2>=fecha1 & c32_date_2<=fecha2) %>% count() %>% .$n,
+    crf=="C35" ~ c35_acumulado_b7 %>% filter(c35_date_2>=fecha1 & c35_date_2<=fecha2) %>% count() %>% .$n,
+    crf=="C42" ~ c42_acumulado_b7 %>% filter(c42_date>=fecha1 & c42_date<=fecha2) %>% count() %>% .$n,
+    #crf=="H57" ~ h57_acumulado_b7 %>% filter(h57_date_2>=fecha1 & h57_date_2<=fecha2) %>% count() %>% .$n,
+    crf=="C85" ~ c85_acumulado_b7 %>% filter(c85_date>=fecha1 & c85_date<=fecha2) %>% count() %>% .$n,
+    crf=="C852" ~ c85_2_acumulado_b7 %>% filter(c85_date_2>=fecha1 & c85_date_2<=fecha2) %>% count() %>% .$n,
+    TRUE ~ NA_integer_
+  ) ,
+  acumulado = case_when(
+    
+    crf=="M10" ~ m10_acumulado_b7 %>% count() %>% .$n,
+    crf=="M11" ~ m11_acumulado_b7 %>%  count() %>% .$n,
+    crf=="M19" ~ m19_acumulado_b7 %>%  count() %>% .$n,
+   # crf=="C31" ~ c31_acumulado_b7 %>%  count() %>% .$n,
+    crf=="C32" ~ c32_acumulado_b7 %>%  count() %>% .$n,
+    crf=="C35" ~ c35_acumulado_b7 %>%  count() %>% .$n,
+    crf=="C42" ~ c42_acumulado_b7 %>%  count() %>% .$n,
+    #crf=="H57" ~ h57_acumulado_b7 %>%  count() %>% .$n,
+    crf=="C85" ~ c85_acumulado_b7 %>%  count() %>% .$n,
+    crf=="C852" ~ c85_2_acumulado_b7 %>%  count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+
+)%>%  mutate(crf=case_when(
+  crf=="M10" ~ "M10 Demografico",                                   
+  crf=="M11" ~ "M11 Comportamiento sobre Estilo de Vida",
+  crf=="M19" ~ "M19 Costos e ingresos",
+                                     #crf=="C31" ~ "C31 (estado salud bebé)",
+                                     crf=="C32" ~ "C32 Alimentación II",
+                                     crf=="C35" ~ "C35 Salud Mental II",
+   crf=="C42" ~ "C42 Vacunacion",
+   #crf=="H57" ~ "H57 Encuesta inicial II",
+    crf=="C85" ~ "C85 MDAT",
+   crf=="C852" ~ "C85 MDAT Segunda Evaluacion",
+                                    
+                                     TRUE ~ NA_character_
+                                   )) %>%
+  select("CRF"=crf, "Quincenal     " = quincenal, "Acumulado     "=acumulado) %>%
+
+   mutate(CRF=cell_spec(CRF,"html", color = "blue",align = "c", bold = T)) %>%
+  #                                    `En la quincena`= select(., contains("Quincenal")) %>% rowSums(., na.rm = TRUE),
+  #                                            `En la quincena`= cell_spec(`En la quincena`, "html", color = "blue", bold=T)
+  #                                            ) %>%
+  kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c("  ", "REPORTE AVANCES CRF'S RECLUTAMIENTO 4 AÑOS"=2))
+
+
+```
+
+##### CUESTIONARIOS DE MEDICIONES
+###### Inicio de actividad: el 12 de abril del 2023
+
+```{r}
+
+#-------------------
+# EXPOSICION b7
+CRF<-c("M14a", "M14b","C31","C33", "H41","H42", "H43", "C86")
+reporte_b7_exposicion<-data.frame(CRF)
+
+#m14a en b7
+m14a_acumulado_b7<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year4_q1_48m_arm_1"
+) %>% filter(!is.na(m14a_date )) %>% filter(id!='99999') %>% transmute(id, m14a_date, evento="b7")
+
+#m14b en b7
+m14b_acumulado_b7<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year4_q1_48m_arm_1"
+) %>% filter(!is.na(m14b_date )) %>% filter(id!='99999') %>% transmute(id, m14b_date, evento="b7")
+
+
+#c33 en b7
+c33_acumulado_b7<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year4_q1_48m_arm_1"
+  )  %>% filter(!is.na(c33_date_2)) %>% transmute(id, c33_date_2, evento="b7")
+
+#h41
+H41_b7<-gt_hapin_II_data %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>% select(id, h41_date_v2) %>% filter(
+  !is.na(h41_date_v2)
+)
+
+#h42
+H42<-gt_hapin_II_data %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>% select(id, h42_date_2) %>% filter(
+  !is.na(h42_date_2)
+)
+
+#h43
+H43<-gt_hapin_II_data %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>% select(id, h43_date_2) %>% filter(
+  !is.na(h43_date_2)
+)
+
+#C85 FOT
+C86<-gt_hapin_II_data %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>% select(
+  id, c86_date
+) %>% filter(!is.na(c86_date))
+
+blancos_realizados<-cat_blancos %>% left_join(
+  H41_b7
+) %>% filter(!is.na(h41_date_v2))
+# Después de tu código existente, agrega la nota al pie de la tabla
+blancos_realizados_nota <- paste("Blancos realizados: ", blancos_realizados %>% count() %>% .$n)
+# Aplica el estilo CSS para el color rojo a la nota al pie
+html_note <- paste0(
+  "<span style='color: red;'>", blancos_realizados_nota, "</span>"
+)
+
+reporte_b7_exposicion %>% mutate(
+  Quincenal=case_when(
+    CRF=="M14a" ~ m14a_acumulado_b7 %>% filter(m14a_date>=fecha1 & m14a_date<=fecha2) %>% count() %>% .$n,
+    CRF=="M14b" ~ m14b_acumulado_b7 %>% filter(m14b_date>=fecha1 & m14b_date<=fecha2) %>% count() %>% .$n,
+    CRF=="C31" ~ c31_acumulado_b7 %>% filter(c31_date_2>=fecha1 & c31_date_2<=fecha2) %>% count() %>% .$n,
+    CRF=="C33" ~ c33_acumulado_b7 %>% filter(c33_date_2>=fecha1 & c33_date_2<=fecha2) %>% count() %>% .$n,
+    CRF=="H41" ~ H41_b7 %>%  filter(h41_date_v2>=fecha1 & h41_date_v2<=fecha2) %>% count() %>% .$n,
+    CRF=="H42" ~ H42 %>% filter(h42_date_2>=fecha1 & h42_date_2<=fecha2) %>% count() %>% .$n,
+    CRF=="H43" ~ H43 %>% filter(h43_date_2>=fecha1 & h43_date_2<=fecha2) %>% count() %>% .$n,
+    CRF=="C86" ~ C86 %>% filter(c86_date>=fecha1 & c86_date<=fecha2) %>% count() %>% .$n,
+    TRUE ~ NA_integer_
+  ),
+   Acumulado=case_when(
+    CRF=="M14a" ~ m14a_acumulado_b7 %>% count() %>% .$n,
+    CRF=="M14b" ~ m14b_acumulado_b7 %>% count() %>% .$n,
+    CRF=="C31" ~ c31_acumulado_b7 %>%  count() %>% .$n,
+    CRF=="C33" ~ c33_acumulado_b7 %>% count() %>% .$n,
+    CRF=="H41" ~ H41_b7 %>%   count() %>% .$n,
+    CRF=="H42" ~ H42 %>%  count() %>% .$n,
+    CRF=="H43" ~ H43 %>%  count() %>% .$n,
+    CRF=="C86" ~ C86 %>%  count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+) %>%   mutate(CRF=case_when(
+                        CRF=="M14a" ~ "M14a Antropometria",                                   
+                        CRF=="M14b" ~ "M14b Presion Arterial",
+                        CRF=="C31" ~ "C31 (estado salud bebé)",
+                        CRF=="C33" ~ "C33 Antropometria Infantil",
+                        CRF=="H41" ~ "H41 Equipo Exposición II",
+                        CRF=="H42" ~ "H42 Exposure Compliance II",
+                        CRF=="H43" ~ "H43 Linea Basal de Exposición II",
+                        CRF=="C86" ~ "C86 FOT",
+                                     TRUE ~ NA_character_
+                                   )) %>%
+  select("CRF"=CRF, "Quincenal     " = Quincenal, "Acumulado     "=Acumulado) %>%
+ mutate(CRF=cell_spec(CRF,"html", color = "blue",align = "c", bold = T)) %>%
+    kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c("  ", "REPORTE AVANCES CRF'S MEDIDAS EXPOSICION b7"=2))  %>%
+  add_footnote(html_note, escape = FALSE)
+
+
+
+
+```
+
+~~~~
+ *Quincena del  "`r as.Date(f_week1) %>% format(.,"%A %d %B  %Y")`" al "`r as.Date(f_week2) %>% format(.,"%A %d %B  %Y")` "*
+~~~~
+
+
+#### INDICADORES
+##### HOGARES PROGRAMADOS POR MES: "HAPIN-II 4 AÑOS"
+```{r avance_anual, echo=FALSE}
+
+#esperados en 36 meses a la fecha del reporte
+esperados_48meses<-gt_emory_data_arm2 %>% filter(!is.na(c30_dob)) %>% select(id, c30_dob) %>% mutate(
+  ventana=as.Date(c30_dob) + lubridate::days(330),
+  un_anio=as.Date(c30_dob) + lubridate::days(365)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_c)) %>% select(id, e3_date_exit_c, e3_reason_c)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit)) %>% select(id, e3_date_exit, e3_reason)
+) %>% mutate(
+  descartar=case_when(
+    e3_reason=="8"  ~  "Si",
+    TRUE ~ "No"
+  )
+) %>% filter(descartar=="No") %>% select(id, fecha_nacimiento=c30_dob) %>% mutate(
+  `12_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*12)),
+  `24_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*24)),
+  `36_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*36)),
+  `48_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.416*48)), # se tomó ese valor por mes para sumar 365 dias
+  `60_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*60))
+) %>% select(id, fecha_48m=`48_meses`)
+
+dt_esperados_48m<-esperados_48meses %>%  mutate( Mes=format(fecha_48m, "%B")) %>% group_by(
+  Anio=lubridate::year(fecha_48m),
+  mes=lubridate::month(fecha_48m),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Esperados=n) 
+
+#identificar los hogares fuera de ventana
+dt_fuera_ventana<-consentimientos_48m %>% mutate(fuera_ventana=if_else(
+  grepl("FUERA DE VENTANA",s4_reason_c), "1", NA_character_
+)) %>%  mutate( Mes=format(s4_date, "%B")) %>% filter(!is.na(fuera_ventana)) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Fueraventana=n)
+
+#realizados que tienen s4 por mes
+dt_realizados_48m<-consentimientos_48m %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Realizados=n)
+
+#Consentidos por mes
+dt_consentidos_48m<-consentimientos_48m %>% filter(!is.na(consentidos)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Consentidos=n)
+
+#rechazados por mes
+dt_rechazados_48m<-consentimientos_48m %>% filter(!is.na(rechazado)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, `No consintieron`=n)
+
+#migraciones
+dt_migraciones_48m<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(visit=="b7") %>%  select(id, s4_date, s4_reason_c) %>% filter(!is.na(s4_reason_c)) %>% mutate(
+  razon=toupper(s4_reason_c),
+  migracion=case_when(
+    grepl("FUERA DEL AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("FUERA DEL AREA DE ESTUDIO", razon) ~ "1",
+    grepl("AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("AREA DE ESTUDIO", razon) ~ "1",
+    grepl("MIGRO", razon) ~ "1",
+    grepl("MIGRÓ", razon) ~ "1",
+    grepl("SE MUDO", razon) ~ "1",
+    grepl("FUERA DEL ÁREA", razon) ~ "1",
+    grepl("FUERA DEL ESTUDIO", razon) ~ "1",
+    grepl("MIGRACIÓN", razon) ~ "1",
+    grepl("MIGRACION", razon) ~ "1",
+    grepl("MIGRARON", razon) ~ "1",
+    grepl("DE VIAJE", razon) ~ "1",
+     grepl("MUDARON", razon) ~ "1",
+
+    TRUE ~ NA_character_
+  )
+) %>% filter(!is.na(migracion)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Migraciones=n)
+
+
+#integrar tabla programados por mes, con modificaciones ----
+dt_esperados_48m %>% 
+  left_join(
+  dt_realizados_48m %>% mutate(
+    acumulado_realizados = cumsum(as.numeric(Realizados))
+
+  )
+) %>%
+  mutate(
+  acumulado_esperados=cumsum(as.numeric(Esperados))
+) %>% 
+  mutate(
+  p_realizados=percent(as.numeric(acumulado_realizados) / as.numeric(acumulado_esperados), 1)
+) %>% left_join(
+  dt_fuera_ventana %>% mutate(
+    acumulado_fueraventana=cumsum(as.numeric(Fueraventana))
+  )
+) %>% 
+  mutate(
+  p_fueraventana=percent(as.numeric(Fueraventana) / as.numeric(Esperados), 1),
+) %>% 
+  left_join(
+  dt_consentidos_48m %>% mutate(
+    acumulado_consentidos=cumsum(as.numeric(Consentidos))
+  )
+) %>% mutate(
+  p_consentidos=percent(as.numeric(Consentidos) / as.numeric(Realizados), 1),
+) %>%
+  transmute(
+  `Año`=Anio,
+  Mes=toupper(Mes),
+  `Programados`=Esperados,
+  `Acumulado Programados` = paste0(acumulado_esperados, " (", percent(acumulado_esperados/750,1),")"),
+  #`Fuera de Ventana`=if_else(is.na(Fueraventana), NA_character_, as.character(Fueraventana)),
+  
+  `Visitados`= if_else(is.na(Realizados), NA_character_, as.character(Realizados )),
+  `Acumulado Visitados(%)`= if_else(is.na(Realizados), NA_character_, paste0(as.character(acumulado_realizados)," (",as.character(p_realizados),")")
+                                            ),
+  `Consintieron(%)`= if_else(is.na(Consentidos), NA_character_, paste0(Consentidos," (", p_consentidos, ")")),
+  `Acumulados Consintieron(%)`= if_else(is.na(Consentidos), NA_character_, paste0(acumulado_consentidos, " (", percent(acumulado_consentidos/acumulado_realizados),")") )
+
+)%>% kable(caption = "<center>REPORTE MENSUAL <br>
+                  DE AVANCES</center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria")
+
+
+```
+
+
+
+##### RECLUTAMIENTOS Y MEDIDAS
+```{r}
+dt_c31_h41_categorias_b7<-gt_hapin_II_data %>% filter(!is.na(m10_date)) %>% filter(visit=="b7") %>%  select(id, m10_date) %>% left_join(
+  esperados_48meses
+) %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(h41_date_v2)) %>% filter(visit=="b7") %>% select(id, h41_date_v2)
+) %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(c85_date)) %>% filter(visit=="b7") %>% transmute(id, c85_date=as.Date(c85_date))
+) %>% 
+  mutate(
+  dias_m10_esperado=as.numeric(as.Date(m10_date) - as.Date(fecha_48m)),
+  dias_h41_esperado=if_else(!is.na(h41_date_v2),as.numeric(as.Date(h41_date_v2) - as.Date(fecha_48m)),NA_real_),
+  dias_mdat_esperado=if_else(!is.na(c85_date), as.numeric(c85_date) - as.numeric(as.Date(fecha_48m)), NA_real_ ),
+  Categoria_m10= case_when(
+    dias_m10_esperado<= 30 ~ "<=30",
+    dias_m10_esperado>30 & dias_m10_esperado<=90 ~ "31-90",
+    dias_m10_esperado>90 ~ ">90",
+  ),
+  Categoria_h41= case_when(
+    dias_h41_esperado<= 30 ~ "<=30",
+    dias_h41_esperado>30 & dias_h41_esperado<=90 ~ "31-90",
+    dias_h41_esperado>90 ~ ">90",
+  ),
+  Categoria_mdat= case_when(
+    dias_mdat_esperado<= 30 ~ "<=30",
+    dias_mdat_esperado>30 & dias_mdat_esperado<=90 ~ "31-90",
+    dias_mdat_esperado>90 ~ ">90",
+  ),
+   Mes=toupper( format(m10_date, "%B") )
+
+) 
+
+
+
+ cat_quincenal<-dt_c31_h41_categorias_b7 %>% filter(m10_date>=f_week1) %>% group_by(Categoria_m10) %>% count() %>% ungroup() %>% select(categoria=Categoria_m10, cantidad_m10=n) %>% full_join(
+   dt_c31_h41_categorias_b7 %>% filter(h41_date_v2>=f_week1) %>% group_by(Categoria_h41) %>% count() %>% ungroup() %>% select(categoria=Categoria_h41, cantidad_h41=n)
+ ) %>% full_join(
+   dt_c31_h41_categorias_b7 %>% filter(c85_date>=f_week1) %>% group_by(Categoria_mdat) %>% count() %>% ungroup() %>% select(categoria=Categoria_mdat, cantidad_c85=n)
+ )
+ 
+ cat_quincenal<-cat_quincenal%>% mutate_all(., ~replace(.,is.na(.),0))    
+ 
+ dt_elaborados_quincenal<-c( "<=30",
+               "31 - 90",
+                "> 90"
+               ) %>% data.frame(Categorias=.) 
+ 
+ #verifiar siempre el código para mayores a 90 dias c31 y h41
+ #var_91_1<-cat_quincenal %>% filter(categoria==">90") %>% select(cantidad_c31) %>% .$cantidad_c31
+ #codigo antiguo ----
+ dt_avances_quincenal<-dt_elaborados_quincenal %>% mutate(
+   `Quincenal`=case_when(
+     #Categorias=="<=30" ~ cat_quincenal %>% filter(categoria=="<=30") %>% select(cantidad_m10) %>% .$cantidad_m10,
+       Categorias=="31 - 90" ~ cat_quincenal %>% filter(categoria=="31-90") %>% select(cantidad_m10) %>% .$cantidad_m10,
+  # Categorias=="> 90" ~  cat_quincenal %>% filter(categoria==">90") %>% select(cantidad_c31) %>% .$cantidad_c31
+ ),
+ `Acumulado`=case_when(
+   Categorias=="<=30" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_m10=="<=30") %>%  group_by() %>% count() %>% .$n,
+    Categorias=="31 - 90" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_m10=="31-90") %>%  group_by() %>% count() %>% .$n,
+   Categorias=="> 90" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_m10==">90") %>%  group_by() %>% count() %>% .$n
+ ),
+ ` Quincenal `=case_when(
+     #Categorias=="<=30" ~ cat_quincenal %>% filter(categoria=="<=30") %>% select(cantidad_h41) %>% .$cantidad_h41,
+       Categorias=="31 - 90" ~ cat_quincenal %>% filter(categoria=="31-90") %>% select(cantidad_h41) %>% .$cantidad_h41,
+     # Categorias=="> 90" ~ cat_quincenal %>% filter(categoria==">90") %>% select(cantidad_h41) %>% .$cantidad_h41
+ ),
+ ` Acumulado `=case_when(
+   Categorias=="<=30" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_h41=="<=30") %>%  group_by() %>% count() %>% .$n,
+    Categorias=="31 - 90" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_h41=="31-90") %>%  group_by() %>% count() %>% .$n,
+   Categorias=="> 90" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_h41==">90") %>%  group_by() %>% count() %>% .$n
+ ),
+ #agregar MDAT
+ `  Quincenal  `=case_when(
+    # Categorias=="<=30" ~ cat_quincenal %>% filter(categoria=="<=30") %>% select(cantidad_c85) %>% .$cantidad_c85,
+       Categorias=="31 - 90" ~  cat_quincenal %>% filter(categoria=="31-90") %>% select(cantidad_c85) %>% .$cantidad_c85,
+     # Categorias=="> 90" ~ cat_quincenal %>% filter(categoria==">90") %>% select(cantidad_h41) %>% .$cantidad_h41
+ ),
+ `  Acumulado  `=case_when(
+   Categorias=="<=30" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_mdat=="<=30") %>%  group_by() %>% count() %>% .$n,
+    Categorias=="31 - 90" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_mdat=="31-90") %>%  group_by() %>% count() %>% .$n,
+   Categorias=="> 90" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_mdat==">90") %>%  group_by() %>% count() %>% .$n,
+ )
+ )
+
+#CODIGO NUEVO --
+# dt_avances_quincenal <- dt_elaborados_quincenal %>%
+#   mutate(
+#     Quincenal = case_when(
+#       Categorias == "<=30" ~ coalesce(cat_quincenal %>% filter(categoria == "<=30") %>% pull(cantidad_m10) %>% first(), 0),
+#       Categorias == "31 - 90" ~ coalesce(cat_quincenal %>% filter(categoria == "31-90") %>% pull(cantidad_m10) %>% first(), 0),
+#       Categorias == "> 90" ~ coalesce(cat_quincenal %>% filter(categoria == ">90") %>% pull(cantidad_c85) %>% first(), 0),
+#       TRUE ~ 0
+#     ),
+#     Acumulado = case_when(
+#       Categorias == "<=30" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_m10 == "<=30") %>% summarise(n = n()) %>% pull(n) %>% first(),
+#       Categorias == "31 - 90" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_m10 == "31-90") %>% summarise(n = n()) %>% pull(n) %>% first(),
+#       Categorias == "> 90" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_m10 == ">90") %>% summarise(n = n()) %>% pull(n) %>% first(),
+#       TRUE ~ 0
+#     ),
+#     ` Quincenal ` = case_when(
+#       Categorias == "<=30" ~ coalesce(cat_quincenal %>% filter(categoria == "<=30") %>% pull(cantidad_h41) %>% first(), 0),
+#       Categorias == "31 - 90" ~ coalesce(cat_quincenal %>% filter(categoria == "31-90") %>% pull(cantidad_h41) %>% first(), 0),
+#       Categorias == "> 90" ~ coalesce(cat_quincenal %>% filter(categoria == ">90") %>% pull(cantidad_h41) %>% first(), 0),
+#       TRUE ~ 0
+#     ),
+#     ` Acumulado ` = case_when(
+#       Categorias == "<=30" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_h41 == "<=30") %>% summarise(n = n()) %>% pull(n) %>% first(),
+#       Categorias == "31 - 90" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_h41 == "31-90") %>% summarise(n = n()) %>% pull(n) %>% first(),
+#       Categorias == "> 90" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_h41 == ">90") %>% summarise(n = n()) %>% pull(n) %>% first(),
+#       TRUE ~ 0
+#     ),
+#     `  Quincenal  ` = case_when(
+#       Categorias == "<=30" ~ coalesce(cat_quincenal %>% filter(categoria == "<=30") %>% pull(cantidad_c85) %>% first(), 0),
+#       Categorias == "31 - 90" ~ coalesce(cat_quincenal %>% filter(categoria == "31-90") %>% pull(cantidad_c85) %>% first(), 0),
+#       Categorias == "> 90" ~ coalesce(cat_quincenal %>% filter(categoria == ">90") %>% pull(cantidad_c85) %>% first(), 0),
+#       TRUE ~ 0
+#     ),
+#     `  Acumulado  ` = case_when(
+#       Categorias == "<=30" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_mdat == "<=30") %>% summarise(n = n()) %>% pull(n) %>% first(),
+#       Categorias == "31 - 90" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_mdat == "31-90") %>% summarise(n = n()) %>% pull(n) %>% first(),
+#       Categorias == "> 90" ~ dt_c31_h41_categorias_b7 %>% filter(Categoria_mdat == ">90") %>% summarise(n = n()) %>% pull(n) %>% first(),
+#       TRUE ~ 0
+#     )
+#   )
+
+dt_avances_quincenal<-dt_avances_quincenal %>% mutate_all(., ~replace(.,is.na(.),0))   
+
+dt_avances_quincenal_total<-dt_avances_quincenal %>% bind_rows(
+ apply(X= dt_avances_quincenal %>% transmute(Acumulado=as.numeric(Acumulado), ` Acumulado `=as.numeric(` Acumulado `),`  Acumulado  `=as.numeric(`  Acumulado  `)),  MARGIN=2, FUN= sum) 
+)
+
+dt_avances_quincenal_integrado<-dt_avances_quincenal_total %>% mutate(
+ Categorias= if_else(is.na(Categorias), "Total",Categorias)
+) 
+ totales<-dt_avances_quincenal_integrado %>% filter(Categorias=="Total") %>% select(Total_m10=Acumulado, Total_h41=` Acumulado `, Total_c85=`  Acumulado  `)
+
+ dt_avances_final<-dt_avances_quincenal_integrado %>% mutate(
+   p_m10=case_when(
+     Categorias!="Total" ~ percent(as.numeric(Acumulado) / totales$Total_m10)
+   ),
+   p_h41=case_when(
+     Categorias!="Total" ~ percent(as.numeric(` Acumulado `) / totales$Total_h41 )
+   ),
+   p_c85=case_when(
+     Categorias!="Total" ~ percent(as.numeric(`  Acumulado  `) / totales$Total_c85 )
+   )
+ ) %>% transmute(
+   Categorias, Quincenal, Acumulado= paste0(Acumulado, " (", p_m10,")"),
+   ` Quincenal `, 
+   ` Acumulado `=paste0(` Acumulado `," (", p_h41,")"),
+   `  Quincenal  `, 
+   `  Acumulado  `=paste0(`  Acumulado  `," (", p_c85,")")
+ )
+
+dt_avances_final %>% mutate(
+  Acumulado=if_else(
+    Categorias=="Total", substr(Acumulado,1,3), Acumulado
+  ),
+   ` Acumulado `=if_else(
+    Categorias=="Total", substr(` Acumulado `,1,3), ` Acumulado `
+  ),
+  `  Acumulado  `=if_else(
+    Categorias=="Total", substr(`  Acumulado  `,1,3), `  Acumulado  `
+  )
+) %>% 
+kable(caption = "<center>REPORTE CONSENTIDOS Y MEDIDAS<br>
+                  QUINCENAL Y ACUMULADO </center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria") %>% column_spec(3, width = "2cm",  bold = T) %>% column_spec(5, width = "5cm",  bold = T)  %>% column_spec(7, width = "2cm",  bold = T) %>% row_spec(1, bold=F, background = "#11e88d") %>% row_spec(2, bold=F, background = "#edcc46") %>% row_spec(3, bold=F, background =  "#df455c") %>% row_spec(4, bold=T) %>% 
+ add_header_above(c("    ", "CONSENTIDOS (M10) "=2, "MEDIDAS (H41) "=2 , " MDAT (C85) "=2 ))
+
+#dt_c31_h41_categorias %>% writexl::write_xlsx("output/revision_rojos.xlsx")
+
+```
+
+```{r}
+#Consentidos por mes
+dt_consentidos_48m<-consentimientos_48m %>% filter(!is.na(consentidos)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Consentidos=n)
+
+#rechazados por mes
+dt_rechazados_48m<-consentimientos_48m %>% filter(!is.na(rechazado)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, `No consintieron`=n)
+
+#migraciones
+dt_migraciones_48m<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(visit=="b7") %>%  select(id, s4_date, s4_reason_c) %>% filter(!is.na(s4_reason_c)) %>% mutate(
+  razon=toupper(s4_reason_c),
+  migracion=case_when(
+    grepl("FUERA DEL AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("FUERA DEL AREA DE ESTUDIO", razon) ~ "1",
+    grepl("AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("AREA DE ESTUDIO", razon) ~ "1",
+    grepl("MIGRO", razon) ~ "1",
+    grepl("MIGRÓ", razon) ~ "1",
+    grepl("SE MUDO", razon) ~ "1",
+    grepl("FUERA DEL ÁREA", razon) ~ "1",
+    grepl("FUERA DEL ESTUDIO", razon) ~ "1",
+    grepl("MIGRACIÓN", razon) ~ "1",
+    grepl("MIGRACION", razon) ~ "1",
+    grepl("MIGRARON", razon) ~ "1",
+    grepl("DE VIAJE", razon) ~ "1",
+     grepl("MUDARON", razon) ~ "1",
+  
+    
+    TRUE ~ "revisar contenido"
+  )
+) %>% filter(!is.na(migracion)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Migraciones=n)
+
+dt_rechazos_motivos_b7<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(visit=="b7") %>% select(
+  id, s4_date, s4_consent_c, s4_reason_c
+) %>% filter(s4_consent_c=="0") %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e3_date)) %>% filter(visit=="b7") %>%  select(id, e3_reason)
+) %>% mutate(
+  motivo_rechazo=recode(e3_reason,
+                        "3"="Retiro voluntario",
+                        "4"="Retirada por el equipo de estudio",
+                        "5"="Se mudó del área de estudio",
+                        "6"="Muerte de la madre",
+                        "7"="Muerte Infantil",
+                        "8"="Fuera de la ventana",
+                        "555"="Otro")
+)  %>% mutate(
+  razon=toupper(s4_reason_c),
+  migracion=case_when(
+    grepl("FUERA DEL AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("FUERA DEL AREA DE ESTUDIO", razon) ~ "1",
+    grepl("AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("AREA DE ESTUDIO", razon) ~ "1",
+    grepl("MIGRO", razon) ~ "1",
+    grepl("MIGRÓ", razon) ~ "1",
+    grepl("SE MUDO", razon) ~ "1",
+    grepl("FUERA DEL ÁREA", razon) ~ "1",
+    grepl("FUERA DEL ESTUDIO", razon) ~ "1",
+    grepl("MIGRACIÓN", razon) ~ "1",
+    grepl("MIGRACION", razon) ~ "1",
+    grepl("MIGRARON", razon) ~ "1",
+    grepl("DE VIAJE", razon) ~ "1",
+     grepl("MUDARON", razon) ~ "1",
+    
+    TRUE ~ NA_character_
+  ),
+  no_autoriza_padre_familiar=case_when(
+   grepl("PADRE ", razon) ~ "1", 
+   grepl("PERMISO", razon) ~ "1",
+   grepl("ESPOSO", razon) ~ "1", 
+    grepl("FAMILIARES NO", razon) ~ "1",
+    grepl("FAMILIARES QUE", razon) ~ "1",
+    grepl("FAMILIAR QUIEN", razon) ~ "1",
+    grepl("FAMILIAR NO ESTA", razon) ~ "1"
+  ),
+  falta_valor_al_estudio=case_when(
+   grepl("LOS CAMBIOS ", razon) ~ "1",
+   grepl("CAMBIOS EN EL PROYECTOS ", razon) ~ "1",
+   grepl("CAMBIOS EN EL PROYECTOS", razon) ~ "1",
+   grepl("CAMBIOS EN EL PROYECTO", razon) ~ "1",
+   grepl("NO LE INTERESA SEGUIR CON CAMBIOS EN EL PROYECTO", razon) ~ "1",
+   grepl("NO DESEA PARTICIPAR MAS", razon) ~ "1",
+   grepl("POCA LA RECOMPENSA", razon) ~ "1",
+   grepl("VALOR EN EL ESTUDIO", razon) ~ "1",
+  ),
+  no_tiene_tiempo=case_when(
+    grepl("NO TIENE TIEMPO", razon) ~ "1",
+    grepl("NO TENER TIEMPO", razon) ~ "1",
+  )
+)
+
+ 
+#aramar tabla de rechazos con sumas por columna
+tabla_rechazos_b7<-dt_consentidos_48m %>% left_join(
+  dt_rechazados_48m
+)%>% left_join(
+  dt_rechazos_motivos_b7 %>% filter(!is.na(migracion)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           Migraciones=n) 
+) %>% left_join(
+  dt_rechazos_motivos_b7 %>% filter(!is.na(no_autoriza_padre_familiar)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           no_autoriza_padre_familiar=n) 
+) %>% left_join(
+  dt_rechazos_motivos_b7 %>% filter(!is.na(falta_valor_al_estudio)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           falta_valor_al_estudio=n) 
+)%>% left_join(
+  dt_rechazos_motivos_b7 %>% filter(!is.na(no_tiene_tiempo)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           no_tiene_tiempo=n) 
+)
+
+#cambiar NA por cero para poder hace rla suma
+tabla_rechazos_b7<-tabla_rechazos_b7 %>%  mutate_all(., ~replace(.,is.na(.),0))
+
+#agregar sumas
+tabla_rechazos_b7_totales<-tabla_rechazos_b7 %>% 
+ bind_rows(
+ apply(X= tabla_rechazos_b7 %>% transmute(
+  Consentidos, `No consintieron`, Migraciones, no_autoriza_padre_familiar,
+  falta_valor_al_estudio, no_tiene_tiempo
+ ),  MARGIN=2, FUN= sum)
+)
+
+#agregar proporciones
+tabla_rechazos_b7_totales %>% 
+  mutate(
+    p_no_consintieron= percent(as.numeric(`No consintieron`)/ as.numeric(Consentidos),1),
+  p_migraciones=percent(as.numeric(Migraciones) / as.numeric(`No consintieron`),1),
+   p_no_autoriza_padre=percent(as.numeric(no_autoriza_padre_familiar) / as.numeric(`No consintieron`),1),
+  p_falta_valor_al_estudio=percent(as.numeric(falta_valor_al_estudio) / as.numeric(`No consintieron`),1),
+  p_no_tiene_tiempo=percent(as.numeric(no_tiene_tiempo) / as.numeric(`No consintieron`),1)
+)%>% transmute(
+  `Año`=if_else(is.na(Anio),"",as.character(Anio)),
+  Mes=if_else(is.na(Mes),"Total",Mes),
+  Consentidos,
+  `No consintieron(%)`=if_else(is.na(`No consintieron`), NA_character_, paste0(`No consintieron`,"(",p_no_consintieron,")")),
+   Migraciones=if_else(is.na(Migraciones), NA_character_, paste0(Migraciones,"(",p_migraciones,")")),
+  `No autoriza padre o familiar(%)`=if_else(is.na(no_autoriza_padre_familiar), NA_character_, paste0(no_autoriza_padre_familiar,"(",p_no_autoriza_padre,")")),
+   `Falta valor al estudio(%)`=if_else(is.na(falta_valor_al_estudio), NA_character_, paste0(falta_valor_al_estudio,"(",p_falta_valor_al_estudio,")")),
+  `No tiene tiempo`=if_else(is.na(no_tiene_tiempo), NA_character_, paste0(no_tiene_tiempo,"(",p_no_tiene_tiempo,")"))
+) %>% kable(caption = "<center>REPORTE MENSUAL <br>
+                  DE RECHAZOS</center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria") 
+
+
+```
+
+~~~~
+ *Quincena del  "`r as.Date(f_week1) %>% format(.,"%A %d %B  %Y")`" al "`r as.Date(f_week2) %>% format(.,"%A %d %B  %Y")` "*
+~~~~
+
+
+
+
+### INTENSIVO (54 MESES)
+
+#### 54 MESES (Intensivo)
+
+```{r}
+#catalogo intensivo -----
+
+
+#intensivos realizados
+
+
+#indicadores intensivo -----
+
+#datos intensivos
+cat_intensivos<-cat_intensivos %>% mutate_all(as.character)
+cat_intensivos<-cat_intensivos %>% mutate(
+  fecha_visita=as.Date(fecha_nacimiento)+lubridate::days(1620)
+  )
+
+dt_intensivos<-cat_intensivos %>% arrange(fecha_visita) %>% mutate(Mes=toupper(format(fecha_visita, "%B"))) %>%  group_by(
+  Anio=lubridate::year(as.Date(fecha_visita)),
+  mes=lubridate::month(as.Date(fecha_visita)),
+  Mes
+) %>% count() %>% ungroup() %>% select(
+  Anio, Mes, Programados=n
+) 
+
+realizados_intensivo_54m<-gt_osm_uvg_data %>% filter(!is.na(hapi_date)) %>% select(id, fecha_visita=hapi_date, iniciales=hapi_by)
+
+realizados_intensivo_agrupado<-realizados_intensivo_54m %>% arrange(fecha_visita) %>% mutate(Mes=toupper(format(fecha_visita, "%B"))) %>%  group_by(
+  Anio=lubridate::year(as.Date(fecha_visita)),
+  mes=lubridate::month(as.Date(fecha_visita)),
+  Mes
+) %>% count() %>% ungroup() %>% select(
+  Anio, Mes, Realizados=n
+) 
+
+dt_intensivos %>% left_join(
+  realizados_intensivo_agrupado
+) %>% mutate(
+  Programados=as.numeric(Programados),
+  Acumulados_Programados=cumsum(as.numeric(Programados)),
+  Realizados=as.numeric(Realizados),
+  Acumulado_Realizado=cumsum(as.numeric(Realizados)),
+  p_acu_realizado=percent(Acumulado_Realizado/Acumulados_Programados),
+  p_acum_prog=percent(Acumulados_Programados/73)
+) %>% transmute(
+  Anio, Mes, Programados, `Acumulados Programados`=paste0(Acumulados_Programados," (",p_acum_prog,")"),
+  Realizados,
+  `Acumulados Realizados`=paste0(Acumulado_Realizado," (",p_acu_realizado,")")
+) %>% kable(caption = "<center> REPORTE AVANCE <br>
+                  INTENSIVO 54M</center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria")
+
+
+```
+
+
+### 5 AÑOS (60 MESES) {.tabset}
+#### AVANCES
+```{r}
+# consentimientos_hapinII<-gt_hapin_II_data %>% group_by(id,s4_consent, s4_consent_c, s4_owa ) %>% count()
+
+#esperados en 60 meses a la fecha del reporte
+candidatos_60m_general<-gt_emory_data_arm2 %>% filter(!is.na(c30_dob)) %>% select(id, c30_dob) %>% mutate(
+  ventana=as.Date(c30_dob) + lubridate::days(330),
+  un_anio=as.Date(c30_dob) + lubridate::days(365)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_c)) %>% select(id, e3_date_exit_c, e3_reason_c)
+) %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(e3_date_exit)) %>% select(id, e3_date_exit, e3_reason)
+) %>% mutate(
+  descartar=case_when(
+    e3_reason=="8"  ~  "Si",
+    TRUE ~ "No"
+  )
+) %>% filter(descartar=="No") %>% select(id, fecha_nacimiento=c30_dob) %>% mutate(
+  `60_meses`= as.Date(fecha_nacimiento) + lubridate::days(round(30.25*60))
+) %>% select(id, fecha_60m=`60_meses`)
+#quitar fallecimientos antes de 60 meses
+candidatos_60m_general<-candidatos_60m_general %>% anti_join(
+  gt_hapin_II_data %>% filter(redcap_event_name=="year4_q1_48m_arm_1") %>%  filter(!is.na(e2_date)) %>% select(id, e2_date, e2_participant, e2_title, redcap_event_name) %>% filter(!is.na(e2_date)) %>% filter(e2_participant=="3") %>% filter(e2_title=="7") %>% select(id)
+)
+candidatos_60m<-candidatos_60m_general
+candidatos_60m<-candidatos_60m %>% filter(as.Date(fecha_60m)<=fecha2)
+
+
+#conteo consentimientos hapin II 36 meses 
+#marcar los consentidos y rechazadas
+ consentimientos_60m<- gt_hapin_II_data %>% filter(redcap_event_name=="year5_arm_1") %>% select(
+      id, s4_date, s4_consent_c
+    ) %>%left_join(
+   #identificar los no visitados por estar fuera de ventana
+    gt_hapin_II_data %>% filter(redcap_event_name=="year5_arm_1") %>% filter(!is.na(s4_reason_c)) %>% select(id, s4_reason_c) %>% filter(grepl("FUERA DE VENTANA", s4_reason_c)==TRUE)
+    ) %>% 
+   mutate(
+      consentidos=if_else(s4_consent_c=="1", "1", NA_character_),
+      rechazado=if_else(s4_consent_c=="0" & is.na(s4_reason_c),"1", NA_character_ ),
+      novisitado=if_else(!is.na(s4_reason_c),"1", NA_character_ ),
+
+    )
+
+ #E3 en B8
+e3_acumulado_b8<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year5_arm_1"
+) %>% filter(!is.na(e3_date)) %>% transmute(id, e3_date, evento="b8") %>% left_join(
+  consentimientos_60m %>% filter(consentidos=="1") %>% select(id, consentidos)
+) %>% filter(!is.na(consentidos))
+
+    #armar la tabla de consentimientos 36m
+actividad_consentimientos<-c( "Esperados",
+                              "S4 realizados",
+                              "--Consentidos",
+                              "--Rechazados",
+                              #"--Fuera de Ventana (no visitados)",
+                               "Salidas Anticipadas"
+                        ) 
+
+consentimientos_60m_15nal<-consentimientos_60m %>% filter(s4_date>=fecha1 & s4_date<=fecha2)
+
+reporte_consentimientos_60m<-data.frame(Actividad=actividad_consentimientos) 
+reporte_consentimientos_60m %>% mutate(
+  Quincenal = case_when(
+    Actividad =="Esperados" ~  candidatos_60m %>% filter(
+      as.Date(fecha_60m)>=fecha1 & as.Date(fecha_60m)<=fecha2 
+    ) %>%  count() %>% .$n,
+    Actividad =="--Consentidos" ~  consentimientos_60m_15nal %>% filter(consentidos=="1") %>%  count() %>% .$n,
+    Actividad=="--Rechazados" ~ consentimientos_60m_15nal %>% filter(rechazado == "1") %>% 
+      count() %>% .$n,
+    #Actividad=="--Fuera de Ventana (no visitados)" ~ consentimientos_48m_15nal %>% filter(novisitado == "1") %>% 
+    #  count() %>% .$n,
+    Actividad=="S4 realizados" ~ consentimientos_60m_15nal %>% filter(!is.na(s4_date)) %>% count() %>% .$n,
+    Actividad=="Salidas Anticipadas" ~ e3_acumulado_b8 %>% filter(e3_date>=fecha1 & e3_date<=fecha2) %>% count() %>% .$n,
+    TRUE ~ NA_integer_
+    
+  ),
+  Acumulado= case_when(
+    Actividad =="Esperados" ~  candidatos_60m %>% count() %>% .$n,
+     Actividad =="--Consentidos" ~  consentimientos_60m %>% filter(consentidos=="1") %>%  count() %>% .$n,
+    Actividad=="--Rechazados" ~ consentimientos_60m %>% filter(rechazado == "1") %>% 
+      count() %>% .$n,
+   # Actividad=="--Fuera de Ventana (no visitados)" ~ consentimientos_48m %>% filter(novisitado == "1") %>% 
+     # count() %>% .$n,
+    Actividad=="S4 realizados" ~ consentimientos_60m %>% filter(!is.na(s4_date)) %>% count() %>% .$n,
+    Actividad=="Salidas Anticipadas" ~ e3_acumulado_b8 %>%  count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+) %>%   mutate(Actividad=cell_spec(Actividad,"html", color = "blue",align = "c", bold = T)) %>%
+ kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c(" ", "REPORTE VISITAS HAPIN II 60m"=2))
+
+var_candidatos<-candidatos_60m %>% count() %>% .$n
+var_realizados <-consentimientos_60m %>% filter(!is.na(s4_date)) %>% count() %>% .$n
+var_consentidas<-consentimientos_60m %>% filter(consentidos=="1") %>% count() %>% .$n
+var_rechazadas<-consentimientos_60m %>% filter(rechazado=="1") %>% count() %>% .$n
+
+```
+
+~~~~
+Resumen:
+Visitas esperadas a la fecha: "`r candidatos_60m %>% count() %>% .$n `" (Segun cumple años)
+Visitas realizadas a la fecha: "`r consentimientos_60m %>% filter(!is.na(s4_date)) %>% count() %>% .$n `"
+Proporción de realizadas sobre esperadas: `r percent(var_realizados / var_candidatos)`
+ - Proporción Consentidas: `r percent( var_consentidas / var_realizados)`
+ - Proporción Rechazadas: `r percent(var_rechazadas / var_realizados)`
+~~~~
+
+
+##### RECLUTAMIENTO Y CUESTIONARIOS
+###### Inicio de actividad: el 21 de febrero del 2024
+```{r}
+#m10 en b7
+m10_acumulado_b8<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year5_arm_1"
+) %>% filter(!is.na(m10_date)) %>% filter(id!='99999') %>% transmute(id, m10_date, evento="b8")
+#m11 en b7
+m11_acumulado_b8<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year5_arm_1"
+  ) %>% filter(!is.na(m11_date)) %>% filter(id!='99999') %>% transmute(id, m11_date, evento="b8")
+#group_by(evento) %>% summarize(acumulado=n()) %>% spread(key=evento, value = acumulado)
+#m19 en b7
+m19_acumulado_b8<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year5_arm_1") %>% filter(!is.na(m19_date)) %>% filter(id!='99999') %>% transmute(id, m19_date, evento="b8")
+
+#c31 en b7
+c31_acumulado_b8<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year5_arm_1"
+  ) %>% filter(!is.na(c31_date_2)) %>% transmute(id, c31_date_2, evento="b8")
+
+#c32 en b7
+c32_acumulado_b8<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year5_arm_1"
+  ) %>% filter(!is.na(c32_date_2)) %>% transmute(id, c32_date_2, evento="b8")
+
+
+#c35 en b7
+c35_acumulado_b8<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year5_arm_1"
+  ) %>% filter(!is.na(c35_date_2)) %>% transmute(id, c35_date_2, evento="b8")
+
+#c42 en b7
+c42_acumulado_b8<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year5_arm_1"
+  ) %>% filter(!is.na(c42_date)) %>% transmute(id, c42_date, evento="b8")
+
+
+#H57 en b7
+h57_acumulado_b8<- gt_hapin_II_data %>% filter(redcap_event_name=="year5_arm_1") %>%  transmute(id, h57_date_2,evento="b8") %>% filter(
+  !is.na(h57_date_2)
+)
+
+#C85 Mdat
+c85_acumulado_b8<-gt_hapin_II_data %>% filter(redcap_event_name=="year5_arm_1") %>% transmute(
+  id, c85_date, evento="b8"
+) %>% filter(
+  !is.na(c85_date)
+)
+
+#C85 Mdat secundario
+c85_2_acumulado_b8<-gt_hapin_II_data %>% filter(redcap_event_name=="year5_arm_1") %>% transmute(
+  id, c85_date_2, evento="b8"
+) %>% filter(
+  !is.na(c85_date_2)
+)
+
+crf<-c("M10","M11", "M19",  "C32","C35", "C42",  "C85", "C852")
+reporte_b8_clinica<-data.frame(crf)
+reporte_b8_clinica %>% mutate(
+  quincenal=case_when(
+    crf=="M10" ~ m10_acumulado_b8 %>% filter(m10_date>=fecha1 & m10_date<=fecha2) %>% count() %>% .$n,
+    crf=="M11" ~ m11_acumulado_b8 %>% filter(m11_date>=fecha1 & m11_date<=fecha2) %>% count() %>% .$n,
+    crf=="M19" ~ m19_acumulado_b8 %>% filter(m19_date>=fecha1 & m19_date<=fecha2) %>% count() %>% .$n,
+   # crf=="C31" ~ c31_acumulado_b7 %>% filter(c31_date_2>=fecha1 & c31_date_2<=fecha2) %>% count() %>% .$n,
+    crf=="C32" ~ c32_acumulado_b8 %>% filter(c32_date_2>=fecha1 & c32_date_2<=fecha2) %>% count() %>% .$n,
+    crf=="C35" ~ c35_acumulado_b8 %>% filter(c35_date_2>=fecha1 & c35_date_2<=fecha2) %>% count() %>% .$n,
+    crf=="C42" ~ c42_acumulado_b8 %>% filter(c42_date>=fecha1 & c42_date<=fecha2) %>% count() %>% .$n,
+    #crf=="H57" ~ h57_acumulado_b7 %>% filter(h57_date_2>=fecha1 & h57_date_2<=fecha2) %>% count() %>% .$n,
+    crf=="C85" ~ c85_acumulado_b8 %>% filter(c85_date>=fecha1 & c85_date<=fecha2) %>% count() %>% .$n,
+    crf=="C852" ~ c85_2_acumulado_b8 %>% filter(c85_date_2>=fecha1 & c85_date_2<=fecha2) %>% count() %>% .$n,
+    TRUE ~ NA_integer_
+  ) ,
+  acumulado = case_when(
+    
+    crf=="M10" ~ m10_acumulado_b8 %>% count() %>% .$n,
+    crf=="M11" ~ m11_acumulado_b8 %>%  count() %>% .$n,
+    crf=="M19" ~ m19_acumulado_b8 %>%  count() %>% .$n,
+   # crf=="C31" ~ c31_acumulado_b7 %>%  count() %>% .$n,
+    crf=="C32" ~ c32_acumulado_b8 %>%  count() %>% .$n,
+    crf=="C35" ~ c35_acumulado_b8 %>%  count() %>% .$n,
+    crf=="C42" ~ c42_acumulado_b8 %>%  count() %>% .$n,
+    #crf=="H57" ~ h57_acumulado_b7 %>%  count() %>% .$n,
+    crf=="C85" ~ c85_acumulado_b8 %>%  count() %>% .$n,
+    crf=="C852" ~ c85_2_acumulado_b8 %>%  count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+
+)%>%  mutate(crf=case_when(
+  crf=="M10" ~ "M10 Demografico",                                   
+  crf=="M11" ~ "M11 Comportamiento sobre Estilo de Vida",
+  crf=="M19" ~ "M19 Costos e ingresos",
+                                     #crf=="C31" ~ "C31 (estado salud bebé)",
+                                     crf=="C32" ~ "C32 Alimentación II",
+                                     crf=="C35" ~ "C35 Salud Mental II",
+   crf=="C42" ~ "C42 Vacunacion",
+   #crf=="H57" ~ "H57 Encuesta inicial II",
+    crf=="C85" ~ "C85 MDAT",
+   crf=="C852" ~ "C85 MDAT Segunda Evaluacion",
+                                    
+                                     TRUE ~ NA_character_
+                                   )) %>%
+  select("CRF"=crf, "Quincenal     " = quincenal, "Acumulado     "=acumulado) %>%
+
+   mutate(CRF=cell_spec(CRF,"html", color = "blue",align = "c", bold = T)) %>%
+  kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c("  ", "REPORTE AVANCES CRF'S RECLUTAMIENTO 60m"=2))
+
+
+```
+
+##### CUESTIONARIOS DE MEDICIONES
+###### Inicio de actividad: el 23 de febrero del 2023
+
+```{r}
+
+#-------------------
+# EXPOSICION b8
+CRF<-c("M14a", "M14b","C31","C33", "H41","H42", "H43", "D1", "R1", "R2")
+reporte_b8_exposicion<-data.frame(CRF)
+
+#m14a en b8
+m14a_acumulado_b8<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year5_arm_1"
+) %>% filter(!is.na(m14a_date )) %>% filter(id!='99999') %>% transmute(id, m14a_date, evento="b8")
+
+#m14b en b8
+m14b_acumulado_b8<-gt_hapin_II_data %>% filter(
+  redcap_event_name=="year5_arm_1"
+) %>% filter(!is.na(m14b_date )) %>% filter(id!='99999') %>% transmute(id, m14b_date, evento="b8")
+
+
+#c33 en b8
+c33_acumulado_b8<-gt_hapin_II_data %>% filter(
+    redcap_event_name=="year5_arm_1"
+  )  %>% filter(!is.na(c33_date_2)) %>% transmute(id, c33_date_2, evento="b8")
+
+#h41
+H41_b8<-gt_hapin_II_data %>% filter(redcap_event_name=="year5_arm_1") %>% select(id, h41_date_v2) %>% filter(
+  !is.na(h41_date_v2)
+)
+
+#h42
+H42_b8<-gt_hapin_II_data %>% filter(redcap_event_name=="year5_arm_1") %>% select(id, h42_date_2) %>% filter(
+  !is.na(h42_date_2)
+)
+
+#h43
+H43_b8<-gt_hapin_II_data %>% filter(redcap_event_name=="year5_arm_1") %>% select(id, h43_date_2) %>% filter(
+  !is.na(h43_date_2)
+)
+
+#Agregar conteos de hapin plus
+#antropometria D1
+D1_b8<-dt_hapin_plus %>% filter(redcap_event_name=="5_arm_1") %>%  filter(!is.na(d1_visit_date)) %>% 
+  select(id, d1_visit_date)
+
+#R1 Examen Fisico
+R1_b8<-dt_hapin_plus %>% filter(redcap_event_name=="5_arm_1") %>%  filter(!is.na(r1_visit_date)) %>% 
+  select(id, r1_visit_date)
+
+#R2 OSM
+R2_b8<-dt_hapin_plus %>% filter(redcap_event_name=="5_arm_1") %>%  filter(!is.na(r2_visit_date)) %>% 
+  select(id, r2_visit_date)
+
+blancos_realizados<-cat_blancos %>% left_join(
+  H41_b8
+) %>% filter(!is.na(h41_date_v2))
+# Después de tu código existente, agrega la nota al pie de la tabla
+blancos_realizados_nota <- paste("Blancos realizados: ", "0")
+# Aplica el estilo CSS para el color rojo a la nota al pie
+html_note <- paste0(
+  "<span style='color: red;'>", blancos_realizados_nota, "</span>"
+)
+
+reporte_b8_exposicion %>% mutate(
+  Quincenal=case_when(
+    CRF=="M14a" ~ m14a_acumulado_b8 %>% filter(m14a_date>=fecha1 & m14a_date<=fecha2) %>% count() %>% .$n,
+    CRF=="M14b" ~ m14b_acumulado_b8 %>% filter(m14b_date>=fecha1 & m14b_date<=fecha2) %>% count() %>% .$n,
+    CRF=="C31" ~ c31_acumulado_b8 %>% filter(c31_date_2>=fecha1 & c31_date_2<=fecha2) %>% count() %>% .$n,
+    CRF=="C33" ~ c33_acumulado_b8 %>% filter(c33_date_2>=fecha1 & c33_date_2<=fecha2) %>% count() %>% .$n,
+    CRF=="H41" ~ H41_b8 %>%  filter(h41_date_v2>=fecha1 & h41_date_v2<=fecha2) %>% count() %>% .$n,
+    CRF=="H42" ~ H42_b8 %>% filter(h42_date_2>=fecha1 & h42_date_2<=fecha2) %>% count() %>% .$n,
+    CRF=="H43" ~ H43_b8 %>% filter(h43_date_2>=fecha1 & h43_date_2<=fecha2) %>% count() %>% .$n,
+    CRF=="D1" ~ D1_b8 %>% filter(d1_visit_date>=fecha1 & d1_visit_date<=fecha2) %>% count() %>% .$n,
+    CRF=="R1" ~ R1_b8 %>% filter(r1_visit_date>=fecha1 & r1_visit_date<=fecha2) %>% count() %>% .$n,
+    CRF=="R2" ~ R2_b8 %>% filter(r2_visit_date>=fecha1 & r2_visit_date<=fecha2) %>% count() %>% .$n,
+    #CRF=="C86" ~ C86 %>% filter(c86_date>=fecha1 & c86_date<=fecha2) %>% count() %>% .$n,
+    TRUE ~ NA_integer_
+  ),
+   Acumulado=case_when(
+    CRF=="M14a" ~ m14a_acumulado_b8 %>% count() %>% .$n,
+    CRF=="M14b" ~ m14b_acumulado_b8 %>% count() %>% .$n,
+    CRF=="C31" ~ c31_acumulado_b8 %>%  count() %>% .$n,
+    CRF=="C33" ~ c33_acumulado_b8 %>% count() %>% .$n,
+    CRF=="H41" ~ H41_b8 %>%   count() %>% .$n,
+    CRF=="H42" ~ H42_b8 %>%  count() %>% .$n,
+    CRF=="H43" ~ H43_b8 %>%  count() %>% .$n,
+    CRF=="D1" ~ D1_b8 %>%  count() %>% .$n,
+    CRF=="R1" ~ R1_b8 %>%  count() %>% .$n,
+    CRF=="R2" ~ R2_b8 %>%  count() %>% .$n,
+    #CRF=="C86" ~ C86 %>%  count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+) %>%   mutate(CRF=case_when(
+                        CRF=="M14a" ~ "M14a Antropometria",                                   
+                        CRF=="M14b" ~ "M14b Presion Arterial",
+                        CRF=="C31" ~ "C31 (estado salud bebé)",
+                        CRF=="C33" ~ "C33 Antropometria Infantil",
+                        CRF=="H41" ~ "H41 Equipo Exposición II",
+                        CRF=="H42" ~ "H42 Exposure Compliance II",
+                        CRF=="H43" ~ "H43 Linea Basal de Exposición II",
+                        CRF=="D1" ~ "D1 Antropometria",
+                        CRF=="R1" ~ "R1 Examen Fisico",
+                        CRF=="R2" ~ "R2 Osm",
+                                     TRUE ~ NA_character_
+                                   )) %>%
+  select("CRF"=CRF, "Quincenal     " = Quincenal, "Acumulado     "=Acumulado) %>%
+ mutate(CRF=cell_spec(CRF,"html", color = "blue",align = "c", bold = T)) %>%
+    kable(caption = paste(""), escape = F, format = "html") %>%
+  kable_styling("hover", full_width = F) %>%
+  column_spec(2, width = "5cm", color = "blue", bold = T) %>%
+  add_header_above(c("  ", "REPORTE AVANCES CRF'S MEDIDAS EXPOSICION 60m"=2))  %>%
+  add_footnote(html_note, escape = FALSE)
+
+
+
+
+```
+
+~~~~
+ *Quincena del  "`r as.Date(f_week1) %>% format(.,"%A %d %B  %Y")`" al "`r as.Date(f_week2) %>% format(.,"%A %d %B  %Y")` "*
+~~~~
+
+
+#### INDICADORES
+##### HOGARES PROGRAMADOS POR MES: "HAPIN-II  5 AÑOS"
+```{r , echo=FALSE}
+
+#esperados en 36 meses a la fecha del reporte
+esperados_60meses<-candidatos_60m_general
+dt_esperados_60m<-esperados_60meses %>%  mutate( Mes=format(fecha_60m, "%B")) %>% group_by(
+  Anio=lubridate::year(fecha_60m),
+  mes=lubridate::month(fecha_60m),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Esperados=n) 
+
+#identificar los hogares fuera de ventana
+dt_fuera_ventana<-consentimientos_60m %>% mutate(fuera_ventana=if_else(
+  grepl("FUERA DE VENTANA",s4_reason_c), "1", NA_character_
+)) %>%  mutate( Mes=format(s4_date, "%B")) %>% filter(!is.na(fuera_ventana)) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Fueraventana=n)
+
+#realizados que tienen s4 por mes
+dt_realizados_60m<-consentimientos_60m %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Realizados=n)
+
+#Consentidos por mes
+dt_consentidos_60m<-consentimientos_60m %>% filter(!is.na(consentidos)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Consentidos=n)
+
+#rechazados por mes
+dt_rechazados_60m<-consentimientos_60m %>% filter(!is.na(rechazado)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, `No consintieron`=n)
+
+#migraciones
+dt_migraciones_60m<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(visit=="b8") %>%  select(id, s4_date, s4_reason_c) %>% filter(!is.na(s4_reason_c)) %>% mutate(
+  razon=toupper(s4_reason_c),
+  migracion=case_when(
+    grepl("FUERA DEL AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("FUERA DEL AREA DE ESTUDIO", razon) ~ "1",
+    grepl("AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("AREA DE ESTUDIO", razon) ~ "1",
+    grepl("MIGRO", razon) ~ "1",
+    grepl("MIGRÓ", razon) ~ "1",
+    grepl("SE MUDO", razon) ~ "1",
+    grepl("FUERA DEL ÁREA", razon) ~ "1",
+    grepl("FUERA DEL ESTUDIO", razon) ~ "1",
+    grepl("MIGRACIÓN", razon) ~ "1",
+    grepl("MIGRACION", razon) ~ "1",
+    grepl("MIGRARON", razon) ~ "1",
+    grepl("DE VIAJE", razon) ~ "1",
+     grepl("MUDARON", razon) ~ "1",
+
+    TRUE ~ NA_character_
+  )
+) %>% filter(!is.na(migracion)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Migraciones=n)
+
+
+#integrar tabla programados por mes, con modificaciones ----
+dt_esperados_60m %>% 
+  left_join(
+  dt_realizados_60m %>% mutate(
+    acumulado_realizados = cumsum(as.numeric(Realizados))
+
+  )
+) %>%
+  mutate(
+  acumulado_esperados=cumsum(as.numeric(Esperados))
+) %>% 
+  mutate(
+  p_realizados=percent(as.numeric(acumulado_realizados) / as.numeric(acumulado_esperados), 1)
+) %>% left_join(
+  dt_fuera_ventana %>% mutate(
+    acumulado_fueraventana=cumsum(as.numeric(Fueraventana))
+  )
+) %>% 
+  mutate(
+  p_fueraventana=percent(as.numeric(Fueraventana) / as.numeric(Esperados), 1),
+) %>% 
+  left_join(
+  dt_consentidos_60m %>% mutate(
+    acumulado_consentidos=cumsum(as.numeric(Consentidos))
+  )
+) %>% mutate(
+  p_consentidos=percent(as.numeric(Consentidos) / as.numeric(Realizados), 1),
+) %>%
+  transmute(
+  `Año`=Anio,
+  Mes=toupper(Mes),
+  `Programados`=Esperados,
+  `Acumulado Programados` = paste0(acumulado_esperados, " (", percent(acumulado_esperados/750,1),")"),
+  #`Fuera de Ventana`=if_else(is.na(Fueraventana), NA_character_, as.character(Fueraventana)),
+  
+  `Visitados`= if_else(is.na(Realizados), NA_character_, as.character(Realizados )),
+  `Acumulado Visitados(%)`= if_else(is.na(Realizados), NA_character_, paste0(as.character(acumulado_realizados)," (",as.character(p_realizados),")")
+                                            ),
+  `Consintieron(%)`= if_else(is.na(Consentidos), NA_character_, paste0(Consentidos," (", p_consentidos, ")")),
+  `Acumulados Consintieron(%)`= if_else(is.na(Consentidos), NA_character_, paste0(acumulado_consentidos, " (", percent(acumulado_consentidos/acumulado_realizados),")") )
+
+)%>% kable(caption = "<center>REPORTE MENSUAL <br>
+                  DE AVANCES</center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria")
+
+
+```
+
+
+
+##### RECLUTAMIENTOS Y MEDIDAS
+```{r}
+dt_c31_h41_categorias_b8<-gt_hapin_II_data %>% filter(!is.na(m10_date)) %>% filter(visit=="b8") %>%  select(id, m10_date) %>% left_join(
+  esperados_60meses
+) %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(h41_date_v2)) %>% filter(visit=="b8") %>% select(id, h41_date_v2)
+) %>% 
+  left_join(
+  gt_hapin_II_data %>% filter(!is.na(c85_date)) %>% filter(visit=="b8") %>% transmute(id, c85_date=as.Date(c85_date))
+) %>%
+  mutate(
+  dias_m10_esperado=as.numeric(as.Date(m10_date) - as.Date(fecha_60m)),
+  dias_h41_esperado=if_else(!is.na(h41_date_v2),as.numeric(as.Date(h41_date_v2) - as.Date(fecha_60m)),NA_real_),
+  dias_mdat_esperado=if_else(!is.na(c85_date), as.numeric(c85_date) - as.numeric(as.Date(fecha_60m)), NA_real_ ),
+  Categoria_m10= case_when(
+    dias_m10_esperado<= 30 ~ "<=30",
+    dias_m10_esperado>30 & dias_m10_esperado<=90 ~ "31-90",
+    dias_m10_esperado>90 ~ ">90",
+  ),
+  Categoria_h41= case_when(
+    dias_h41_esperado<= 30 ~ "<=30",
+    dias_h41_esperado>30 & dias_h41_esperado<=90 ~ "31-90",
+    dias_h41_esperado>90 ~ ">90",
+  ),
+  Categoria_mdat= case_when(
+    dias_mdat_esperado<= 30 ~ "<=30",
+    dias_mdat_esperado>30 & dias_mdat_esperado<=90 ~ "31-90",
+    dias_mdat_esperado>90 ~ ">90",
+  ),
+   Mes=toupper( format(m10_date, "%B") )
+
+) 
+
+
+
+cat_quincenal_b8<-dt_c31_h41_categorias_b8 %>% filter(m10_date>=f_week1) %>% group_by(Categoria_m10) %>% count() %>% ungroup() %>% select(categoria=Categoria_m10, cantidad_m10=n) %>% full_join(
+  dt_c31_h41_categorias_b8 %>% filter(h41_date_v2>=f_week1) %>% group_by(Categoria_h41) %>% count() %>% ungroup() %>% select(categoria=Categoria_h41, cantidad_h41=n)
+) %>% full_join(
+  dt_c31_h41_categorias_b8 %>% filter(c85_date>=f_week1) %>% group_by(Categoria_mdat) %>% count() %>% ungroup() %>% select(categoria=Categoria_mdat, cantidad_c85=n)
+)
+
+cat_quincenal_b8<-cat_quincenal_b8%>% mutate_all(., ~replace(.,is.na(.),0))    
+
+dt_elaborados_quincenal<-c( "<=30",
+              "31 - 90",
+               "> 90"
+              ) %>% data.frame(Categorias=.) 
+
+#codigo antiguo ----
+dt_avances_quincenal_b8<-dt_elaborados_quincenal %>% mutate(
+  `Quincenal`=case_when(
+    Categorias=="<=30" ~ cat_quincenal_b8 %>% filter(categoria=="<=30") %>% select(cantidad_m10) %>% .$cantidad_m10,
+     Categorias=="31 - 90" ~ cat_quincenal_b8 %>% filter(categoria=="31-90") %>% select(cantidad_m10) %>% .$cantidad_m10,
+    Categorias=="> 90" ~ cat_quincenal_b8 %>% filter(categoria==">90") %>% select(cantidad_m10) %>% .$cantidad_m10,
+),
+`Acumulado`=case_when(
+  Categorias=="<=30" ~ dt_c31_h41_categorias_b8 %>% filter(Categoria_m10=="<=30") %>%  group_by() %>% count() %>% .$n,
+   Categorias=="31 - 90" ~ dt_c31_h41_categorias_b8 %>% filter(Categoria_m10=="31-90") %>%  group_by() %>% count() %>% .$n,
+  Categorias=="> 90" ~ dt_c31_h41_categorias_b8 %>% filter(Categoria_m10==">90") %>%  group_by() %>% count() %>% .$n
+),
+` Quincenal `=case_when(
+    Categorias=="<=30" ~ cat_quincenal_b8 %>% filter(categoria=="<=30") %>% select(cantidad_h41) %>% .$cantidad_h41,
+     Categorias=="31 - 90" ~ cat_quincenal_b8 %>% filter(categoria=="31-90") %>% select(cantidad_h41) %>% .$cantidad_h41,
+     Categorias=="> 90" ~ cat_quincenal_b8 %>% filter(categoria==">90") %>% select(cantidad_h41) %>% .$cantidad_h41
+),
+` Acumulado `=case_when(
+  Categorias=="<=30" ~ dt_c31_h41_categorias_b8 %>% filter(Categoria_h41=="<=30") %>%  group_by() %>% count() %>% .$n,
+   Categorias=="31 - 90" ~ dt_c31_h41_categorias_b8 %>% filter(Categoria_h41=="31-90") %>%  group_by() %>% count() %>% .$n,
+  Categorias=="> 90" ~ dt_c31_h41_categorias_b8 %>% filter(Categoria_h41==">90") %>%  group_by() %>% count() %>% .$n
+),
+#agregar MDAT
+`  Quincenal  `=case_when(
+    Categorias=="<=30" ~ cat_quincenal_b8 %>% filter(categoria=="<=30") %>% select(cantidad_c85) %>% .$cantidad_c85,
+    Categorias=="31 - 90" ~ cat_quincenal_b8 %>% filter(categoria=="31-90") %>% select(cantidad_c85) %>% .$cantidad_c85,
+     # Categorias=="> 90" ~ cat_quincenal_b8 %>% filter(categoria=="3>90") %>% select(cantidad_c85) %>% .$cantidad_c85
+),
+`  Acumulado  `=case_when(
+  Categorias=="<=30" ~ dt_c31_h41_categorias_b8 %>% filter(Categoria_mdat=="<=30") %>%  group_by() %>% count() %>% .$n,
+   Categorias=="31 - 90" ~ dt_c31_h41_categorias_b8 %>% filter(Categoria_mdat=="31-90") %>%  group_by() %>% count() %>% .$n,
+  Categorias=="> 90" ~ dt_c31_h41_categorias_b8 %>% filter(Categoria_mdat==">90") %>%  group_by() %>% count() %>% .$n
+)
+)
+
+
+
+dt_avances_quincenal_b8<-dt_avances_quincenal_b8 %>% mutate_all(., ~replace(.,is.na(.),0))   
+
+dt_avances_quincenal_total<-dt_avances_quincenal_b8 %>% bind_rows(
+ apply(X= dt_avances_quincenal_b8 %>% transmute(Acumulado=as.numeric(Acumulado), ` Acumulado `=as.numeric(` Acumulado `),`  Acumulado  `=as.numeric(`  Acumulado  `)),  MARGIN=2, FUN= sum) 
+)
+
+dt_avances_quincenal_integrado<-dt_avances_quincenal_total %>% mutate(
+ Categorias= if_else(is.na(Categorias), "Total",Categorias)
+) 
+ totales<-dt_avances_quincenal_integrado %>% filter(Categorias=="Total") %>% select(Total_m10=Acumulado, Total_h41=` Acumulado `, Total_c85=`  Acumulado  `)
+
+ dt_avances_final<-dt_avances_quincenal_integrado %>% mutate(
+   p_m10=case_when(
+     Categorias!="Total" ~ percent(as.numeric(Acumulado) / totales$Total_m10)
+   ),
+   p_h41=case_when(
+     Categorias!="Total" ~ percent(as.numeric(` Acumulado `) / totales$Total_h41 )
+   ),
+   p_c85=case_when(
+     Categorias!="Total" ~ percent(as.numeric(`  Acumulado  `) / totales$Total_c85 )
+   )
+ ) %>% transmute(
+   Categorias, Quincenal, Acumulado= paste0(Acumulado, " (", p_m10,")"),
+   ` Quincenal `, 
+   ` Acumulado `=paste0(` Acumulado `," (", p_h41,")"),
+   `  Quincenal  `, 
+   `  Acumulado  `=paste0(`  Acumulado  `," (", p_c85,")")
+ )
+
+dt_avances_final %>% mutate(
+  Acumulado=if_else(
+    Categorias=="Total", substr(Acumulado,1,3), Acumulado
+  ),
+   ` Acumulado `=if_else(
+    Categorias=="Total", substr(` Acumulado `,1,3), ` Acumulado `
+  ),
+  `  Acumulado  `=if_else(
+    Categorias=="Total", substr(`  Acumulado  `,1,3), `  Acumulado  `
+  )
+) %>% 
+kable(caption = "<center>REPORTE CONSENTIDOS Y MEDIDAS<br>
+                  QUINCENAL Y ACUMULADO </center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria") %>% column_spec(3, width = "2cm",  bold = T) %>% column_spec(5, width = "5cm",  bold = T)  %>% column_spec(7, width = "2cm",  bold = T) %>% row_spec(1, bold=F, background = "#11e88d") %>% row_spec(2, bold=F, background = "#edcc46") %>% row_spec(3, bold=F, background =  "#df455c") %>% row_spec(4, bold=T) %>% 
+ add_header_above(c("    ", "CONSENTIDOS (M10) "=2, "MEDIDAS (H41) "=2 , " MDAT (C85) "=2 ))
+
+#dt_c31_h41_categorias %>% writexl::write_xlsx("output/revision_rojos.xlsx")
+
+```
+
+```{r}
+#Consentidos por mes para 60 meses
+dt_consentidos_60m<-consentimientos_60m %>% filter(!is.na(consentidos)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Consentidos=n)
+
+#rechazados por mes
+dt_rechazados_60m<-consentimientos_60m %>% filter(!is.na(rechazado)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, `No consintieron`=n)
+
+#migraciones
+dt_migraciones_60m<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(visit=="b8") %>%  select(id, s4_date, s4_reason_c) %>% filter(!is.na(s4_reason_c)) %>% mutate(
+  razon=toupper(s4_reason_c),
+  migracion=case_when(
+    grepl("FUERA DEL AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("FUERA DEL AREA DE ESTUDIO", razon) ~ "1",
+    grepl("AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("AREA DE ESTUDIO", razon) ~ "1",
+    grepl("MIGRO", razon) ~ "1",
+    grepl("MIGRÓ", razon) ~ "1",
+    grepl("SE MUDO", razon) ~ "1",
+    grepl("FUERA DEL ÁREA", razon) ~ "1",
+    grepl("FUERA DEL ESTUDIO", razon) ~ "1",
+    grepl("MIGRACIÓN", razon) ~ "1",
+    grepl("MIGRACION", razon) ~ "1",
+    grepl("MIGRARON", razon) ~ "1",
+    grepl("DE VIAJE", razon) ~ "1",
+     grepl("MUDARON", razon) ~ "1",
+  
+    
+    TRUE ~ "revisar contenido"
+  )
+) %>% filter(!is.na(migracion)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, Migraciones=n)
+
+dt_rechazos_motivos_b8<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(visit=="b8") %>% select(
+  id, s4_date, s4_consent_c, s4_reason_c
+) %>% filter(s4_consent_c=="0") %>% left_join(
+  gt_hapin_II_data %>% filter(!is.na(e3_date)) %>% filter(visit=="b8") %>%  select(id, e3_reason)
+) %>% mutate(
+  motivo_rechazo=recode(e3_reason,
+                        "3"="Retiro voluntario",
+                        "4"="Retirada por el equipo de estudio",
+                        "5"="Se mudó del área de estudio",
+                        "6"="Muerte de la madre",
+                        "7"="Muerte Infantil",
+                        "8"="Fuera de la ventana",
+                        "555"="Otro")
+)  %>% mutate(
+  razon=toupper(s4_reason_c),
+  migracion=case_when(
+    grepl("FUERA DEL AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("FUERA DEL AREA DE ESTUDIO", razon) ~ "1",
+    grepl("AREA DEL ESTUDIO", razon) ~ "1",
+    grepl("AREA DE ESTUDIO", razon) ~ "1",
+    grepl("MIGRO", razon) ~ "1",
+    grepl("MIGRÓ", razon) ~ "1",
+    grepl("SE MUDO", razon) ~ "1",
+    grepl("FUERA DEL ÁREA", razon) ~ "1",
+    grepl("FUERA DEL ESTUDIO", razon) ~ "1",
+    grepl("MIGRACIÓN", razon) ~ "1",
+    grepl("MIGRACION", razon) ~ "1",
+    grepl("MIGRARON", razon) ~ "1",
+    grepl("DE VIAJE", razon) ~ "1",
+     grepl("MUDARON", razon) ~ "1",
+    
+    TRUE ~ NA_character_
+  ),
+  no_autoriza_padre_familiar=case_when(
+   grepl("PADRE ", razon) ~ "1", 
+   grepl("PERMISO", razon) ~ "1",
+   grepl("ESPOSO", razon) ~ "1", 
+    grepl("FAMILIARES NO", razon) ~ "1",
+    grepl("FAMILIARES QUE", razon) ~ "1",
+    grepl("FAMILIAR QUIEN", razon) ~ "1",
+    grepl("FAMILIAR NO ESTA", razon) ~ "1",
+   grepl("NO QUIERE", razon) ~ "1",
+   grepl("NO AUTORIZAN", razon) ~ "1"
+  ),
+  falta_valor_al_estudio=case_when(
+   grepl("LOS CAMBIOS ", razon) ~ "1",
+   grepl("CAMBIOS EN EL PROYECTOS ", razon) ~ "1",
+   grepl("CAMBIOS EN EL PROYECTOS", razon) ~ "1",
+   grepl("CAMBIOS EN EL PROYECTO", razon) ~ "1",
+   grepl("NO LE INTERESA SEGUIR CON CAMBIOS EN EL PROYECTO", razon) ~ "1",
+   grepl("NO DESEA PARTICIPAR MAS", razon) ~ "1",
+   grepl("POCA LA RECOMPENSA", razon) ~ "1",
+   grepl("VALOR EN EL ESTUDIO", razon) ~ "1",
+  ),
+  no_tiene_tiempo=case_when(
+    grepl("NO TIENE TIEMPO", razon) ~ "1",
+    grepl("NO TENER TIEMPO", razon) ~ "1",
+  ),
+   muerte=case_when(
+    grepl("MUERTE", razon) ~ "1",
+    grepl("FALLECIO", razon) ~ "1",
+  )
+)
+
+ 
+#aramar tabla de rechazos con sumas por columna
+tabla_rechazos_b8<-dt_consentidos_60m %>% left_join(
+  dt_rechazados_60m
+)%>% left_join(
+  dt_rechazos_motivos_b8 %>% filter(!is.na(migracion)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           Migraciones=n) 
+) %>% left_join(
+  dt_rechazos_motivos_b8 %>% filter(!is.na(no_autoriza_padre_familiar)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           no_autoriza_padre_familiar=n) 
+) %>% left_join(
+  dt_rechazos_motivos_b8 %>% filter(!is.na(falta_valor_al_estudio)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           falta_valor_al_estudio=n) 
+)%>% left_join(
+  dt_rechazos_motivos_b8 %>% filter(!is.na(no_tiene_tiempo)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           no_tiene_tiempo=n) 
+) %>% left_join(
+  dt_rechazos_motivos_b8 %>% filter(!is.na(muerte)) %>%  mutate( Mes=format(s4_date, "%B")) %>% group_by(
+  Anio=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  Mes
+) %>%  count() %>% ungroup() %>% transmute(Anio, Mes, 
+                                           muerte=n) 
+)
+
+#cambiar NA por cero para poder hace rla suma
+tabla_rechazos_b8<-tabla_rechazos_b8 %>%  mutate_all(., ~replace(.,is.na(.),0))
+
+#agregar sumas
+tabla_rechazos_b8_totales<-tabla_rechazos_b8 %>% 
+ bind_rows(
+ apply(X= tabla_rechazos_b8 %>% transmute(
+  Consentidos, `No consintieron`, Migraciones, no_autoriza_padre_familiar,
+  falta_valor_al_estudio, no_tiene_tiempo, muerte
+ ),  MARGIN=2, FUN= sum)
+)
+
+#agregar proporciones
+tabla_rechazos_b8_totales %>% 
+  mutate(
+    p_no_consintieron= percent(as.numeric(`No consintieron`)/ as.numeric(Consentidos),1),
+  p_migraciones=percent(as.numeric(Migraciones) / as.numeric(`No consintieron`),1),
+   p_no_autoriza_padre=percent(as.numeric(no_autoriza_padre_familiar) / as.numeric(`No consintieron`),1),
+  p_falta_valor_al_estudio=percent(as.numeric(falta_valor_al_estudio) / as.numeric(`No consintieron`),1),
+  p_no_tiene_tiempo=percent(as.numeric(no_tiene_tiempo) / as.numeric(`No consintieron`),1),
+  p_muerte=percent(as.numeric(muerte) / as.numeric(`No consintieron`),1)
+)%>% transmute(
+  `Año`=if_else(is.na(Anio),"",as.character(Anio)),
+  Mes=if_else(is.na(Mes),"Total",Mes),
+  Consentidos,
+  `No consintieron(%)`=if_else(is.na(`No consintieron`), NA_character_, paste0(`No consintieron`,"(",p_no_consintieron,")")),
+   Migraciones=if_else(is.na(Migraciones), NA_character_, paste0(Migraciones,"(",p_migraciones,")")),
+  `No autoriza padre o familiar(%)`=if_else(is.na(no_autoriza_padre_familiar), NA_character_, paste0(no_autoriza_padre_familiar,"(",p_no_autoriza_padre,")")),
+   `Falta valor al estudio(%)`=if_else(is.na(falta_valor_al_estudio), NA_character_, paste0(falta_valor_al_estudio,"(",p_falta_valor_al_estudio,")")),
+  `No tiene tiempo`=if_else(is.na(no_tiene_tiempo), NA_character_, paste0(no_tiene_tiempo,"(",p_no_tiene_tiempo,")")),
+  `Fallecimiento`=if_else(is.na(muerte), NA_character_, paste0(muerte,"(",p_muerte,")"))
+) %>% kable(caption = "<center>REPORTE DE MOTIVOS <br>
+                  DE NO PARTICIPACION</center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria") 
+
+
+```
+
+~~~~
+ *Quincena del  "`r as.Date(f_week1) %>% format(.,"%A %d %B  %Y")`" al "`r as.Date(f_week2) %>% format(.,"%A %d %B  %Y")` "*
+~~~~
+
+### QUE HACER
+
+
+#### HISTOGRAMA
+
+```{r}
+
+intensivos_54m<-cat_intensivos %>% anti_join(
+  gt_osm_uvg_data %>% filter(!is.na(hapi_date )) %>% select(id)
+) %>%   group_by(
+  anio=lubridate::year(as.Date(fecha_visita)),
+  mes=lubridate::month(as.Date(fecha_visita))
+) %>% count()
+
+#niños 4 años
+visitas_48m<-candidatos_ninos %>% select(id, fecha_nacimiento) %>% filter(id!="35060") %>%  mutate(
+  fecha_visita=as.Date(fecha_nacimiento)+lubridate::days(1460)
+  ) %>% anti_join(
+    cat_pendientes_fot %>% transmute(id=as.character(id))
+  ) %>%   anti_join(
+    gt_hapin_II_data %>% filter(visit=="b7") %>% select(id, s4_date) %>% filter(!is.na(s4_date)) %>% select(id)
+  ) %>%  group_by(
+  anio=lubridate::year(fecha_visita),
+  mes=lubridate::month(fecha_visita)
+) %>% count()
+
+#pendientes de fot
+cat_pendientes_fot<-cat_pendientes_fot %>% mutate(id=as.character(id), pendiente_fot="si") %>% left_join(
+  gt_hapin_II_data %>% filter(visit=="b7") %>% filter(!is.na(h41_date_v2)) %>% select(
+    id,h41_date_v2
+  )
+) %>% left_join(
+  gt_hapin_II_data %>% filter(visit=="b7") %>% filter(!is.na(s4_consent_c)) %>% select(id, consintio=s4_consent_c)
+) %>% 
+  left_join(
+  gt_hapin_II_data %>% filter(visit=="b7") %>% filter(!is.na(c86_date)) %>% select(
+    id, c86_date
+  )
+) %>% filter(is.na(h41_date_v2) & is.na(c86_date)) %>% arrange(h41_date_v2) %>% select(
+  id, pendiente_fot, consintio
+) %>% left_join(
+  candidatos_ninos %>% select(id, fecha_nacimiento)
+) %>% mutate(fecha_visita=as.Date(fecha_nacimiento)+lubridate::days(1460)) %>% filter(consintio=="1" | is.na(consintio)) %>% 
+  group_by(
+  anio=lubridate::year(fecha_visita),
+  mes=lubridate::month(fecha_visita)
+) %>% count()
+
+
+
+#niños 5 años
+visitas_60m<-candidatos_ninos %>% select(id, fecha_nacimiento) %>% mutate(
+  fecha_visita=as.Date(fecha_nacimiento)+lubridate::days(1825)
+  ) %>% anti_join(
+    gt_hapin_II_data %>% filter(visit=="b7") %>%  filter(e3_reason=="7") %>% select(id, e3_reason)
+  ) %>% anti_join(
+    gt_hapin_II_data %>% filter(visit=="b8") %>%  filter(!is.na(s4_date))
+  ) %>%   group_by(
+  anio=lubridate::year(fecha_visita),
+  mes=lubridate::month(fecha_visita)
+) %>% count()
+
+#niños 5 años y medio
+visitas_66m<-candidatos_ninos %>% select(id, fecha_nacimiento) %>% mutate(
+  fecha_visita=as.Date(fecha_nacimiento)+lubridate::days(1996)
+  ) %>% anti_join(
+    gt_hapin_II_data %>% filter(e3_reason=="7") %>% select(id, e3_reason)
+  ) %>% group_by(
+  anio=lubridate::year(fecha_visita),
+  mes=lubridate::month(fecha_visita)
+) %>% count()
+#niños de seis años
+visitas_72m<-candidatos_ninos %>% select(id, fecha_nacimiento) %>% mutate(
+  fecha_visita=as.Date(fecha_nacimiento)+lubridate::days(2178)
+  ) %>% anti_join(
+    gt_hapin_II_data %>% filter(e3_reason=="7") %>% select(id, e3_reason)
+  ) %>% group_by(
+  anio=lubridate::year(fecha_visita),
+  mes=lubridate::month(fecha_visita)
+) %>% count()
+
+#datos integrados para histograma
+datos_histograma<-visitas_48m %>% ungroup() %>%  mutate(Tipo_visita="visita_48m") %>% bind_rows(
+  cat_pendientes_fot %>% ungroup() %>%  mutate(Tipo_visita="visita_48m + fot pendiente")
+) %>% bind_rows(
+   visitas_60m %>% ungroup() %>% mutate(Tipo_visita="visita_60m")
+  #intensivos_54m %>% ungroup() %>%   mutate(Tipo_visita="visita_54m_intensivo")
+) %>% bind_rows(
+ visitas_66m %>% ungroup() %>% mutate(Tipo_visita="visita_66m")
+) %>% bind_rows(
+  visitas_72m %>% ungroup() %>% mutate(Tipo_visita="visita_72m")
+)
+
+# Convierte la columna 'anio' a un objeto de fecha
+datos_histograma$anio <- as.Date(paste(datos_histograma$anio, datos_histograma$mes, "01", sep = "-"))
+
+
+# Define una paleta de colores para los grupos
+# colores_grupos <- c("visita_48m" = "#ccb24c" , "visita_60m"="#f77825", "visita_66m"="#8b8b70", "visita_72m"="#723e4e" )
+
+
+# Define los colores asegurándote de incluir todos los tipos de visitas
+colores_grupos <- c(
+  "visita_48m" = "#d69e60",  # Color para visita_48m
+  "visita_60m" = "#fffdc0",  # Color para visita_60m
+  "visita_66m" = "#85cc9c",  # Color para visita_66m
+  "visita_72m" = "#b4ccb9"   # Color para visita_72m
+)
+
+# Verifica que todos los niveles tienen un color asignado
+niveles_tipo_visita <- unique(datos_histograma$Tipo_visita)
+colores_definidos <- colores_grupos[niveles_tipo_visita]
+
+# Asegúrate de que no haya NA en colores_definidos
+if(any(is.na(colores_definidos))) {
+  stop("Faltan colores para algunos niveles de Tipo_visita en colores_grupos.")
+}
+
+
+# Agrupar y sumar visitas por mes
+datos_agrupados <- datos_histograma %>%
+  group_by(anio, mes) %>%
+  summarise(total_visitas = sum(n)) %>%
+  ungroup()
+
+
+# Calcular el valor máximo de visitas y añadir un margen
+max_visitas <- max(datos_agrupados$total_visitas) + 10
+
+# Crea el gráfico de barras con colores personalizados ----
+# histograma_que_hacer<-ggplot(datos_histograma, aes(x = as.Date(paste(anio, mes, "01", sep = "-")), y = n, fill = Tipo_visita, label=n)) +
+#   geom_bar(stat = "identity") +
+#   geom_text(aes(label=n), position = position_stack(vjust = 0.5), size = 2)+ #Agregar etiquetas a las barras
+#   labs(x = "Año-Mes", y = "Visitas", fill = "Tipo_visita",
+#        title = "Grafica de Visitas Pendientes",
+#        subtitle= "Carga de visitas por mes" ) +
+#   scale_x_date(date_labels = "%Y-%m", date_breaks = "1 month") +
+#   scale_fill_manual(values = colores_grupos) +  # Asigna colores personalizados
+#   scale_y_continuous(breaks = seq(0,100, by=10), limits = c(0,100))+ #establecer limites eje Y
+#   coord_cartesian(ylim = c(0,100)) + #limite del gráfico
+#   theme_minimal() +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+#         panel.grid.major = element_blank(),  # Elimina la cuadrícula mayor
+#         panel.grid.minor = element_blank(),  # Elimina la cuadrícula menor
+#         panel.background = element_blank(),
+#         plot.title = element_text(hjust = 0.5),
+#         plot.subtitle = element_text(hjust=0.5) )   # Elimina el fondo del panel
+
+
+
+
+
+# Crear el gráfico ----
+# Crear el gráfico con el límite dinámico en el eje Y
+histograma_que_hacer<-ggplot(datos_histograma, aes(x = as.Date(paste(anio, mes, "01", sep = "-")), y = n, fill = Tipo_visita)) +
+  geom_bar(stat = "identity", position = "stack") +
+  geom_text(aes(label = n), position = position_stack(vjust = 0.5), size = 2) + # Agregar etiquetas a las barras
+  labs(x = "Año-Mes", y = "Visitas", fill = "Tipo_visita",
+       title = "Grafica de Visitas Pendientes",
+       subtitle = "Carga de visitas por mes") +
+  scale_x_date(date_labels = "%Y-%m", date_breaks = "1 month") +
+  scale_fill_manual(values = colores_definidos) +  # Asigna colores personalizados asegurándote de que todos los niveles tengan un color
+  scale_y_continuous(breaks = seq(0, max_visitas, by = 10), limits = c(0, max_visitas)) + # Establecer límites dinámicos eje Y
+  coord_cartesian(ylim = c(0, max_visitas)) + # Límite del gráfico
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+        panel.grid.major = element_blank(),  # Elimina la cuadrícula mayor
+        panel.grid.minor = element_blank(),  # Elimina la cuadrícula menor
+        panel.background = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))   # Elimina el fondo del panel
+
+
+
+#agreagr notas al pie
+library(plotly)  
+# Filtra filas con valores NA en las columnas utilizadas para el mapeo
+datos_histograma <- datos_histograma %>% drop_na(anio, n)
+
+
+grafica_histograma<- ggplotly(histograma_que_hacer)
+
+notas1<-c("* Las visitas de 60 meses iniciaron el 21 de febrero del 2023")
+
+grafica_histograma
+
+  notas1 %>% as.data.frame() %>%  kable()
+
+
+
+```
+
+
+### MONITOREO
+#### MONITOREO QUINCENAL
+```{r}
+
+reclutamiento_monitoreo <- (m10_acumulado_b6 %>% filter(m10_date>=fecha1 & m10_date<=fecha2) %>% count() %>% .$n)+(m10_acumulado_b7 %>% filter(m10_date>=fecha1 & m10_date<=fecha2) %>% count() %>% .$n) + (m10_acumulado_b8 %>% filter(m10_date>=fecha1 & m10_date<=fecha2) %>% count() %>% .$n)
+  
+
+
+exposicion_monitoreo<-(H41_b6 %>% filter(h41_date_v2>=fecha1 & h41_date_v2<=fecha2) %>% count() %>% .$n) + (H41_b7 %>% filter(h41_date_v2>=fecha1 & h41_date_v2<=fecha2) %>% count() %>% .$n) + (H41_b8 %>% filter(h41_date_v2>=fecha1 & h41_date_v2<=fecha2) %>% count() %>% .$n)
+
+mdat_monitoreo<- (c85_acumulado_b7 %>% filter(c85_date>=fecha1 & c85_date<=fecha2)  %>% count() %>% .$n) +
+  (c85_acumulado_b8 %>% filter(c85_date>=fecha1 & c85_date<=fecha2)  %>% count() %>% .$n)
+
+Equipo<-c("Reclutamiento","Exposicion", "MDAT")
+t_monitoreo<-data.frame(Equipo)
+
+resultado_monitoreo<-t_monitoreo %>% mutate(
+  Tasa_rendimiento=case_when(
+    Equipo=="Reclutamiento" ~ paste0(percent((as.numeric(reclutamiento_monitoreo) / 48),1)," (",as.numeric(reclutamiento_monitoreo)," de 48)"),
+    Equipo=="Exposicion" ~ paste0(percent((as.numeric(exposicion_monitoreo) / 48),1)," (",as.numeric(exposicion_monitoreo)," de 48)"),
+    Equipo=="MDAT" ~ paste0(percent((as.numeric(mdat_monitoreo) / 48),1)," (",as.numeric(mdat_monitoreo)," de 48)")
+  )
+) %>% mutate(
+  Rendimiento=case_when(
+    Equipo=="Reclutamiento" & as.numeric(reclutamiento_monitoreo)<32 ~ "Bajo",
+    Equipo=="Reclutamiento" & as.numeric(reclutamiento_monitoreo)>=32 & as.numeric(reclutamiento_monitoreo)<=43 ~ "Aceptable",
+     Equipo=="Reclutamiento" & as.numeric(reclutamiento_monitoreo)>=44 ~ "Optimo",
+      Equipo=="Exposicion" & as.numeric(exposicion_monitoreo)<32 ~ "Bajo",
+    Equipo=="Exposicion" & as.numeric(exposicion_monitoreo)>=32 & as.numeric(exposicion_monitoreo)<= 43 ~ "Aceptable",
+     Equipo=="Exposicion" & as.numeric(exposicion_monitoreo)>=44 ~ "Optimo",
+     Equipo=="MDAT" & as.numeric(mdat_monitoreo)<20 ~ "Bajo",
+    Equipo=="MDAT" & as.numeric(mdat_monitoreo)>=20 & as.numeric(mdat_monitoreo)<=24 ~ "Aceptable",
+    Equipo=="MDAT" & as.numeric(mdat_monitoreo)>24  ~ "Optimo"
+  )
+)
+
+asignar_color <- function(valor) {
+  if (valor == "Bajo") {
+    return("#FF0000")  # Rojo
+  } else if (valor == "Aceptable") {
+    return("#FFFF00")  # Amarillo
+  } else {
+    return("#00FF00")  # Verde
+  }
+}
+
+
+resultado_monitoreo$Semaforo <- sapply(resultado_monitoreo$Rendimiento, asignar_color)
+
+
+datatable(resultado_monitoreo, 
+          options = list(
+            columnDefs = list(
+              list(targets = 4, render = JS(
+                "function(data, type, row, meta) {",
+                "  if (type === 'display') {",
+                "    return '<div style=\"background-color:' + data + '; height: 100%; width: 100%;\">. </div>';",
+                "  } else {",
+                "    return data;",
+                "  }",
+                "}"
+              ))
+            )
+          )
+)
+
+
+Equipo<-c("Reclutamiento", "Exposicion", "MDAT")
+Reglas<-data.frame(Equipo)
+Reglas %>% mutate(
+  Reglas=case_when(
+    Equipo=="Reclutamiento" ~ " menos de 30=Bajo; 30 a 38=Aceptable; 39 o mas= Óptimo",
+     Equipo=="Exposicion" ~ "menos de 32=Bajo; 32 a 44=Aceptable; 34 o mas= Óptimo",
+     Equipo=="MDAT" ~ "menos de 20=Bajo; 20 a 24=Aceptable; 25 mas=Óptimo",
+  )
+)%>% kable(caption = "<center>DESCRIPCIÓN <br>
+                INTERVALO DE SEMAFORO</center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria"
+                  ) %>% row_spec(0, bold=T, background="skyblue",  align="c") %>% 
+  column_spec(1, bold=T, color="black", background="ligth gray", width="5cm") %>% 
+  row_spec(1, bold=F, background="Wheat",  align="c") %>% 
+   row_spec(2, bold=F, background="MistyRose",  align="c") %>% 
+    row_spec(3, bold=F, background="AntiqueWhite",  align="c") %>% 
+  footnote( number = c("Conteos por quincena; ", "Se consideran crfs de 48 y 60 meses"),
+number_title = "Nota:")
+
+
+
+```
+
+#### ***Semana del  "`r as.Date(fecha1) %>% format(.,"%A %d %B  %Y")`" al "`r as.Date(fecha2) %>% format(.,"%A %d %B  %Y")`" *** 
+#### *Reporte Generado el  "`r Sys.Date() %>% format(.,"%A %d %B  %Y")`"*
+
+## FOT {.tabset}
+### 4 AÑOS (36 MESES)
+#### CONTEOS: "C86 FOT & BASE DE DATOS TREMOFLO"
+```{r}
+#primer dia realizados en fase 1
+fase_1<-gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>%  select(id_hapin=id, c86_date, c86_complete_test1, c86_complete_test1_2) %>% 
+  filter(!is.na(c86_date)) %>% #quitar a los ids aun no abordados 
+  mutate(month = format(c86_date, "%m"), year = format(c86_date, "%Y")) %>%
+  arrange(year, month, c86_date) %>% 
+  group_by(year, month) %>% 
+  filter(c86_date <= "2022-05-16") %>% 
+  select(year, month, c86_complete_test1, c86_complete_test1_2) %>% 
+  count() %>% 
+  rename("C86_realizados"=n)
+
+#segundo dia realizados en fase 1
+f1_2d <- gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% 
+  select(id_hapin=id, c86_date, c86_complete_test1, c86_complete_test1_2) %>% 
+  filter(!is.na(c86_date)) %>% #quitar a los ids aun no abordados 
+  mutate(month = format(c86_date, "%m"), year = format(c86_date, "%Y")) %>%
+  arrange(year, month, c86_date) %>% 
+  group_by(year, month) %>% 
+  filter(c86_date <= "2022-05-16") %>% 
+  filter(c86_complete_test1 =="1", c86_complete_test1_2 == "1") %>% 
+  select(year, month, c86_complete_test1, c86_complete_test1_2) %>% 
+  count() %>% 
+  rename("Completado_dos_dias"=n)
+
+f1_np <- gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% 
+  select(id_hapin=id, c86_date, c86_complete_test1, c86_complete_test1_2) %>% 
+  filter(!is.na(c86_date)) %>% #quitar a los ids aun no abordados 
+  mutate(month = format(c86_date, "%m"), year = format(c86_date, "%Y")) %>%
+  arrange(year, month, c86_date) %>% 
+  group_by(year, month) %>% 
+  filter(c86_date <= "2022-05-16") %>% 
+  filter(c86_complete_test1 =="0", c86_complete_test1_2 == "0") %>% 
+  select(year, month, c86_complete_test1, c86_complete_test1_2) %>% 
+  count() %>% 
+  rename("No_participo"=n)
+#integrar fase 1
+fase_1 <- fase_1 %>% 
+  left_join(f1_2d, by=c("year", "month")) %>% 
+  left_join(f1_np, by=c("year", "month")) %>% 
+  mutate_all(~replace(., is.na(.), 0)) %>% 
+  mutate("Completado_un_dia" = reduce(across(all_of(c("C86_realizados", "Completado_dos_dias", "No_participo"))), `-`)) %>% 
+  relocate("Completado_un_dia", .after=4)
+#liberar espacio df que ya no se utilizaran
+remove(f1_2d, f1_np)
+
+#integrar fases
+fase_total <- gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% 
+  select(id_hapin=id, c86_date, c86_complete_test1, c86_complete_test1_2) %>% 
+  filter(!is.na(c86_date)) %>% #quitar a los ids aun no abordados 
+  mutate(month = format(c86_date, "%m"), year = format(c86_date, "%Y")) %>%
+  arrange(year, month, c86_date) %>% 
+  group_by(year, month) %>% 
+  select(year, month, c86_complete_test1, c86_complete_test1_2) %>% 
+  count() %>% 
+  rename("C86_realizados"=n)
+
+ft_2d <- gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% 
+  select(id_hapin=id, c86_date, c86_complete_test1, c86_complete_test1_2) %>% 
+  filter(!is.na(c86_date)) %>% #quitar a los ids aun no abordados 
+  mutate(month = format(c86_date, "%m"), year = format(c86_date, "%Y")) %>%
+  arrange(year, month, c86_date) %>% 
+  group_by(year, month) %>% 
+  filter(c86_complete_test1 =="1", c86_complete_test1_2 == "1") %>% 
+  select(year, month, c86_complete_test1, c86_complete_test1_2) %>% 
+  count() %>% 
+  rename("Completado_dos_dias"=n)
+
+#fase total no participo
+ft_np <- gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% 
+  select(id_hapin=id, c86_date, c86_complete_test1, c86_complete_test1_2) %>% 
+  filter(!is.na(c86_date)) %>% #quitar a los ids aun no abordados 
+  mutate(month = format(c86_date, "%m"), year = format(c86_date, "%Y")) %>%
+  arrange(year, month, c86_date) %>% 
+  group_by(year, month) %>% 
+  filter(c86_complete_test1 =="0", c86_complete_test1_2 == "0") %>% 
+  select(year, month, c86_complete_test1, c86_complete_test1_2) %>% 
+  count() %>% 
+  rename("No_participo"=n)
+
+#integrar fase total
+fase_total <- fase_total %>% 
+  left_join(ft_2d, by=c("year", "month")) %>% 
+  left_join(ft_np, by=c("year", "month")) %>% 
+  mutate_all(~replace(., is.na(.), 0)) %>% 
+  mutate("Completado_un_dia" = reduce(across(all_of(c("C86_realizados", "Completado_dos_dias", "No_participo"))), `-`)) %>% 
+  relocate("Completado_un_dia", .after=4)
+#quitar df que ya no se usarán
+remove(ft_2d, ft_np)
+
+#convertir el nombre de los meses
+fase_total <- transform(fase_total, month = ifelse(month == "01", "Enero", month))
+fase_total <- transform(fase_total, month = ifelse(month == "02", "Febrero", month))
+fase_total <- transform(fase_total, month = ifelse(month == "03", "Marzo", month))
+fase_total <- transform(fase_total, month = ifelse(month == "04", "Abril", month))
+fase_total <- transform(fase_total, month = ifelse(month == "05", "Mayo", month))
+fase_total <- transform(fase_total, month = ifelse(month == "06", "Junio", month))
+fase_total <- transform(fase_total, month = ifelse(month == "07", "Julio", month))
+fase_total <- transform(fase_total, month = ifelse(month == "08", "Agosto", month))
+fase_total <- transform(fase_total, month = ifelse(month == "09", "Septiembre", month))
+fase_total <- transform(fase_total, month = ifelse(month == "10", "Octubre", month))
+fase_total <- transform(fase_total, month = ifelse(month == "11", "Noviembre", month))
+fase_total <- transform(fase_total, month = ifelse(month == "12", "Diciembre", month))
+
+
+fase_1 <- transform(fase_1, month = ifelse(month == "01", "Enero", month))
+fase_1 <- transform(fase_1, month = ifelse(month == "02", "Febrero", month))
+fase_1 <- transform(fase_1, month = ifelse(month == "03", "Marzo", month))
+fase_1 <- transform(fase_1, month = ifelse(month == "04", "Abril", month))
+fase_1 <- transform(fase_1, month = ifelse(month == "05", "Mayo", month))
+fase_1 <- transform(fase_1, month = ifelse(month == "06", "Junio", month))
+fase_1 <- transform(fase_1, month = ifelse(month == "07", "Julio", month))
+
+#frecuencias y porcentajes acumulados -----
+fase_total <- fase_total %>% 
+  mutate(C86_realizados_acumulados = cumsum(C86_realizados),
+         porcentaje_acumulado = cumsum(rep(1/n(), n())*100)) %>% 
+  mutate(porcentaje_acumulado = str_c(round(porcentaje_acumulado), "%")) %>% 
+  select(year, month, C86_realizados, C86_realizados_acumulados, porcentaje_acumulado, Completado_dos_dias, Completado_un_dia, No_participo)
+
+
+fase_1 <- fase_1 %>% 
+  mutate(C86_realizados_acumulados = cumsum(C86_realizados),
+         porcentaje_acumulado = cumsum(rep(1/n(), n())*100)) %>% 
+  mutate(porcentaje_acumulado = str_c(round(porcentaje_acumulado), "%")) %>% 
+  select(year, month, C86_realizados, C86_realizados_acumulados, porcentaje_acumulado, Completado_dos_dias, Completado_un_dia, No_participo)
+
+
+#agregar programados por mes (todos los consentidos por mes) ----
+t_consentidos<-gt_hapin_II_data %>% filter(!is.na(s4_date)) %>% filter(visit=="b6") %>% select(
+  id, s4_date, s4_consent_c
+) %>% filter(s4_consent_c=="1") %>% group_by(
+  year=lubridate::year(s4_date),
+  mes=lubridate::month(s4_date),
+  month=format(as.Date(s4_date), "%B")
+) %>% count() %>% ungroup() %>% select(year, month, consentidos=n)
+#agregar acumulado por mes de consentidos ---
+t_consentidos<-t_consentidos %>% mutate(
+  acumulado=cumsum(as.numeric(consentidos))
+)
+
+#integrar consentidos a la fase 1 ----
+fase_1<-fase_1 %>% mutate(month=tolower(month)) %>% left_join(
+  t_consentidos %>% transmute(year=as.character(year), month, consentidos,
+                            acumulado_consentidos=acumulado)
+)
+
+
+#tabla reporte fase 1
+fase1_report <- fase_1 %>% select(1:2,9:10,3:8) %>% 
+  gt() %>% 
+  tab_header (title= md("FASE 1 AVANCE MENSUAL FOT")) %>% 
+  cols_label(year = html("A&ntildeo"), 
+             month = "Mes",
+             consentidos="Consentidos",
+             acumulado_consentidos="Consentidos Acumulado",
+             C86_realizados_acumulados = "C86 acumulados",
+             porcentaje_acumulado = "%",
+             C86_realizados = "C86 realizados",
+             Completado_dos_dias = "Completado dos dias",
+             Completado_un_dia = "Completado un dia",
+             No_participo = "No participo"
+             ) %>% 
+  opt_align_table_header(align = "left") %>% 
+  cols_width(C86_realizados ~ px(75),
+             C86_realizados_acumulados ~ px(50),
+             porcentaje_acumulado ~ px(25),
+             Completado_dos_dias ~ px(50),
+             Completado_un_dia ~ px(50),
+             No_participo ~ px(50)) %>% 
+  tab_footnote(footnote= "Fase 1: 24 de febrero hasta el 16 de mayo 2022",
+               locations= list(
+                 cells_column_labels(columns=month))) %>% 
+    data_color(
+    columns = C86_realizados,
+    colors = scales::col_numeric(
+      palette = c("gray"),
+      domain = c(NULL)))
+
+#integrar consentidos a la fase total
+fase_total<-fase_total %>% mutate(month=tolower(month)) %>% left_join(
+  t_consentidos %>% transmute(year=as.character(year), month, consentidos,
+                            acumulado_consentidos=acumulado)
+)
+
+fasetotal_report <- fase_total %>% select(1:2,9:10,3:8) %>% 
+  gt() %>% 
+  tab_header (title= md("Reporte de Avance Mensual FOT 2022")) %>% 
+  cols_label(year = html("A&ntildeo"), 
+             month = "Mes",
+             consentidos="Consentidos",
+             acumulado_consentidos="Consentidos Acumulado",
+             C86_realizados = "C86 realizados",
+             C86_realizados_acumulados = "C86 acumulados",
+             porcentaje_acumulado = "%",
+             Completado_dos_dias = "Completado dos dias",
+             Completado_un_dia = "Completado un dia",
+             No_participo = "No participo"
+             ) %>% 
+  opt_align_table_header(align = "left") %>% 
+  cols_width(C86_realizados ~ px(75),
+             C86_realizados_acumulados ~ px(50),
+             porcentaje_acumulado ~ px(25),
+             Completado_dos_dias ~ px(50),
+             Completado_un_dia ~ px(50),
+             No_participo ~ px(50)) %>%  
+  tab_footnote(footnote= "Fase 1: 24 de febrero hasta el 16 de mayo 2022",
+               locations= list(
+                 cells_column_labels(columns=month))) %>% 
+    data_color(
+    columns = C86_realizados,
+    colors = scales::col_numeric(
+      palette = c("gray"),
+      domain = c(NULL)))
+
+#graficar tablas
+fase1_report
+fasetotal_report
+
+```
+
+
+
+#### Resumen pruebas realizadas
+##### Inicio de actividad: el 24 de marzo del 2022 haciendo fot en  dia 1 y dia 2
+##### Modificación 1: El 17 de mayo del 2022 se inció a hacer FOT únicamente el dia 2 de exposición
+~~~~
+**Nota:** del 6 al 14 de septiembre, 2 equipos de exposición: 1 hará fot y el otro no
+~~~~
+
+```{r FOT, echo=FALSE}
+dt_fot<-gt_hapin_II_data %>% filter(redcap_event_name=="year_3_q1_36m_arm_1") %>% filter(!is.na(c86_date)) %>%  select(
+  id, c86_date, dos_pruebas_dia1= c86_complete_test1, dos_pruebas_dia2=c86_complete_test1_2
+)
+
+# FOT B6 FASE 1 DEL 24 DE MARZO AL 16 DE MAYO 2022
+Actividad<-c("C86 realizados","Dos pruebas completas dia 1", "Dos pruebas completas dia 2")
+reporte_fot<-data.frame(Actividad)
+
+reporte_fot %>% mutate(
+  Acumulado=case_when(
+     Actividad=="C86 realizados" ~ dt_fot %>% filter(as.Date(c86_date)<="2022-05-16" ) %>% count() %>% .$n,
+      Actividad=="Dos pruebas completas dia 1" ~  dt_fot %>% filter(as.Date(c86_date)<="2022-05-16" ) %>% filter(
+      dos_pruebas_dia1=="1"
+    ) %>%  count() %>% .$n,
+    Actividad=="Dos pruebas completas dia 2" ~  dt_fot %>% filter(as.Date(c86_date)<="2022-05-16" )%>% filter(
+      dos_pruebas_dia2=="1"
+    ) %>%  count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+)   %>% kable(caption = "<center>REPORTE C86 (FOT EN DIA 1 Y DIA 2)<br>
+                  FASE 1 (24-03-2022 al 16-05-2022) </center>", 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria") %>% column_spec(2, width = "2cm",  bold = T, color="blue")
+
+
+```
+
+```{r FOT_f2, echo=FALSE}
+#FASE 2 (FOT EN DIA 2 DE EXPOSICION)
+Actividad<-c("C86 realizados","Dos pruebas completas")
+reporte_fot<-data.frame(Actividad)
+
+reporte_fot %>% mutate(
+   Quincenal=case_when(
+     Actividad=="C86 realizados" ~  dt_fot %>% filter(as.Date(c86_date)>="2022-05-17" ) %>% filter(c86_date>=fecha1 & c86_date<=fecha2) %>% count() %>% .$n,
+     Actividad=="Dos pruebas completas" ~ dt_fot %>% filter(c86_date>=fecha1 & c86_date<=fecha2) %>% filter(
+      dos_pruebas_dia1=="1"
+    ) %>%  count() %>% .$n,
+   ),
+  Acumulado=case_when(
+     Actividad=="C86 realizados" ~ dt_fot %>% filter(as.Date(c86_date)>="2022-05-17" ) %>% count() %>% .$n,
+      Actividad=="Dos pruebas completas" ~  dt_fot %>% filter(as.Date(c86_date)>="2022-05-17" ) %>% filter(
+      dos_pruebas_dia1=="1"
+    ) %>%  count() %>% .$n,
+    TRUE ~ NA_integer_
+  )
+)   %>% kable(caption =paste0( "<center>REPORTE C86 (FOT EN DIA 2 DE EXPOSICION)<br>
+                  FASE 2 (17-05-2022 al ", fecha2," </center>"), 
+        align = "l") %>% 
+    kable_classic(full_width=F, html_font = "Cambria") %>% column_spec(2, width = "2cm",  bold = T, color="blue") 
+
+```
+
+
+~~~~
+ *Quincena del  "`r as.Date(f_week1) %>% format(.,"%A %d %B  %Y")`" al "`r as.Date(f_week2) %>% format(.,"%A %d %B  %Y")` "*
+~~~~
+
+
+

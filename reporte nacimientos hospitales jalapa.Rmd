@@ -1,0 +1,252 @@
+---
+title: "reporte_nacimientos_hospitalesJalapa"
+editor_options:
+  chunk_output_type: console
+date: " generado el `r Sys.Date()`"
+output:
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+# load use packages
+library(package = "tidyverse")
+library(package = "crosstalk")
+
+
+###CARGA DE DATOS EMORY Y UVG
+# Pre-screening information (s0)
+source(file = "scripts/0_get_prescreening.R", encoding = "UTF-8")
+
+# Load helper functions
+source(file = "scripts/zz_output.R")
+
+# Emory RedCap dictionary
+source(file = "scripts/0_get_emory_dictionary.R", encoding = "UTF-8")
+
+# Emory RedCap export data
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+
+# Stops knitting if lpg delivery data is not up to date
+#source(file = "scripts/uso-estufas.R", encoding = "UTF-8")
+
+#fecha de la semana
+fecha1<-'2019-04-22'
+fecha2<-'2019-04-28'
+
+```
+
+## Actividad: "Nacimientos"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+
+```{r nacimientos, echo=FALSE}
+#nacimientos en C30
+c30_acumulado<-gt_emory_data %>% select(id, c30_date) %>% 
+  filter(!is.na(c30_date)) %>% count()
+c30_semana<-gt_emory_data %>% select(id, c30_date) %>% 
+  filter(!is.na(c30_date)) %>% 
+      filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+##e2 mortinatos
+e2_acumulado<-gt_emory_data %>% select(id, e2_date,e2_title, redcap_event_name,
+                             e2_sae_nature) %>% filter(!is.na(e2_date)) %>% 
+                                filter(e2_title=="2") %>%  count()
+e2_semana<- gt_emory_data %>% select(id, e2_date,e2_title, redcap_event_name,
+                             e2_sae_nature) %>% filter(!is.na(e2_date)) %>% 
+                                filter(e2_title=="2")%>% 
+                                    filter(e2_date>=fecha1 & e2_date<=fecha2) %>% count()
+#resultado embarazos
+resultado_acumulado<-e2_acumulado$n + c30_acumulado$n
+resultado_semana<-e2_semana$n + c30_semana$n
+
+#lugar de nacimiento, hospital u hogar
+#Hospital
+hospital_acumulado<-gt_emory_data %>% select(id, c30_date, c30_where) %>% 
+      filter(!is.na(c30_date)) %>% filter(c30_where=="1") %>% count()
+hospital_semana<- gt_emory_data %>% select(id, c30_date, c30_where) %>% 
+  filter(!is.na(c30_date)) %>% filter(c30_where=="1") %>%  filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+#Hogar
+hogar_acumulado<-gt_emory_data %>% select(id, c30_date, c30_where) %>% 
+      filter(!is.na(c30_date)) %>% filter(c30_where=="3") %>% count()
+hogar_semana<- gt_emory_data %>% select(id, c30_date, c30_where) %>% 
+  filter(!is.na(c30_date)) %>% filter(c30_where=="3") %>%  filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+
+#Vaginal
+vaginal_acumulado<-gt_emory_data %>% select(id, c30_date, c30_delivery) %>% 
+      filter(!is.na(c30_date)) %>% filter(c30_delivery=="1") %>% count()
+vaginal_semana<- gt_emory_data %>% select(id, c30_date, c30_delivery) %>% 
+  filter(!is.na(c30_date)) %>% filter(c30_delivery=="1") %>%  filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+#Cesarea
+cesarea_acumulado<-gt_emory_data %>% select(id, c30_date, c30_delivery) %>% 
+      filter(!is.na(c30_date)) %>% filter(c30_delivery=="2") %>% count()
+cesarea_semana<- gt_emory_data %>% select(id, c30_date, c30_delivery) %>% 
+  filter(!is.na(c30_date)) %>% filter(c30_delivery=="2") %>%  filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+
+#b10a y C30a
+b10a_acumulado<-gt_emory_data %>% select(id, b10a_date, redcap_event_name) %>% 
+    filter(!is.na(b10a_date)) %>% count()
+b10a_semana<-gt_emory_data %>% select(id, b10a_date, redcap_event_name) %>% 
+    filter(!is.na(b10a_date)) %>% 
+      filter(b10a_date>=fecha1 & b10a_date<=fecha2) %>% count()
+
+c30a_acumulado<-gt_emory_data %>% select(id, c30a_date, redcap_event_name) %>% 
+    filter(!is.na(c30a_date)) %>% count()
+c30a_semana<-gt_emory_data %>% select(id, c30a_date, redcap_event_name) %>% 
+    filter(!is.na(c30a_date)) %>% 
+      filter(c30a_date>=fecha1 & c30a_date<=fecha2) %>% count()
+
+#Visitas de nacimientos <24 horas
+
+v24_acumulada<-gt_emory_data %>% 
+  select(id, c30_date, c30_time, c30_dob, c30_birth_time) %>% 
+    filter(!is.na(c30_date) & !is.na(c30_time)) %>% 
+  mutate(
+    time_c30=paste(c30_date,c30_time) %>% lubridate::ymd_hm(),
+    time_nacimiento = paste(c30_dob, c30_birth_time) %>% lubridate::ymd_hm()
+  ) %>% mutate(
+  diferencia= as.numeric( time_c30 - time_nacimiento, unit="hours")
+  )%>%filter(diferencia<=24) %>% count()
+
+v24_semana<-gt_emory_data %>% 
+  select(id, c30_date, c30_time, c30_dob, c30_birth_time) %>% 
+    filter(!is.na(c30_date) & !is.na(c30_time)) %>% 
+  mutate(
+    time_c30=paste(c30_date,c30_time) %>% lubridate::ymd_hm(),
+    time_nacimiento = paste(c30_dob, c30_birth_time) %>% lubridate::ymd_hm()
+  ) %>% mutate(
+  diferencia= as.numeric( time_c30 - time_nacimiento, unit="hours")
+  ) %>% filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+
+
+#----------------------
+#make table Nacimientos
+#----------------------
+actividad<-c("Total de resultados de embarazo", "Nacimientos (C30)", "Mortinatos (E2)","Nacimientos en Hospital", "Nacimientos en Hogar","Parto Vaginal","Parto Cesárea","B10a","C30a","Visitas de nacimiento <24 horas")
+reporte_nacimientos<-data.frame(actividad)
+reporte_nacimientos %>% mutate(
+  semana=case_when(
+    actividad=="Total de resultados de embarazo" ~ c30_semana$n + e2_semana$n,
+    actividad=="Nacimientos (C30)" ~ c30_semana$n,
+    actividad == "Mortinatos (E2)" ~ e2_semana$n,
+    actividad == "Nacimientos en Hospital" ~ hospital_semana$n,
+    actividad == "Nacimientos en Hogar" ~ hogar_semana$n,
+    actividad == "Parto Vaginal" ~ vaginal_semana$n,
+    actividad == "Parto Cesárea" ~ cesarea_semana$n,
+    actividad == "B10a" ~ b10a_semana$n,
+    actividad == "C30a" ~ c30a_semana$n,
+    actividad == "Visitas de nacimiento <24 horas" ~ v24_semana$n,
+    TRUE ~ NA_integer_
+  )
+) %>% mutate(
+  acumulado=case_when(
+    actividad=="Total de resultados de embarazo" ~ c30_acumulado$n + e2_acumulado$n,
+    actividad=="Nacimientos (C30)" ~ c30_acumulado$n,
+    actividad == "Mortinatos (E2)" ~ e2_acumulado$n,
+    actividad == "Nacimientos en Hospital" ~ hospital_acumulado$n,
+    actividad == "Nacimientos en Hogar" ~ hogar_acumulado$n,
+    actividad == "Parto Vaginal" ~ vaginal_acumulado$n,
+    actividad == "Parto Cesárea" ~ cesarea_acumulado$n,
+    actividad == "B10a" ~ b10a_acumulado$n,
+    actividad == "C30a" ~ c30a_acumulado$n,
+    actividad == "Visitas de nacimiento <24 horas" ~ v24_acumulada$n,
+    TRUE ~ NA_integer_
+  )
+) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>%  
+  knitr::kable(caption=paste("Nacimientos, semana del ", fecha1, " al ", fecha2))
+```
+
+## Actividad: "Desenlaces"
+Conteo **semanal** y **acumulado** al "`r Sys.Date()`"
+
+```{r desenlaces, echo=FALSE}
+#<37 semanas
+c30_ga37_acumulado<-gt_emory_data %>% select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+c30_wt_record, c30_wt_unit) %>% 
+  filter(!is.na(c30_date)) %>% filter(c30_age<"37") %>% count()
+
+c30_ga37_semana<- gt_emory_data %>% select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+c30_wt_record, c30_wt_unit) %>% 
+  filter(!is.na(c30_date)) %>% filter(c30_age<"37")%>% 
+    filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+
+  # peso promedio con desnudo y con ropa 
+  # c30_ave_wt
+  # c30_ave_wt2
+  
+
+  
+  p2500_acumulado<-gt_emory_data %>% 
+    select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+            c30_wt_record, c30_wt_unit, c30_ave_wt, c30_ave_wt2) %>% 
+                filter(!is.na(c30_date)) %>% 
+      mutate(peso=if_else(is.na(c30_ave_wt2),as.numeric(c30_ave_wt), as.numeric(c30_ave_wt2))) %>% 
+    filter(peso<2500) %>% count()
+  
+  p2500_semana<- gt_emory_data %>% 
+    select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+            c30_wt_record, c30_wt_unit, c30_ave_wt, c30_ave_wt2) %>% 
+                filter(!is.na(c30_date)) %>% 
+       mutate(peso=if_else(is.na(c30_ave_wt2),as.numeric(c30_ave_wt), as.numeric(c30_ave_wt2))) %>% 
+              filter(peso<2500) %>%  
+                filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+
+  longitud_acumulado<-gt_emory_data %>% 
+    select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+            c30_ave_ht) %>% 
+                filter(!is.na(c30_date)) %>% mutate(
+                  largo=as.numeric(c30_ave_ht)
+                  ) %>% filter(largo<45) %>% count()
+  longitud_semana <- gt_emory_data %>% 
+    select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+            c30_ave_ht) %>% 
+                filter(!is.na(c30_date)) %>% mutate(
+                  largo=as.numeric(c30_ave_ht)
+                  ) %>% filter(largo<45) %>% 
+                            filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+  
+# p2500_acumulado<-gt_emory_data %>% 
+#     select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+#             c30_wt_record, c30_wt_unit) %>% 
+#                 filter(!is.na(c30_date)) %>% mutate(
+#                   peso_gramos= case_when(
+#                     c30_wt_unit=="1" & c30_wt_record<"2.5" ~ "1",
+#                     c30_wt_unit=="2" & c30_wt_record<"5.5" ~ "1",
+#                     TRUE  ~ NA_character_
+#                   )
+#                 ) %>% filter(peso_gramos=="1") %>%  count()
+
+# p2500_semana<-gt_emory_data %>% 
+#     select(id, c30_date, redcap_event_name, c30_where, c30_delivery, c30_age, c30_scale, 
+#             c30_wt_record, c30_wt_unit) %>% 
+#                 filter(!is.na(c30_date)) %>% mutate(
+#                   peso_gramos= case_when(
+#                     c30_wt_unit=="1" & c30_wt_record<"2.5" ~ "1",
+#                     c30_wt_unit=="2" & c30_wt_record<"5.5" ~ "1",
+#                     TRUE  ~ NA_character_
+#                   )
+#                 ) %>% filter(peso_gramos=="1") %>% filter(c30_date>=fecha1 & c30_date<=fecha2) %>% count()
+
+#----------------------
+#make table Desenlaces
+#----------------------
+actividad<-c("Prematurez(<37 sem por USG)", "Peso al nacer <2500g", "Medida al nacer < 45cm")
+reporte_desenlaces<-data.frame(actividad)
+reporte_desenlaces %>% mutate(
+  semana=case_when(
+    actividad=="Prematurez(<37 sem por USG)" ~ c30_ga37_semana$n,
+    actividad=="Peso al nacer <2500g" ~ p2500_semana$n,
+    actividad=="Medida al nacer < 45cm" ~ longitud_semana$n,
+    TRUE ~ NA_integer_
+  )
+) %>% mutate(
+  acumulado=case_when(
+    actividad=="Prematurez(<37 sem por USG)" ~ c30_ga37_acumulado$n,
+    actividad=="Peso al nacer <2500g" ~ p2500_acumulado$n,
+    actividad=="Medida al nacer < 45cm" ~ longitud_acumulado$n,
+    TRUE ~ NA_integer_
+  )
+) %>% select(" "=actividad, "Semana n(%)"=semana, "Acumulado n(%)"=acumulado) %>% 
+  knitr::kable(caption=paste("Desenlaces, semana del ", fecha1, " al ", fecha2))
+
+```

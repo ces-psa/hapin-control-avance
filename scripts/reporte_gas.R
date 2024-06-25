@@ -3,7 +3,8 @@
 #---------------------------------------
 
 library(package = "tidyverse")
-
+# Participant information (z10)
+source(file = "scripts/0_get_salidas.R", encoding = "UTF-8")
 # Most recent export for Repeated CRFs project
 gt_emory_repeat_file <- list.files(
   path = "data/exports", pattern = "Repeat.+csv", full.names = TRUE
@@ -183,12 +184,12 @@ gt_gas_data <- gt_repeat_data %>%
 # Original use - Emory RedCap montly events in main study project ----
 #------------------------------------------------------------------------------*
 
-source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+#source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
 
 
 
 
-stove_install_data <- gt_emory_data %>%
+stove_install_data <- gt_emory_data_arm2 %>%
   select(house_id = id, visit, matches("h50")) %>%
   filter(
     !is.na(h50_date)
@@ -212,7 +213,7 @@ stove_install_data <- gt_emory_data %>%
 
 
 
-original_emory_gas_data <- gt_emory_data %>%
+original_emory_gas_data <- gt_emory_data_arm3 %>%
   # solo los datos que te interesan
   filter(!is.na(h51_date)) %>%
   # conservar solo las variables que te interesan
@@ -282,61 +283,130 @@ all_gas_actions <- list(
     action = factor(action, levels = c("remove", "install"))
   ) %>%
   arrange(house_id, date, action) %>% left_join(
-                                gt_emory_data %>% select(house_id=id, s6_date, s6_arm) %>% filter(!is.na(s6_date))
+                                gt_emory_data_arm2 %>% select(house_id=id, s6_date, s6_arm) %>% filter(!is.na(s6_date))
                                 ) #%>% 
   #print()
 #-----------------
 #imprimir resumen de H51 integrado
 #-----------------
-all_gas_actions %>% write_csv(paste("output/resumen_h51_",Sys.Date(),".csv"))
+library("tidyverse")
+all_gas_actions %>% mutate("dia_semana"=lubridate::wday(date, label=TRUE)) %>%  write_csv(paste("output/resumen_h51_dia",Sys.Date(),".csv"))
 
 
 cantidad_cilindros<-all_gas_actions %>%
   #marcar hogares con cilindros de cien libras
     mutate(
             cyl_cien=case_when(house_id=="33040" ~ "Si",
-                     house_id=="33110" ~ "Si",
-                     house_id=="35021" ~ "Si",
+                     house_id=="33498" ~ "Si",
+                     house_id=="35107" ~ "Si",
+                     house_id=="33324" ~ "Si",
+                     house_id=="35089" ~ "Si",
                      house_id=="35033" ~ "Si",
+                     house_id=="33487" ~ "Si",
+                     house_id=="35081" ~ "Si",
+                     house_id=="33624" ~ "Si",
+                     house_id=="35130" ~ "Si",
+                     house_id=="33394" ~ "Si",
+                     house_id=="35135" ~ "Si",
                      TRUE ~ "No")
-  ) %>% filter(cyl_cien!="Si" & action=="install") %>% select(
-  house_id, action, s6_date) %>% left_join(gt_emory_data %>% select(house_id=id, h50_date) %>% filter(!is.na(h50_date))
+  ) %>% filter(#cyl_cien!="Si" & 
+                 action=="remove" & !is.na(request_date)) %>% select(
+  house_id, action, s6_date) %>% left_join(gt_emory_data_arm2 %>% select(house_id=id, h50_date) %>% filter(!is.na(h50_date))
                                         ) %>% filter(!is.na(h50_date)) %>%
   group_by(house_id) %>% summarize(contador=n())
 
+#datos para los hogares con cilindros de cien
+cantidad_cilindros_cien<-all_gas_actions %>%
+  #marcar hogares con cilindros de cien libras
+  mutate(
+    cyl_cien=case_when(house_id=="33040" ~ "Si",
+                       house_id=="33498" ~ "Si",
+                       house_id=="35107" ~ "Si",
+                       house_id=="33324" ~ "Si",
+                       house_id=="35089" ~ "Si",
+                       house_id=="35033" ~ "Si",
+                       house_id=="33487" ~ "Si",
+                       house_id=="35081" ~ "Si",
+                       house_id=="33624" ~ "Si",
+                       house_id=="35130" ~ "Si",
+                       house_id=="33394" ~ "Si",
+                       house_id=="35135" ~ "Si",
+                       TRUE ~ "No")
+  ) %>% filter(cyl_cien=="Si" & action=="remove" & !is.na(request_date) & date>="2019-12-01") %>% select(
+    house_id, action, s6_date) %>% left_join(gt_emory_data_arm2 %>% select(house_id=id, h50_date) %>% filter(!is.na(h50_date))
+    ) %>% filter(!is.na(h50_date)) %>%
+  group_by(house_id) %>% summarize(contador=n())
+
 cantidad_cilindros %>% left_join(
-  gt_emory_data %>% select(house_id=id, h50_date) %>% filter(!is.na(h50_date))
-) %>% left_join(gt_emory_data %>%
-                  select(house_id=id, m10_date, m10_sleep) %>%
-                  filter(!is.na(m10_date)) %>% print()
+  gt_emory_data_arm2 %>% select(house_id=id, h50_date) %>% filter(!is.na(h50_date))
+) %>% left_join(gt_emory_data_arm2 %>%
+                  select(house_id=id, visit, m10_date, m10_sleep) %>%
+                  filter(!is.na(m10_date)) %>% filter(visit=="baseline") %>%  print()
+)
+
+cantidad_cilindros_cien<-all_gas_actions %>%
+  #marcar hogares con cilindros de cien libras
+  mutate(
+    cyl_cien=case_when(house_id=="33040" ~ "Si",
+                       house_id=="33498" ~ "Si",
+                       house_id=="35107" ~ "Si",
+                       house_id=="33324" ~ "Si",
+                       house_id=="35089" ~ "Si",
+                       house_id=="35033" ~ "Si",
+                       house_id=="33487" ~ "Si",
+                       house_id=="35081" ~ "Si",
+                       house_id=="33624" ~ "Si",
+                       house_id=="35130" ~ "Si",
+                       house_id=="33394" ~ "Si",
+                       house_id=="35135" ~ "Si",
+                       TRUE ~ "No")
+  ) %>% filter(cyl_cien=="Si" & action=="remove" & !is.na(request_date) & date>="2019-12-01") %>% select(
+    house_id, action, s6_date) %>% left_join(gt_emory_data_arm2 %>% select(house_id=id, h50_date) %>% filter(!is.na(h50_date))
+    ) %>% filter(!is.na(h50_date)) %>%
+  group_by(house_id) %>% summarize(contador=n())
+
+cantidad_cilindros_cien %>% left_join(
+  gt_emory_data_arm2 %>% select(house_id=id, h50_date) %>% filter(!is.na(h50_date))
+) %>% left_join(gt_emory_data_arm2 %>%
+                  select(house_id=id, visit, m10_date, m10_sleep) %>%
+                  filter(!is.na(m10_date)) %>% filter(visit=="baseline") %>%  print()
 )
 
 
 
-cantidad_cilindros_fechas<-all_gas_actions %>%
+cantidad_cilindros_fechas<-all_gas_actions %>% filter(!is.na(date)) %>% 
   #marcar hogares con cilindros de cien libras
   mutate(
     cyl_cien=case_when(house_id=="33040" ~ "Si",
-                       house_id=="33110" ~ "Si",
-                       house_id=="35021" ~ "Si",
-                       house_id=="35033" ~ "Si",
-                       TRUE ~ "No")
-  ) %>% filter(cyl_cien!="Si" & action=="install" & source!="emory-stove-install") %>% mutate(
+                                          house_id=="33498" ~ "Si",
+                                          house_id=="35107" ~ "Si",
+                                          house_id=="33324" ~ "Si",
+                                          house_id=="35089" ~ "Si",
+                                          house_id=="35033" ~ "Si",
+                                          house_id=="33487" ~ "Si",
+                                          house_id=="35081" ~ "Si",
+                                          house_id=="33624" ~ "Si",
+                                          house_id=="35130" ~ "Si",
+                                          house_id=="33394" ~ "Si",
+                                          house_id=="35135" ~ "Si",
+                                          TRUE ~ "No")
+  ) %>% filter(#cyl_cien!="Si" & 
+                 action=="remove" & source!="emory-stove-install") %>% mutate(
     fecha_install=date
   ) %>%
   select(
-    house_id, action, fecha_install, request_date, s6_date) %>% left_join(gt_emory_data %>% select(house_id=id, h50_date) %>% filter(!is.na(h50_date))
+    house_id, action, fecha_install, request_date, s6_date) %>% left_join(gt_emory_data_arm2 %>% select(house_id=id, h50_date) %>% filter(!is.na(h50_date))
     ) %>% filter(!is.na(h50_date)) %>%
-  group_by(house_id) %>%
+  group_by(house_id) %>% #filter(fecha_install>="2019-01-01") %>% 
     summarize_at(vars(fecha_install), funs(firts_date=min(fecha_install), last_date=max(fecha_install), pedidos=n())) %>% mutate(
-      libras=pedidos*25
-    ) %>% left_join(gt_emory_data %>%
-                      select(house_id=id, m10_date, m10_sleep) %>%
-                      filter(!is.na(m10_date))
+      libras=(pedidos)*25
+    ) %>% left_join(gt_emory_data_arm2 %>%
+                      select(house_id=id, visit, m10_date, m10_sleep) %>%
+                      filter(!is.na(m10_date) & visit=="baseline") %>% select(-visit)
     ) %>% left_join(
-        gt_emory_data %>% select(house_id=id,h50_date) %>% filter(!is.na(h50_date))
+        gt_emory_data_arm2 %>% select(house_id=id,h50_date) %>% filter(!is.na(h50_date))
       ) %>% mutate(
-        cilindros_utilizados= 2+pedidos,
+        cilindros_utilizados= pedidos,
         fecha_install_estufa=h50_date
       ) %>% mutate(
         dias_uso = as.Date(last_date) - as.Date(fecha_install_estufa)
@@ -350,17 +420,70 @@ cantidad_cilindros_fechas<-all_gas_actions %>%
                    )
 
 
-
-
-tiempos_entrega<-all_gas_actions %>%
+#cilindros de cien libras
+cantidad_cilindros_cien_fechas<-all_gas_actions %>% filter(!is.na(date) & date>="2019-12-01") %>% 
   #marcar hogares con cilindros de cien libras
   mutate(
     cyl_cien=case_when(house_id=="33040" ~ "Si",
-                       house_id=="33110" ~ "Si",
-                       house_id=="35021" ~ "Si",
+                       house_id=="33498" ~ "Si",
+                       house_id=="35107" ~ "Si",
+                       house_id=="33324" ~ "Si",
+                       house_id=="35089" ~ "Si",
                        house_id=="35033" ~ "Si",
+                       house_id=="33487" ~ "Si",
+                       house_id=="35081" ~ "Si",
+                       house_id=="33624" ~ "Si",
+                       house_id=="35130" ~ "Si",
+                       house_id=="33394" ~ "Si",
+                       house_id=="35135" ~ "Si",
                        TRUE ~ "No")
-  ) %>% filter(cyl_cien!="Si" & action=="install" & source!="emory-stove-install") %>% mutate(
+  ) %>% filter(cyl_cien=="Si" & action=="remove" & source!="emory-stove-install") %>% mutate(
+    fecha_install=date
+  ) %>%
+  select(
+    house_id, action, fecha_install, request_date, s6_date) %>% left_join(gt_emory_data_arm2 %>% select(house_id=id, h50_date) %>% filter(!is.na(h50_date))
+    ) %>% filter(!is.na(h50_date)) %>%
+  group_by(house_id) %>% #filter(fecha_install>="2019-01-01") %>% 
+  summarize_at(vars(fecha_install), funs(firts_date=min(fecha_install), last_date=max(fecha_install), pedidos=n())) %>% mutate(
+    libras=(pedidos)*100
+  ) %>% left_join(gt_emory_data_arm2 %>%
+                    select(house_id=id, visit, m10_date, m10_sleep) %>%
+                    filter(!is.na(m10_date) & visit=="baseline") %>% select(-visit)
+  ) %>% left_join(
+    gt_emory_data_arm2 %>% select(house_id=id,h50_date) %>% filter(!is.na(h50_date))
+  ) %>% mutate(
+    cilindros_utilizados= pedidos,
+    fecha_install_estufa=h50_date
+  ) %>% mutate(
+    dias_uso = as.Date(last_date) - as.Date(fecha_install_estufa)
+  ) %>% select(house_id, date_stove=fecha_install_estufa,
+               primer_pedido=firts_date,
+               ultimo_pedido=last_date,
+               cilindros_utilizados,
+               libras_utilizadas=libras,
+               dias_uso,
+               cantidad_personas=m10_sleep
+  )
+
+
+tiempos_entrega<-all_gas_actions %>% filter(!is.na(date)) %>% 
+  #marcar hogares con cilindros de cien libras
+  mutate(
+    cyl_cien=case_when(house_id=="33040" ~ "Si",
+                       house_id=="33498" ~ "Si",
+                       house_id=="35107" ~ "Si",
+                       house_id=="33324" ~ "Si",
+                       house_id=="35089" ~ "Si",
+                       house_id=="35033" ~ "Si",
+                       house_id=="33487" ~ "Si",
+                       house_id=="35081" ~ "Si",
+                       house_id=="33624" ~ "Si",
+                       house_id=="35130" ~ "Si",
+                       house_id=="33394" ~ "Si",
+                       house_id=="35135" ~ "Si",
+                       TRUE ~ "No")
+  ) %>% filter(#cyl_cien!="Si" & 
+                 action=="install" & source!="emory-stove-install") %>% mutate(
     fecha_install=date
   ) %>%
   select(
@@ -378,9 +501,44 @@ tiempos_entrega<-all_gas_actions %>%
     max_demora = max(demora_instalacion, na.rm = TRUE)
   )
 
+#tiempos de entrega, cilindros de cien libras
+tiempos_entrega_cien<-all_gas_actions %>% filter(!is.na(date)) %>%  #& #date>="2019-12-01") %>% 
+  #marcar hogares con cilindros de cien libras
+  mutate(
+    cyl_cien=case_when(house_id=="33040" ~ "Si",
+                       house_id=="33498" ~ "Si",
+                       house_id=="35107" ~ "Si",
+                       house_id=="33324" ~ "Si",
+                       house_id=="35089" ~ "Si",
+                       house_id=="35033" ~ "Si",
+                       house_id=="33487" ~ "Si",
+                       house_id=="35081" ~ "Si",
+                       house_id=="33624" ~ "Si",
+                       house_id=="35130" ~ "Si",
+                       house_id=="33394" ~ "Si",
+                       house_id=="35135" ~ "Si",
+                       TRUE ~ "No")
+  ) %>% filter(cyl_cien=="Si" & action=="install" & source!="emory-stove-install") %>% mutate(
+    fecha_install=date
+  ) %>%
+  select(
+    house_id, action, fecha_install, request_date, s6_date) %>%
+  mutate_at(
+    vars(fecha_install, request_date),
+    funs(as.Date)
+  ) %>%
+  mutate(
+    demora_instalacion = as.numeric(fecha_install - request_date, units = "days")
+  ) %>%  group_by(house_id) %>%
+  summarize(
+    entregas = n(),
+    promedio_demora = mean(demora_instalacion, na.rm = TRUE),
+    max_demora = max(demora_instalacion, na.rm = TRUE)
+  )
+
 #agregar comunidades
 cat_comunidades<-read_csv("data/dictionaries/cat_comunidadez_z10.csv")
-comunidades<-gt_emory_data %>% select(house_id=s4_main_id, id_tamizaje=id, s4_date) %>% filter(!is.na(house_id)) %>% left_join(
+comunidades<-gt_emory_data_arm1 %>% select(house_id=s4_main_id, id_tamizaje=id, s4_date) %>% filter(!is.na(house_id)) %>% left_join(
  gt_participants %>% select(record_id,id_estudio, codigo=com_jalapa) %>% 
       mutate(house_id=if_else(condition = grepl("^G[0-9]{4}",id_estudio),
                                            true = record_id,
@@ -390,7 +548,7 @@ comunidades<-gt_emory_data %>% select(house_id=s4_main_id, id_tamizaje=id, s4_da
 
 cantidad_cilindros_fechas %>% left_join(
   tiempos_entrega
-) %>% left_join(comunidades %>% select(house_id, comunidad)) %>%mutate(
+) %>% left_join(comunidades %>% select(house_id, comunidad=codigo)) %>%mutate(
   meses_uso_gas=dias_uso / 30,
   promedio_cilindro_mes=as.numeric(cilindros_utilizados) / as.numeric(meses_uso_gas),
   libras_por_dia=as.numeric(libras_utilizadas)/as.numeric(dias_uso),
@@ -401,7 +559,7 @@ cantidad_cilindros_fechas %>% left_join(
   promedio_cilindro_mes=round(promedio_cilindro_mes, digits = 2),
   libras_por_dia=round(libras_por_dia, digits = 2),
   libras_por_dia_persona=round(libras_por_dia_persona, digits = 2),
-  promedio_demora=round(promedio_demora, digits = 2),
+  promedio_demora=round(promedio_demora, digits = 2)
   
 ) %>%  select(house_id, date_stove, primer_pedido, 
              ultimo_pedido, "Cantidad de cilindros utilizados"=cilindros_utilizados, 
@@ -410,7 +568,54 @@ cantidad_cilindros_fechas %>% left_join(
              "Promedio de libras consumidas por dia"=libras_por_dia, "Promedio de libras por persona"=libras_por_dia_persona, "Cantidad de entregas de gas registradas"=entregas, 
              "Promedio demora en entrega"=promedio_demora, "Maximo demora en entrega"=max_demora,"Comunidad"=comunidad) %>% 
   writexl::write_xlsx(paste0("output/reporte_promedios_uso_gas_",Sys.Date(),".xlsx"))
-# 
+
+#---------------------------
+#SACAR PROMEDIO DE CILINDROS INCLUYENDO LOS CILINDROS DE CIEN LIBRAS
+#---------------------------
+data_uso_gas_total<-cantidad_cilindros_fechas %>% left_join(
+  tiempos_entrega
+) %>% left_join(comunidades %>% select(house_id, comunidad=codigo)) %>%mutate(
+  meses_uso_gas=dias_uso / 30,
+  promedio_cilindro_mes=as.numeric(cilindros_utilizados) / as.numeric(meses_uso_gas),
+  libras_por_dia=as.numeric(libras_utilizadas)/as.numeric(dias_uso),
+  libras_por_dia_persona=libras_por_dia/as.numeric(cantidad_personas),
+  promedio_demora
+) %>% mutate(
+  meses_uso_gas=round(meses_uso_gas, digits = 2),
+  promedio_cilindro_mes=round(promedio_cilindro_mes, digits = 2),
+  libras_por_dia=round(libras_por_dia, digits = 2),
+  libras_por_dia_persona=round(libras_por_dia_persona, digits = 2),
+  promedio_demora=round(promedio_demora, digits = 2)
+  
+) %>% bind_rows(
+  cantidad_cilindros_cien_fechas %>% left_join(
+    tiempos_entrega_cien
+  ) %>% left_join(comunidades %>% select(house_id, comunidad=codigo)) %>%mutate(
+    meses_uso_gas=dias_uso / 30,
+    promedio_cilindro_mes=as.numeric(cilindros_utilizados) / as.numeric(meses_uso_gas),
+    libras_por_dia=as.numeric(libras_utilizadas)/as.numeric(dias_uso),
+    libras_por_dia_persona=libras_por_dia/as.numeric(cantidad_personas),
+    promedio_demora
+  ) %>% mutate(
+    meses_uso_gas=round(meses_uso_gas, digits = 2),
+    promedio_cilindro_mes=round(promedio_cilindro_mes, digits = 2),
+    libras_por_dia=round(libras_por_dia, digits = 2),
+    libras_por_dia_persona=round(libras_por_dia_persona, digits = 2),
+    promedio_demora=round(promedio_demora, digits = 2)
+    
+  )
+  
+) 
+# %>%
+#   select(house_id, date_stove, primer_pedido,
+#              ultimo_pedido, "Cantidad de cilindros utilizados"=cilindros_utilizados,
+#              "Cantidad de meses de uso de gas"=meses_uso_gas, "Promedio de cilindros por mes"=promedio_cilindro_mes,
+#              "Cantidad de libras de gas utilizadas"=libras_utilizadas, "Cantidad de dias de uso de gas"=dias_uso, "Cantidad de personas en el hogar"=cantidad_personas,
+#              "Promedio de libras consumidas por dia"=libras_por_dia, "Promedio de libras por persona"=libras_por_dia_persona, "Cantidad de entregas de gas registradas"=entregas,
+#              "Promedio demora en entrega"=promedio_demora, "Maximo demora en entrega"=max_demora,"Comunidad"=comunidad) %>%
+#   writexl::write_xlsx(paste0("output/reporte_promedios_uso_gas_integrado_cien_",Sys.Date(),".xlsx"))
+
+
 # 
 # 
 # #----------------------------------------- %>% 
@@ -419,24 +624,24 @@ cantidad_cilindros_fechas %>% left_join(
 # 
 
 
-H50_faltante <- gt_emory_data %>%
+H50_faltante <- gt_emory_data_arm2 %>%
           select(id,s6_date, s6_arm) %>%
               filter(!is.na(s6_date) & s6_arm=="1") %>%
           left_join(
-                    gt_emory_data %>% select(id_tamizaje=id, id=s4_main_id, s4_date,s1_community_name) %>%
+                    gt_emory_data_arm1 %>% select(id_tamizaje=id, id=s4_main_id, s4_date,s1_community_name) %>%
                           filter(!is.na(s4_date))
             ) %>%#agregamos la cantidad de personas que duermen en el hogar
         left_join(
-            gt_emory_data %>% select(id,m10_date,m10_sleep) %>% filter(!is.na(m10_date))
+            gt_emory_data_arm2 %>% select(id,m10_date,m10_sleep) %>% filter(!is.na(m10_date))
         ) %>%
     left_join(
-        gt_emory_data %>% select(id_tamizaje=id, m17_date, m17_ga) %>% filter(!is.na(m17_date))
+        gt_emory_data_arm1 %>% select(id_tamizaje=id, m17_date, m17_ga) %>% filter(!is.na(m17_date))
     ) %>% left_join(
-      gt_emory_data %>% select(id,h50_date) %>% filter(!is.na(h50_date))
+      gt_emory_data_arm2 %>% select(id,h50_date) %>% filter(!is.na(h50_date))
     ) %>% #filtramos los faltantes de h50
       filter(is.na(h50_date)) %>% #descartamos las salidas registradas en e3
       left_join(
-        gt_emory_data %>% select(id, e3_date) %>% filter(!is.na(e3_date))
+        gt_emory_data_arm2 %>% select(id, e3_date) %>% filter(!is.na(e3_date))
           ) %>% filter(is.na(e3_date)) %>% #agregamos edad gestacional
               mutate(
                   fecha_concepcion = as.Date(m17_ga) - lubridate::days(280),
@@ -527,27 +732,98 @@ H50_faltante <- gt_emory_data %>%
 #         ) %>% print() %>% write_csv(paste("output/h42_sin_s6_", Sys.Date(),".csv"))
 # 
 
+#consumo de variabilidad de gas
+#----------------------------------------------------------
+all_gas_actions %>%
+  #marcar hogares con cilindros de cien libras
+  mutate(
+    cyl_cien=case_when(house_id=="33040" ~ "Si",
+                       house_id=="33110" ~ "Si",
+                       house_id=="35021" ~ "Si",
+                       house_id=="35033" ~ "Si",
+                       TRUE ~ "No")
+  ) %>% filter(date>="2019-01-01") %>%  group_by(house_id, cyl_id, action, by) %>% summarize(num=n(), fecha=min(date)) %>%  filter(num>1)
+
+all_gas_actions %>%
+  #marcar hogares con cilindros de cien libras
+  mutate(
+    cyl_cien=case_when(house_id=="33040" ~ "Si",
+                       house_id=="33110" ~ "Si",
+                       house_id=="35021" ~ "Si",
+                       house_id=="35033" ~ "Si",
+                       TRUE ~ "No")
+  ) %>% filter(date>="2019-01-01") %>%  distinct(house_id,cyl_id,action,date, cyl_weight) %>% select(house_id,cyl_id,action, date, cyl_weight) %>% arrange(house_id,date) %>% 
+  writexl::write_xlsx("output/gas.xlsx")
+
+
+#numero de personas en el hogar
+#consumo por persona por mes
+
+
+#proyeccion de consumo de gas
+proyeccion_pedidos_gas<-cantidad_cilindros_fechas %>% left_join(
+  tiempos_entrega
+) %>% left_join(comunidades %>% select(house_id, comunidad=codigo)) %>%mutate(
+  meses_uso_gas=dias_uso / 30,
+  promedio_cilindro_mes=as.numeric(cilindros_utilizados) / as.numeric(meses_uso_gas),
+  libras_por_dia=as.numeric(libras_utilizadas)/as.numeric(dias_uso),
+  libras_por_dia_persona=libras_por_dia/as.numeric(cantidad_personas),
+  promedio_demora
+) %>% mutate(
+  meses_uso_gas=round(meses_uso_gas, digits = 2),
+  promedio_cilindro_mes=round(promedio_cilindro_mes, digits = 2),
+  libras_por_dia=round(libras_por_dia, digits = 2),
+  libras_por_dia_persona=round(libras_por_dia_persona, digits = 2),
+  promedio_demora=round(promedio_demora, digits = 2)
+  
+) %>% mutate(
+  proximo_refill= as.Date(ultimo_pedido) + lubridate::days(round(25/as.numeric(libras_por_dia)))
+) %>% left_join(
+  comunidades %>% select(house_id, comunidad=codigo)
+) %>% select(
+  house_id, fecha_instalacion_estufa=date_stove, 
+  fecha_ultimo_pedido=ultimo_pedido, fecha_proximo_refill=proximo_refill, comunidad
+) %>% filter(as.Date(fecha_proximo_refill) >="2021-05-17" & 
+               as.Date(fecha_proximo_refill) <="2021-05-25") %>% left_join(
+  datos_participantes %>% select(house_id=`ID estudio`, `Nombre embarazada`)
+) %>% arrange(desc(fecha_proximo_refill)) %>% anti_join(
+  salidas %>% select(house_id=id)
+) 
+proyeccion_pedidos_gas %>% writexl::write_xlsx(paste0("output/proyeccion_entregas_gas_semanal_",Sys.Date(),".xlsx"))
+
+##lista de hogares grupo intervencion que tienen salida
+salidas_detalle%>% filter(sale=="1") %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(s6_arm)) %>% select(id, brazo=s6_arm)
+) %>% filter(brazo=="1") %>% select(id, fecha_salida=e3_date) %>% 
+  arrange(fecha_salida) %>% writexl::write_xlsx(paste0("output/lista_salidas_intervencion_al_", Sys.Date(),".xlsx"))
 
 
 
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+salidas_detalle%>% filter(sale=="1") %>% left_join(
+  gt_emory_data_arm2 %>% filter(!is.na(s6_arm)) %>% select(id, brazo=s6_arm)
+) %>% filter(brazo=="1") %>% mutate_all(as.character) %>% 
+  gather(key=variable, value=value, -id ) %>% mutate(
+  fecha_salida=case_when(
+    variable=="e3_date" ~ value,
+    variable=="e3_date_o" ~ value,
+    variable=="e3_date_c" ~ value,
+    TRUE ~ NA_character_
+  )
+) %>% spread(variable, value ) %>% transmute(id, fecha_e3=as.Date(fecha_salida)) %>% filter(!is.na(fecha_e3)) %>% 
+    group_by(id) %>% summarize(fecha_salida=max(fecha_e3)) %>% 
+  left_join(
+  all_gas_actions %>% select(id=house_id, date, action) %>% group_by(id) %>% summarize(ultimo_refill=max(date))
+) %>% select(id, fecha_salida, ultimo_refill) %>% mutate(
+  uso_despues_salida=as.Date(ultimo_refill) - as.Date(fecha_salida),
+dias_refill_despues_salida= if_else(
+  uso_despues_salida<=0, NA_real_, as.numeric(uso_despues_salida)
+)
+  ) %>% select(-uso_despues_salida) %>% writexl::write_xlsx(
+    paste0("output/salidas_intervencion_al_", Sys.Date(),".xlsx")
+  )
 
 
 

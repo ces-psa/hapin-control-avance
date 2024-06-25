@@ -1,0 +1,46 @@
+---
+title: "Reporte de nacimientos Hapin Guatemala"
+author: "Alexander Ramirez"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  #pdf_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+# load use packages
+library(package = "tidyverse")
+library(package = "crosstalk")
+library("kableExtra")
+
+# Emory RedCap dictionary
+source(file = "scripts/0_get_emory_dictionary.R", encoding = "UTF-8")
+
+# Emory RedCap export data
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+
+```
+
+
+
+
+## TABLA DE NACIMIENTOS
+
+```{r datos, echo=FALSE}
+inscritas<-gt_emory_data%>%select(id, id_estudio=s4_main_id)%>%filter(!is.na(id_estudio))
+
+c30<-gt_emory_data%>%select(id_estudio=id, c30_date, tipo_parto=c30_delivery, ga_birth=c30_age)
+```
+
+# tabla
+
+
+```{r}
+c30 %>% kable() %>% kable_styling("striped", position = "left", font_size = 7)
+```
+

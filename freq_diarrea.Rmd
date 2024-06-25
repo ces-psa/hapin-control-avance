@@ -1,0 +1,54 @@
+---
+title: "frecuencias_diarrea"
+author: "aramirez"
+date: "26/11/2019"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library("tidyverse")
+
+source(file = "scripts/0_get_emory_dictionary.R", encoding = "UTF-8")
+
+# Emory RedCap export data
+source(file = "scripts/0_get_emory_data.R", encoding = "UTF-8")
+
+# Participant information (z10)
+source(file = "scripts/0_get_participants.R", encoding = "UTF-8")
+
+# Participant information (z10)
+source(file = "scripts/0_get_salidas.R", encoding = "UTF-8")
+
+
+
+c36_diarrea<-gt_emory_data_arm2 %>% filter(!is.na(c36_date)) %>% select(id,c36_diarrhea ) %>% mutate(
+  Q_E6=recode(c36_diarrhea,"1"="Si, en el ultimo dia", "2"="Si, en los ultimos 2-7 dias", "0"="No")
+) %>% bind_rows(
+  gt_emory_data_arm2 %>% filter(!is.na(c36a_date)) %>% select(id,c36a_diarrhea ) %>% mutate(
+    Q_E6=recode(c36a_diarrhea,"1"="Si, en el ultimo dia", "2"="Si, en los ultimos 2-7 dias", "0"="No")
+  ) 
+)
+```
+
+## R Markdown
+
+
+
+```{r cars}
+
+
+table(c36_diarrea$Q_E6)
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=TRUE}
+
+```
+
